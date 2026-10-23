@@ -54,3 +54,40 @@ export function injectBattleTeams(battle, convertedA, convertedB) {
   for (const [team, converted] of pairs) for(let i=0;i<team.length;i++) injectBattleStats(team[i],converted[i]);
   return battle;
 }
+
+/**
+ * Recalculate a new form using the SAME GP/level/nature, never IV/EV.
+ * Retains current damage; does not heal on a form change.
+ */
+export function applyFormChange(battlePokemon, pokemon, newSpeciesData) {
+  if (!battlePokemon || !pokemon) throw new TypeError('Missing Pokemon');
+  const beforeMax=battlePokemon.maxhp;
+  const beforeHP=battlePokemon.hp;
+  const converted=convertPokemon(pokemon,newSpeciesData);
+  const next=converted.stats;
+  for(const stat of STATS) {
+    if(stat==='hp') continue;
+    battlePokemon.storedStats[stat]=next[stat];
+    battlePokemon.baseStoredStats[stat]=next[stat];
+  }
+  battlePokemon.maxhp=next.hp;
+  // Preserve HP lost, including a fainted state.
+  battlePokemon.hp=beforeHP<=0 ? 0 : Math.max(1,Math.min(next.hp,next.hp-(beforeMax-beforeHP)));
+  return converted;
+}
+
+/**
+ * Transform copies the target's current raw battle stats except HP.
+ * HP, max HP and the original GP remain unchanged.
+ * Battle engine still owns move/ability/typing/boost mechanics.
+ */
+export function applyTransformStats(battlePokemon, targetPokemon) {
+  if (!battlePokemon?.storedStats || !targetPokemon?.storedStats) throw new TypeError('Missing battle stats');
+  for(const stat of STATS) {
+    if(stat==='hp') continue;
+    const value=targetPokemon.storedStats[stat];
+    if(!Number.isInteger(value) || value<1) throw new RangeError('Invalid target stat');
+    battlePokemon.storedStats[stat]=value;
+  }
+  return battlePokemon;
+}
