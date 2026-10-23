@@ -99,6 +99,7 @@ export class GPBattleStream extends BattleStreams.BattleStream {
           const saved = prior[i];
           if (!saved) throw new Error(`Missing carry state for ${key} slot ${i}`);
           mon.hp = Math.max(0, Math.min(mon.maxhp, saved.hp));
+          mon.fainted = mon.hp === 0;
           mon.status = mon.hp > 0 ? (saved.status || '') : '';
           mon.statusState = mon.status ? {id: mon.status, target: mon} : {};
           for (let j = 0; j < mon.baseMoveSlots.length; j++) {
@@ -109,6 +110,7 @@ export class GPBattleStream extends BattleStreams.BattleStream {
           mon.moveSlots = mon.baseMoveSlots.slice();
         }
       }
+      for (const side of sides) side.pokemonLeft = side.pokemon.filter(mon => mon.hp > 0).length;
       installFormHooks(battle, self.gpTeams, self.formEvents);
       self.initialStats = currentStats(battle);
       return originalStart.apply(this, args);
