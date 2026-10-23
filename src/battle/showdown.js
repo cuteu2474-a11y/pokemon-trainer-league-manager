@@ -19,7 +19,7 @@ export async function simulateSixVsSix(teamA, teamB, {formatid = 'gen9customgame
     for await (const chunk of streams.omniscient) {
       chunks.push(chunk);
       if (/\|(win|tie)\|/.test(chunk)) break;
-      if (stream.battle?.turn > maxTurns) throw new Error(`Battle exceeded ${maxTurns} turns; tail: ${chunks.slice(-4).join(' ').slice(-1400)}`);
+      if (stream.battle?.turn > maxTurns) throw new Error(`Battle exceeded ${maxTurns} turns; sides: ${JSON.stringify(['p1','p2'].map(id=>({id,left:stream.battle[id].pokemonLeft,active:stream.battle[id].active.map(p=>({hp:p?.hp,fainted:p?.fainted,species:p?.species?.name})),all:stream.battle[id].pokemon.map(p=>p.hp)})))}; tail: ${chunks.slice(-4).join(' ').slice(-500)}`);
     }
     return chunks.join('\n');
   })();
