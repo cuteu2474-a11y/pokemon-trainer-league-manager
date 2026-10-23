@@ -34,3 +34,23 @@ export function injectBattleStats(battlePokemon, converted) {
   // Reapply only at battle initialization. Mid-battle application would erase damage.
   return battlePokemon;
 }
+
+/**
+ * Inject stats for both sides after teams have been instantiated and before turn 1.
+ * The caller must own a direct Battle instance (BattleStream hides this lifecycle).
+ * Rejects mismatches rather than silently applying stats to the wrong Pokémon.
+ */
+export function injectBattleTeams(battle, convertedA, convertedB) {
+  if (!battle?.p1?.pokemon || !battle?.p2?.pokemon) throw new TypeError('Direct Battle instance required');
+  const pairs = [[battle.p1.pokemon, convertedA], [battle.p2.pokemon, convertedB]];
+  for (const [team, converted] of pairs) {
+    if (!Array.isArray(converted) || team.length !== converted.length) throw new RangeError('Team size mismatch');
+    for (let i=0;i<team.length;i++) {
+      const actual = String(team[i].species?.name ?? team[i].species?.id ?? '').toLowerCase().replace(/[^a-z0-9]/g,'');
+      const expected = String(converted[i].species ?? '').toLowerCase().replace(/[^a-z0-9]/g,'');
+      if (!actual || actual !== expected) throw new Error('Species mismatch at slot ' + i);
+    }
+  }
+  for (const [team, converted] of pairs) for(let i=0;i<team.length;i++) injectBattleStats(team[i],converted[i]);
+  return battle;
+}
