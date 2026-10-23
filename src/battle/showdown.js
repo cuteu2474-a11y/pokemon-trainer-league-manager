@@ -19,6 +19,15 @@ export async function simulateSixVsSix(teamA, teamB, {formatid = 'gen9customgame
     for await (const chunk of streams.omniscient) {
       chunks.push(chunk);
       if (/\|(win|tie)\|/.test(chunk)) break;
+      // Carried fainted Pokemon can desynchronize Showdown's pokemonLeft counter.
+      // The actual HP state is authoritative for deciding a fully defeated side.
+      const battle=stream.battle;
+      if(battle?.started && !battle.ended && battle.p1?.pokemon?.length===6 && battle.p2?.pokemon?.length===6) {
+        const alive=id=>battle[id].pokemon.some(mon=>mon.hp>0);
+        if(!alive('p1') || !alive('p2')) {
+          battle.win(!alive('p1') ? (!alive('p2') ? null : 'p2') : 'p1');
+        }
+      }
       if (stream.battle?.turn > maxTurns) throw new Error(`Battle exceeded ${maxTurns} turns; sides: ${JSON.stringify(['p1','p2'].map(id=>({id,left:stream.battle[id].pokemonLeft,active:stream.battle[id].active.map(p=>({hp:p?.hp,fainted:p?.fainted,species:p?.species?.name})),all:stream.battle[id].pokemon.map(p=>p.hp)})))}; tail: ${chunks.slice(-4).join(' ').slice(-500)}`);
     }
     return chunks.join('\n');
