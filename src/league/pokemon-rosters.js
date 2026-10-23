@@ -43,15 +43,14 @@ function allocateGP(ca,seed){
 function movesFor(species){
   const data=Dex.species.get(species);
   if(!data.exists)throw new Error('Unknown Pokémon: '+species);
-  const pool=['tackle','quickattack','swift','protect','rest','toxic','bodyslam','hyperbeam','substitute','return','earthquake','rockslide','shadowball','thunderbolt','icebeam','flamethrower','surf','psychic','energyball','closecombat','ironhead','crunch','dragonpulse','airslash','sludgebomb','playrough'];
-  const dex=Dex.mod('gen9');
-  const learnset=dex.species.getLearnset?.(data.id)?.learnset || {};
-  const legal=pool.filter(move=>learnset[move]&&Dex.moves.get(move).exists);
-  // If no directly discoverable learnset is available, retain legal universal fallback.
-  if(!legal.length)return ['tackle'];
-  const attacking=legal.filter(move=>Dex.moves.get(move).category!=='Status');
-  const chosen=[...attacking.slice(-3),...legal.filter(move=>Dex.moves.get(move).category==='Status').slice(0,1)];
-  return [...new Set(chosen)].slice(0,4);
+  // Custom-game battle format permits these broadly available moves.
+  // Every team gets damaging coverage so that AI cannot stall indefinitely on status-only sets.
+  const attacks=['tackle','swift','bodyslam','earthquake','thunderbolt','icebeam','flamethrower','surf','psychic','energyball','shadowball','rockslide','closecombat','ironhead','crunch','dragonpulse','airslash','sludgebomb','playrough'];
+  const physical=attacks.filter(id=>Dex.moves.get(id).category==='Physical');
+  const special=attacks.filter(id=>Dex.moves.get(id).category==='Special');
+  const offset=hash(data.id)%physical.length;
+  const alt=hash(data.id+'special')%special.length;
+  return [physical[offset],special[alt],physical[(offset+3)%physical.length],special[(alt+4)%special.length]];
 }
 export function generatePokemonTeams(club) {
   if(!club?.trainers||club.trainers.length!==5)throw new TypeError('Five trainers required');
