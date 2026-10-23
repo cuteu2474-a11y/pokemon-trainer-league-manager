@@ -45,6 +45,48 @@ body{background:radial-gradient(ellipse at 8% 0%,#34203f 0%,#152032 25%,#0d1724 
 .metric-row{background:#26384b}.metric{background:#162538}.metric strong{font-size:21px}
 @media(max-width:1130px){.tactic-grid{grid-template-columns:200px minmax(250px,1fr)}.tactic-grid>.tactic-column:last-child{grid-column:1/-1}.config-panel{max-height:none}.content{padding:0 18px 30px}}
 @media(max-width:680px){.tactic-grid{display:block}.tactic-column{margin-bottom:24px}.formation{height:340px;max-width:400px}.topbar{padding:0 12px}.game-nav button{padding:12px}.sub-nav{padding-left:10px}.content{padding:0 10px 30px}.heading{padding:12px 0}.config-row{grid-template-columns:1fr}}
+
+/* Typography pass: editorial hierarchy, compact game-interface typography */
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap');
+:root{--ui-font:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;--display-font:'Barlow Condensed','Arial Narrow',var(--ui-font)}
+body{font-family:var(--ui-font);font-size:12px;letter-spacing:-.025em;font-weight:400}
+button,select,input{font-family:var(--ui-font)}
+.topbar .breadcrumbs{font-family:var(--display-font);font-size:15px;font-weight:800;letter-spacing:.065em;color:#e7e6f2}
+.topbar .breadcrumbs span{font-weight:800}
+.top-right span{font-family:var(--display-font);font-size:13px;letter-spacing:.04em;font-weight:700}
+.advance{font-weight:900;letter-spacing:-.015em}
+.game-nav button{font-size:13px;font-weight:800;letter-spacing:-.03em}
+.game-nav button.active{font-weight:900}
+.sub-nav button{font-size:11px;font-weight:600}
+.sub-nav button.active{font-weight:800}
+.heading h1{font-size:24px;font-weight:900;letter-spacing:-.065em}
+.heading .eyebrow{font-family:var(--display-font);font-size:12px;letter-spacing:.11em;font-weight:800}
+.heading .subtle{font-size:11px;font-weight:500}
+.season b{font-weight:900;color:#60d5c7}
+.workspace-head strong,.tactic-label{font-family:var(--display-font),var(--ui-font);font-size:17px;font-weight:800;letter-spacing:.025em}
+.workspace-head strong{font-size:19px}
+.plan-choice{font-size:11px;font-weight:500;letter-spacing:-.025em}
+.plan-choice.selected{font-weight:800;color:#fff}
+.mentality label{font-size:11px;font-weight:700}
+.field-unit{font-family:var(--display-font);font-size:21px;font-weight:800}
+.formation-caption{font-size:15px;font-weight:900;letter-spacing:-.04em}
+.formation-help{font-size:10px;line-height:1.75;font-weight:500}
+.order-row button{font-weight:800}
+.config-tabs button{font-weight:700}
+.config-tabs button.active{font-weight:900}
+.config-group h3{font-family:var(--display-font),var(--ui-font);font-size:15px;letter-spacing:.02em;font-weight:800}
+.config-row{font-size:11px;font-weight:500}
+.config-row>span:first-child{color:#c6d4df;font-weight:700}
+.config-row strong{font-weight:900}
+.config-options button{font-size:10px;font-weight:600}
+.config-options button.active{font-weight:900}
+.config-note{font-weight:400;line-height:1.7}
+.section-head h2{font-size:13px;font-weight:900}
+th{font-size:10px;font-weight:800}
+td.name,.name{font-weight:800}
+.metric span{font-weight:700}
+.metric strong{font-family:var(--display-font),var(--ui-font);font-weight:800;font-size:27px;letter-spacing:.01em}
+.rating{font-weight:900}
 </style></head><body><div class="app"><main class="main">
 <header class="topbar"><div class="breadcrumbs">◀　▶　✉　　TRAINER MANAGER　 <span style="color:#63d5ca">TEAM</span></div><div class="top-right"><span>W1 | 2026 / 27 시즌</span><button class="advance" id="advance">계속 진행 ❯❯</button></div></header>
 <nav class="game-nav" id="navigation"><button data-view="home">구단</button><button data-view="squad">팀</button><button data-view="pokemon">포켓몬</button><button data-view="league">대회</button><button data-view="scouting">스카우팅</button><button data-view="finances">경영</button></nav>
