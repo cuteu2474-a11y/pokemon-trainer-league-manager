@@ -10,8 +10,8 @@ export async function simulateSixVsSix(teamA, teamB, {formatid = 'gen9customgame
   const packedB = packGPTeam(teamB);
   const stream = new GPBattleStream(teamA, teamB, carry);
   const streams = BattleStreams.getPlayerStreams(stream);
-  const p1 = new TrainerAI(streams.p1, trainerA, {seed});
-  const p2 = new TrainerAI(streams.p2, trainerB, {seed:seed?.map(x => (x + 17) >>> 0)});
+  const p1 = new TrainerAI(streams.p1, trainerA, {seed, team:teamA});
+  const p2 = new TrainerAI(streams.p2, trainerB, {seed:seed?.map(x => (x + 17) >>> 0), team:teamB});
   p1.side = 'p1'; p2.side = 'p2';
   const tasks = [p1.start(), p2.start()];
   const collector = (async () => {
