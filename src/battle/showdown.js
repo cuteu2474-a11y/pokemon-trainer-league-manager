@@ -16,12 +16,10 @@ export async function simulateSixVsSix(teamA, teamB, {formatid = 'gen9customgame
   const tasks = [p1.start(), p2.start()];
   const collector = (async () => {
     const chunks = [];
-    let turnCount = 0;
     for await (const chunk of streams.omniscient) {
       chunks.push(chunk);
-      turnCount += (chunk.match(/\|turn\|/g) || []).length;
       if (/\|(win|tie)\|/.test(chunk)) break;
-      if (turnCount > maxTurns) throw new Error(`Battle exceeded ${maxTurns} turns; tail: ${chunks.slice(-4).join(' ').slice(-1400)}`);
+      if (stream.battle?.turn > maxTurns) throw new Error(`Battle exceeded ${maxTurns} turns; tail: ${chunks.slice(-4).join(' ').slice(-1400)}`);
     }
     return chunks.join('\n');
   })();
