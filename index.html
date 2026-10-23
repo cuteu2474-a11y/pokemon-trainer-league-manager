@@ -117,7 +117,37 @@ td.num,th.num,.rating{font-family:var(--display-font),var(--ui-font);font-varian
 
 :root{--ui-font:'Malgun Gothic','맑은 고딕','Apple SD Gothic Neo',Arial,sans-serif;--display-font:'Malgun Gothic','맑은 고딕','Apple SD Gothic Neo',Arial,sans-serif}
 html,body,button,select,input,.topbar .breadcrumbs,.top-right span,.game-nav button,.heading h1,.heading .eyebrow,.workspace-head strong,.tactic-label,.config-group h3,.field-unit,.metric strong{font-family:var(--ui-font)}
-</style></head><body><div class="app"><main class="main">
+
+/* Entry flow */
+.entry-layer{position:fixed;inset:0;z-index:90;background:radial-gradient(ellipse at 74% 20%,#3c254f 0%,#172b41 37%,#0b1422 78%);display:grid;place-items:center;padding:22px;overflow:auto}
+.entry-layer[hidden]{display:none}
+.entry-frame{width:min(1060px,100%);min-height:570px;border:1px solid #40506a;background:linear-gradient(135deg,#16273c,#0e1929);box-shadow:0 35px 110px #0009;display:grid;grid-template-columns:1.1fr .9fr}
+.entry-hero{padding:66px 52px;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(155deg,#392044,#1d2742 60%,#132c42)}
+.entry-kicker{font-size:12px;letter-spacing:.19em;font-weight:800;color:#60d9c9}
+.entry-title{font-size:clamp(44px,6vw,76px);font-weight:900;line-height:1.03;letter-spacing:-.07em;margin:24px 0}
+.entry-title em{font-style:normal;color:#e15bbb}
+.entry-desc{font-size:14px;color:#c4d2e1;line-height:1.95;max-width:440px}
+.entry-meta{font-size:11px;color:#a7b9c9;border-top:1px solid #556075;padding-top:15px}
+.entry-side{padding:65px 43px;display:flex;flex-direction:column;justify-content:center;gap:15px}
+.entry-side h2{font-size:23px;margin:0 0 10px;font-weight:850}
+.entry-button{background:#a92f9e;border:1px solid #e064c3;color:#fff;padding:15px 18px;font-weight:850;text-align:left;font-size:14px;cursor:pointer}
+.entry-button.secondary{background:#192d40;border-color:#456076}
+.entry-button:disabled{opacity:.45;cursor:not-allowed}
+.entry-foot{color:#8fa6b7;font-size:11px;line-height:1.8}
+.setup-frame{width:min(860px,100%);background:#111e30;border:1px solid #45526b;padding:32px}
+.setup-frame h2{font-size:25px;margin:0 0 6px}
+.setup-label{display:block;color:#70d8cd;font-size:11px;font-weight:800;margin:20px 0 7px}
+.setup-input{width:100%;padding:12px 14px;background:#091524;border:1px solid #40536b;color:white;font-size:13px;border-radius:3px}
+.setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.setup-actions{display:flex;justify-content:space-between;gap:12px;margin-top:25px}
+.setup-actions .entry-button{min-width:150px;text-align:center}
+.setup-summary{background:#1b2c40;border-left:3px solid #62d2c8;padding:14px 17px;margin-top:18px;font-size:12px;line-height:1.9}
+.tutorial-counter{font-family:var(--ui-font);font-size:12px;font-weight:800;color:#e768c4;letter-spacing:.12em}
+.tutorial-heading{font-size:30px;font-weight:900;margin:20px 0 12px}
+.tutorial-body{font-size:14px;line-height:2.05;color:#d2dce8;min-height:170px}
+.tutorial-stepper{display:flex;gap:7px;margin-top:20px}.tutorial-stepper i{height:4px;flex:1;background:#39465b}.tutorial-stepper i.active{background:#d54ba9}
+@media(max-width:720px){.entry-frame{display:block}.entry-hero{padding:35px 28px;min-height:300px}.entry-side{padding:28px}.setup-grid{grid-template-columns:1fr}.setup-frame{padding:23px}.entry-title{font-size:48px}}
+</style></head><body><div id="entry-layer" class="entry-layer" aria-live="polite"></div><div class="app"><main class="main">
 <header class="topbar"><div class="breadcrumbs">◀　▶　✉　　TRAINER MANAGER　 <span style="color:#63d5ca">TEAM</span></div><div class="top-right"><span>W1 | 2026 / 27 시즌</span><button class="advance" id="advance">계속 진행 ❯❯</button></div></header>
 <nav class="game-nav" id="navigation"><button data-view="home">구단</button><button data-view="squad">팀</button><button data-view="pokemon">포켓몬</button><button data-view="league">대회</button><button data-view="scouting">스카우팅</button><button data-view="finances">경영</button></nav>
 <nav class="sub-nav" id="subnavigation"><button data-view="home">개요</button><button data-view="squad">선수단</button><button data-view="tactics">게임 플랜</button><button data-view="pokemon">포켓몬 편성</button><button data-view="fixtures">일정</button><button data-view="league">리그 순위</button><button data-view="scouting">탐색</button><button data-view="finances">재정</button></nav>
@@ -132,6 +162,38 @@ const trainers=[
 ];
 const divisionNames=['구름시티','미르시티','슛시티','테이블시티','해안시티','노랑시티','금빛시티','하우올리시티','축복시티','뇌문시티'];
 const stats=['tactics','switching','scouting','training','capture','appraisal'];const labels={tactics:'전술 이해도',switching:'교체 판단',scouting:'탐색',training:'육성',capture:'포획',appraisal:'개체 감별'};
+const availableClubs=[
+['미르시티','칼로스',1],['구름시티','하나',1],['테이블시티','팔데아',1],['슛시티','가라르',1],['금빛시티','성도',1],['노랑시티','관동',1],['해안시티','호연',1],['축복시티','신오',1],['하우올리시티','알로라',1],['뇌문시티','하나',1],
+['너클시티','가라르',2],['보울마을','팔데아',2],['엔진시티','가라르',2],['장막시티','신오',2],['무지개시티','관동',2],['잿빛도시','호연',2],['쌍용시티','하나',2],['보라시티','호연',2],['갈색시티','관동',2],['운하시티','신오',2],
+['연고시티','신오',3],['말리에시티','알로라',3],['이설시티','칼로스',3],['삼채시티','칼로스',3],['비익시티','칼로스',3],['아라베스크마을','가라르',3],['인주시티','성도',3],['고동마을','성도',3],['용암마을','호연',3],['신수마을','신오',3],
+['터프마을','가라르',4],['펄롱마을','가라르',4],['보울마을 남부','팔데아',4],['아르타존','팔데아',4],['오하나마을','알로라',4],['릴리마을','알로라',4],['태초마을','관동',4],['연두마을','성도',4],['미로마을','호연',4],['떡잎마을','신오',4]
+];
+const saveKey='trainer-league:save:v1';let save=null;let entryStage='menu',tutorialStep=0;
+try{const raw=JSON.parse(localStorage.getItem(saveKey));if(raw&&Number.isInteger(raw.clubIndex)&&raw.clubIndex>=0&&raw.clubIndex<40&&typeof raw.manager==='string')save=raw;}catch{}
+let setup={manager:'',clubIndex:0};
+const tutorialSlides=[
+['감독으로서의 첫 시즌','이 게임에서 당신은 포켓몬 구단의 감독입니다. 4개 디비전, 총 40개 구단이 경쟁합니다.\n\n구단을 선택하고 트레이너 5명과 포켓몬 30마리를 운영하며 승격과 우승을 목표로 합니다.'],
+['트레이너 5명의 연승전','한 경기에는 트레이너 5명이 차례로 출전합니다. 각 트레이너는 포켓몬 6마리를 보유합니다.\n\n상대 트레이너를 이기면 살아남은 포켓몬을 데리고 다음 상대에게 도전합니다. 쓰러진 포켓몬은 다음 대결에 돌아오지 않습니다.'],
+['게임 플랜 관리','상단의 팀 → 게임 플랜에서 트레이너를 선택하고 출전 순서를 바꿀 수 있습니다.\n\n상대에 따라 선봉과 에이스를 조정하는 것이 중요합니다. 현재 웹 시안에서는 출전 순서가 브라우저에 저장됩니다.'],
+['리그와 구단 운영','각 디비전은 10개 구단, 18라운드 홈 앤드 어웨이 방식입니다. 상위 2팀은 승격하고 하위 2팀은 강등됩니다.\n\n포켓몬·스카우팅·재정 화면에서 구단의 전력을 살펴보세요. 일부 운영 기능과 실제 경기 진행은 아직 개발 중입니다.'],
+['감독실로 이동','준비가 끝났습니다. 우선 팀의 트레이너를 살펴보고 게임 플랜에서 출전 순서를 정해보세요.\n\n경기 시뮬레이션을 실행하는 버튼은 아직 활성화되지 않았습니다. 지금은 구단 관리 화면을 체험할 수 있습니다.']
+];
+function safeText(x){return String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function showEntry(stage){entryStage=stage;const el=document.getElementById('entry-layer');el.hidden=false;
+if(stage==='menu'){el.innerHTML='<div class="entry-frame"><section class="entry-hero"><div><div class="entry-kicker">POKÉMON · CLUB MANAGEMENT</div><div class="entry-title">TRAINER<br><em>LEAGUE</em></div><p class="entry-desc">트레이너를 지휘하고, 포켓몬을 육성하고, 구단을 승격시키세요. 당신의 첫 시즌이 여기서 시작됩니다.</p></div><div class="entry-meta">4 DIVISIONS　 /　 40 CLUBS　 /　 200 TRAINERS</div></section><section class="entry-side"><div class="entry-kicker">MAIN MENU</div><h2>감독 커리어</h2><button class="entry-button" data-entry="setup">새 게임 시작　→</button><button class="entry-button secondary" data-entry="continue" '+(!save?'disabled':'')+'>이어하기　→</button><button class="entry-button secondary" data-entry="guide">게임 안내</button><div class="entry-foot">로컬 브라우저에 감독 정보와 출전 순서를 저장합니다.<br>현재 버전: 관리 화면 및 튜토리얼 체험</div></section></div>';return;}
+if(stage==='setup'){el.innerHTML='<div class="setup-frame"><div class="entry-kicker">NEW CAREER / STEP 01</div><h2>새 구단 만들기</h2><p class="entry-desc">감독 이름과 맡을 구단을 선택하세요. 40개 구단은 4개 리그에 배정되어 있습니다.</p><div class="setup-grid"><div><label class="setup-label" for="manager-name">감독 이름</label><input class="setup-input" id="manager-name" maxlength="24" placeholder="감독 이름 입력" value="'+safeText(setup.manager)+'"></div><div><label class="setup-label" for="club-choice">맡을 구단</label><select class="setup-input" id="club-choice">'+availableClubs.map((c,i)=>'<option value="'+i+'" '+(i===setup.clubIndex?'selected':'')+'>'+c[0]+' 클럽 · '+c[2]+'부</option>').join('')+'</select></div></div><div class="setup-summary" id="club-summary"></div><div class="setup-actions"><button class="entry-button secondary" data-entry="menu">← 돌아가기</button><button class="entry-button" data-entry="create">구단 취임 →</button></div><p class="entry-foot">※ 구단 선택은 감독 프로필에 저장됩니다. 다른 구단의 실제 로스터 연결은 개발 중이며 현재 관리 화면에는 미르시티 예시 로스터가 표시됩니다.</p></div>';updateSetupSummary();return;}
+if(stage==='tutorial'){const [title,body]=tutorialSlides[tutorialStep];el.innerHTML='<div class="setup-frame"><div class="tutorial-counter">WELCOME TO TRAINER LEAGUE　　'+String(tutorialStep+1).padStart(2,'0')+' / 05</div><h2 class="tutorial-heading">'+title+'</h2><div class="tutorial-body">'+body.split('\n').map(s=>safeText(s)).join('<br>')+'</div><div class="tutorial-stepper">'+tutorialSlides.map((_,i)=>'<i class="'+(i<=tutorialStep?'active':'')+'"></i>').join('')+'</div><div class="setup-actions"><button class="entry-button secondary" data-entry="'+(tutorialStep===0?'menu':'prev')+'">← '+(tutorialStep===0?'메인 메뉴':'이전')+'</button><button class="entry-button" data-entry="next">'+(tutorialStep===4?'감독실 입장':'다음 →')+'</button></div></div>';return;}}
+function updateSetupSummary(){const c=availableClubs[setup.clubIndex];const el=document.getElementById('club-summary');if(el)el.innerHTML='<strong>'+c[0]+' 클럽</strong>　·　'+c[1]+' 지방　·　'+c[2]+'부 리그<br>감독: '+safeText(setup.manager||'이름 미입력')+'<br>기본 구성: 트레이너 5명 / 포켓몬 30마리';}
+function enterOffice(){document.getElementById('entry-layer').hidden=true;state.view='home';render();}
+document.addEventListener('input',e=>{if(e.target.id==='manager-name'){setup.manager=e.target.value;updateSetupSummary();}});
+document.addEventListener('change',e=>{if(e.target.id==='club-choice'){setup.clubIndex=Number(e.target.value);updateSetupSummary();}});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-entry]');if(!b)return;const act=b.dataset.entry;
+if(act==='menu'||act==='setup'){showEntry(act);return;}
+if(act==='continue'){if(save)enterOffice();return;}
+if(act==='guide'){tutorialStep=0;showEntry('tutorial');return;}
+if(act==='create'){if(!setup.manager.trim()){document.getElementById('manager-name').focus();return;}save={manager:setup.manager.trim(),clubIndex:setup.clubIndex,createdAt:new Date().toISOString()};try{localStorage.setItem(saveKey,JSON.stringify(save));}catch{}tutorialStep=0;showEntry('tutorial');return;}
+if(act==='prev'){tutorialStep=Math.max(0,tutorialStep-1);showEntry('tutorial');return;}
+if(act==='next'){if(tutorialStep===4){if(save)enterOffice();else showEntry('menu');}else{tutorialStep++;showEntry('tutorial');}}});
 const state={view:'tactics',selected:0,tab:'all',day:1,order:[0,1,2,3,4],division:1,plan:0,switchPref:2};
 const lineupStorageKey='trainer-league:lumiose:lineup:v1';
 try{const saved=JSON.parse(localStorage.getItem(lineupStorageKey));if(Array.isArray(saved)&&saved.length===5&&new Set(saved).size===5&&saved.every(i=>Number.isInteger(i)&&i>=0&&i<5))state.order=saved;}catch{}
@@ -158,9 +220,9 @@ function fixtures(){return '<div class="layout"><div><div class="section"><div c
 function scouting(){return '<div class="two-col"><div class="section"><div class="section-head"><h2>지역 탐색</h2><small>스카우팅 업무</small></div><div class="empty">지역별 탐색 대상과 포획 보고서는 실제 탐색 시스템과 연결할 예정입니다.</div></div><div class="section"><div class="section-head"><h2>담당 트레이너</h2></div>'+trainers.map(t=>'<div class="formline"><strong>'+t.name+'</strong><span>탐색 '+value(t.scouting)+' / 감별 '+value(t.appraisal)+'</span></div>').join('')+'</div></div>'}
 function finances(){return '<div class="metric-row"><div class="metric"><span>운영 자금</span><strong>₽12.0M</strong><small>도시 규모 지수 100</small></div><div class="metric"><span>팬 규모</span><strong>75,000</strong><small>초기 추정치</small></div><div class="metric"><span>시설 수준</span><strong>20 <small>/ 20</small></strong><small>초기 설정</small></div><div class="metric"><span>구단 규모</span><strong>대도시</strong><small>최상위 규모</small></div></div><div class="section"><div class="section-head"><h2>재정 보고</h2></div><div class="empty">구단 초기 자금은 생성 규칙에 연결된 값입니다. 수입·지출·계약 예산은 재정 엔진 연동 후 표시됩니다.</div></div>'}
 const pages={home:['Club overview','구단 개요','미르시티 FC · 칼로스 지방',home],squad:['Squad','트레이너','1군 등록 명단 및 능력치',squad],tactics:['Tactics','전술 및 출전 순서','연승전 출전 순서와 트레이너 AI',tactics],pokemon:['Pokémon','포켓몬','트레이너별 등록 포켓몬',pokemon],league:['Competition','리그','4개 디비전 · 승강급 2구단',league],fixtures:['Fixtures','일정 및 결과','2026 / 27 시즌',fixtures],scouting:['Recruitment','스카우팅','지역 탐색 및 개체 감별',scouting],finances:['Finances','재정','운영 자금 및 시설 현황',finances]};
-function render(){const p=pages[state.view];$('eyebrow').textContent=p[0];$('page-title').textContent=p[1];$('page-subtitle').textContent=p[2];$('breadcrumb').textContent='구단 / '+p[1];$('view').innerHTML=p[3]();document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===state.view));}
+function render(){const p=pages[state.view];$('eyebrow').textContent=p[0];$('page-title').textContent=p[1];$('page-subtitle').textContent=p[2];const crumb=$('breadcrumb');if(crumb)crumb.textContent='구단 / '+p[1];$('view').innerHTML=p[3]();document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===state.view));}
 document.addEventListener('click',e=>{const plan=e.target.closest('[data-plan]');if(plan){state.plan=Number(plan.dataset.plan);render();return}const nav=e.target.closest('[data-view]');if(nav){state.view=nav.dataset.view;render();return}const go=e.target.closest('[data-go]');if(go){state.view=go.dataset.go;render();return}const tr=e.target.closest('[data-trainer]');if(tr){state.selected=Number(tr.dataset.trainer);render();return}const move=e.target.closest('[data-move]');if(move){const [i,delta]=move.dataset.move.split(':').map(Number),j=i+delta;if(j>=0&&j<5){[state.order[i],state.order[j]]=[state.order[j],state.order[i]];persistLineup();render()}}});
 document.addEventListener('change',e=>{if(e.target.id==='pokemon-trainer'){state.selected=Number(e.target.value);render()}if(e.target.id==='division'){state.division=Number(e.target.value);render()}});
 $('advance').addEventListener('click',()=>{const n=$('notification');n.classList.remove('hidden');n.textContent='출전 순서는 이 브라우저에 저장됩니다. 경기 진행 및 서버 연동은 아직 비활성화 상태입니다.';});
-render();
+render();showEntry('menu');
 </script></body></html>
