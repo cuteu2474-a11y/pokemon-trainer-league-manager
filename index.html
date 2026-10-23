@@ -47,7 +47,6 @@ body{background:radial-gradient(ellipse at 8% 0%,#34203f 0%,#152032 25%,#0d1724 
 @media(max-width:680px){.tactic-grid{display:block}.tactic-column{margin-bottom:24px}.formation{height:340px;max-width:400px}.topbar{padding:0 12px}.game-nav button{padding:12px}.sub-nav{padding-left:10px}.content{padding:0 10px 30px}.heading{padding:12px 0}.config-row{grid-template-columns:1fr}}
 
 /* Typography pass: editorial hierarchy, compact game-interface typography */
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap');
 :root{--ui-font:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;--display-font:'Barlow Condensed','Arial Narrow',var(--ui-font)}
 body{font-family:var(--ui-font);font-size:12px;letter-spacing:-.025em;font-weight:400}
 button,select,input{font-family:var(--ui-font)}
@@ -89,8 +88,6 @@ td.name,.name{font-weight:800}
 .rating{font-weight:900}
 
 /* Font system v3: SUIT for Korean dense UI, Outfit for display and figures */
-@import url('https://cdn.jsdelivr.net/gh/sun-typeface/SUIT@2/fonts/variable/woff2/SUIT-Variable.css');
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
 :root{--ui-font:'SUIT Variable','Apple SD Gothic Neo','Malgun Gothic',sans-serif;--display-font:'Outfit','SUIT Variable',sans-serif}
 html,body{font-family:var(--ui-font);font-weight:500;letter-spacing:-.018em}
 button,select,input{font-family:var(--ui-font)}
@@ -117,6 +114,9 @@ button,select,input{font-family:var(--ui-font)}
 .metric strong{font-family:var(--display-font);font-weight:700;font-variant-numeric:tabular-nums}
 td.num,th.num,.rating{font-family:var(--display-font),var(--ui-font);font-variant-numeric:tabular-nums}
 .section-head h2{font-weight:800}
+
+:root{--ui-font:'Malgun Gothic','맑은 고딕','Apple SD Gothic Neo',Arial,sans-serif;--display-font:'Malgun Gothic','맑은 고딕','Apple SD Gothic Neo',Arial,sans-serif}
+html,body,button,select,input,.topbar .breadcrumbs,.top-right span,.game-nav button,.heading h1,.heading .eyebrow,.workspace-head strong,.tactic-label,.config-group h3,.field-unit,.metric strong{font-family:var(--ui-font)}
 </style></head><body><div class="app"><main class="main">
 <header class="topbar"><div class="breadcrumbs">◀　▶　✉　　TRAINER MANAGER　 <span style="color:#63d5ca">TEAM</span></div><div class="top-right"><span>W1 | 2026 / 27 시즌</span><button class="advance" id="advance">계속 진행 ❯❯</button></div></header>
 <nav class="game-nav" id="navigation"><button data-view="home">구단</button><button data-view="squad">팀</button><button data-view="pokemon">포켓몬</button><button data-view="league">대회</button><button data-view="scouting">스카우팅</button><button data-view="finances">경영</button></nav>
