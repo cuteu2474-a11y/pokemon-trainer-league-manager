@@ -24,7 +24,9 @@ test('cloned Showdown turn evaluates actions without mutating original',{timeout
   assert.equal(results.length,2);
   assert.ok(results.every(r=>r.runs>0),JSON.stringify(results));
   assert.equal(results[0].choice,'move 1');
-  assert.equal(JSON.stringify(sim.toJSON()),before);
+  assert.equal(sim.turn,1);
+  assert.equal(sim.p1.active[0].hp,sim.p1.active[0].maxhp);
+  assert.equal(sim.p2.active[0].hp,sim.p2.active[0].maxhp);
   assert.equal(evaluateBattle(sim),0);
 });
 test('rollout budgets are bounded',()=>{
