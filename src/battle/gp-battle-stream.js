@@ -67,9 +67,10 @@ export function installFormHooks(battle, teams, formEvents = []) {
 
 /** Provides Battle access before the simulator's very first turn. */
 export class GPBattleStream extends BattleStreams.BattleStream {
-  constructor(teamA, teamB) {
+  constructor(teamA, teamB, carry = {}) {
     super({noCatch: true});
     this.gpTeams = [teamA, teamB];
+    this.carry = carry;
     this.initialStats = null;
     this.formEvents = [];
   }
@@ -90,6 +91,24 @@ export class GPBattleStream extends BattleStreams.BattleStream {
         return convertPokemon({...meta, natureModifiers: natureModifiers(battle.dex, meta.nature)}, mon.species);
       }));
       injectBattleTeams(battle, converted[0], converted[1]);
+      for (const [sideIndex, key] of ['p1','p2'].entries()) {
+        const prior = self.carry[key];
+        if (!prior) continue;
+        for (let i = 0; i < 6; i++) {
+          const mon = sides[sideIndex].pokemon[i];
+          const saved = prior[i];
+          if (!saved) throw new Error(`Missing carry state for ${key} slot ${i}`);
+          mon.hp = Math.max(0, Math.min(mon.maxhp, saved.hp));
+          mon.status = mon.hp > 0 ? (saved.status || '') : '';
+          mon.statusState = mon.status ? {id: mon.status, target: mon} : {};
+          for (let j = 0; j < mon.baseMoveSlots.length; j++) {
+            if (saved.pp?.[j] === undefined) continue;
+            const slot = mon.baseMoveSlots[j];
+            slot.pp = Math.max(0, Math.min(slot.maxpp, saved.pp[j]));
+          }
+          mon.moveSlots = mon.baseMoveSlots.slice();
+        }
+      }
       installFormHooks(battle, self.gpTeams, self.formEvents);
       self.initialStats = currentStats(battle);
       return originalStart.apply(this, args);
