@@ -1,4 +1,5 @@
 import {RandomPlayerAI, Dex} from '@pkmn/sim';
+import {selectTacticalMove} from './tactical-search.js';
 
 const clamp = x => Math.max(1, Math.min(20, Number.isFinite(x) ? x : 10));
 export function trainerSkill(trainer = {}) {
@@ -29,6 +30,8 @@ export class TrainerAI extends RandomPlayerAI {
     super(stream, {move: Math.min(1, 0.70 + skill.tactics * 0.015), seed:options.seed});
     this.skill = skill;
     this.foeSpecies = null;
+    this.team = options.team || [];
+    this.ownActive = null;
     this.decisions = {moves:0, switches:0};
   }
   receiveLine(line) {
@@ -41,13 +44,22 @@ export class TrainerAI extends RandomPlayerAI {
     }
     return super.receiveLine(line);
   }
+  receiveRequest(request) {
+    const slot = request.side?.pokemon?.findIndex(mon => mon.active);
+    if (slot >= 0) this.ownActive = this.team[slot] || null;
+    return super.receiveRequest(request);
+  }
   chooseMove(active, moves) {
     this.decisions.moves++;
     if (this.prng.random() > this.skill.tactics / 20) return super.chooseMove(active, moves);
     const types = Dex.species.get(this.foeSpecies || '').types || [];
-    const ranked = moves.map((entry,i) => ({entry,i,score:scoreMove(entry.move,types)}));
-    ranked.sort((a,b)=>b.score-a.score || a.i-b.i);
-    return ranked[0].entry.choice;
+    const ownSpecies = Dex.species.get(this.ownActive?.species || '');
+    return selectTacticalMove(moves, {
+      foeTypes: types,
+      ownTypes: ownSpecies.exists ? ownSpecies.types : [],
+      ownAbility: this.ownActive?.ability,
+      ownItem: this.ownActive?.item,
+    }, this.skill.tactics, () => this.prng.random());
   }
   chooseSwitch(active, switches) {
     this.decisions.switches++;
