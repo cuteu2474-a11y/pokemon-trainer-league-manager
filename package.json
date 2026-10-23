@@ -1,1 +1,12 @@
-{"name":"pokemon-trainer-league-manager","private":true,"type":"module","scripts":{"test":"node --test"}}
+{
+  "name": "pokemon-trainer-league-manager",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "test:sim": "node --test tests/sim.test.js"
+  },
+  "dependencies": {
+    "@pkmn/sim": "0.10.11"
+  }
+}
