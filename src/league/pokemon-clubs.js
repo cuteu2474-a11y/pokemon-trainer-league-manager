@@ -1,4 +1,5 @@
 import {createLeague} from './season.js';
+import {assignLeagueTrainers} from './trainer-rosters.js';
 
 /** Fictional settlement-size indices for game balance, not canonical census data. */
 export const SETTLEMENTS = Object.freeze([
@@ -41,5 +42,5 @@ export function createPokemonLeague() {
     region:place.region,
     ...clubScale(place.size),
   }));
-  return createLeague(Array.from({length:4},(_,division)=>clubs.slice(division*10,division*10+10)));
+  return assignLeagueTrainers(createLeague(Array.from({length:4},(_,division)=>clubs.slice(division*10,division*10+10))));
 }
