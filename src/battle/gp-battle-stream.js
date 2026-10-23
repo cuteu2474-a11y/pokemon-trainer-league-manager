@@ -34,7 +34,8 @@ function natureModifiers(dex, name) {
 function currentStats(battle) {
   const [p1, p2] = [battle.p1, battle.p2].map(side => side.pokemon.map(mon => ({
     species: mon.species.name,
-    hp: mon.hp, maxhp: mon.maxhp,
+    hp: mon.hp, maxhp: mon.maxhp, status: mon.status,
+    pp: mon.baseMoveSlots.map(slot => slot.pp),
     atk: mon.storedStats.atk, def: mon.storedStats.def, spa: mon.storedStats.spa,
     spd: mon.storedStats.spd, spe: mon.storedStats.spe,
   })));
