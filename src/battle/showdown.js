@@ -1,16 +1,18 @@
-import {BattleStreams, RandomPlayerAI} from '@pkmn/sim';
+import {BattleStreams} from '@pkmn/sim';
+import {TrainerAI} from './trainer-ai.js';
 import {GPBattleStream, packGPTeam} from './gp-battle-stream.js';
 
 /** Full 6v6 Showdown simulation using authoritative GP-derived battle stats. */
-export async function simulateSixVsSix(teamA, teamB, {formatid = 'gen9customgame', maxTurns = 300, seed, carry = {}} = {}) {
+export async function simulateSixVsSix(teamA, teamB, {formatid = 'gen9customgame', maxTurns = 300, seed, carry = {}, trainerA = {}, trainerB = {}} = {}) {
   if (formatid !== 'gen9customgame') throw new RangeError('GP integration currently supports gen9customgame only');
   if (!Number.isInteger(maxTurns) || maxTurns < 1) throw new RangeError('Invalid maxTurns');
   const packedA = packGPTeam(teamA);
   const packedB = packGPTeam(teamB);
   const stream = new GPBattleStream(teamA, teamB, carry);
   const streams = BattleStreams.getPlayerStreams(stream);
-  const p1 = new RandomPlayerAI(streams.p1);
-  const p2 = new RandomPlayerAI(streams.p2);
+  const p1 = new TrainerAI(streams.p1, trainerA, {seed});
+  const p2 = new TrainerAI(streams.p2, trainerB, {seed:seed?.map(x => (x + 17) >>> 0)});
+  p1.side = 'p1'; p2.side = 'p2';
   const tasks = [p1.start(), p2.start()];
   const collector = (async () => {
     const chunks = [];
@@ -36,7 +38,7 @@ export async function simulateSixVsSix(teamA, teamB, {formatid = 'gen9customgame
         pp: mon.baseMoveSlots.map(slot => slot.pp),
       }))
     ]));
-    return {winner, log, initialStats: stream.initialStats, finalState, formEvents: [...stream.formEvents]};
+    return {winner, log, initialStats: stream.initialStats, finalState, aiDecisions:{p1:p1.decisions,p2:p2.decisions}, formEvents: [...stream.formEvents]};
   } finally {
     await stream.writeEnd();
     await Promise.allSettled(tasks);
