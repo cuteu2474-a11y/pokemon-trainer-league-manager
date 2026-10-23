@@ -7,7 +7,7 @@ const base={hp:108,atk:130,def:95,spa:80,spd:85,spe:102};
 const empty=Object.fromEntries(STATS.map(s=>[s,0]));
 const ctx={base,level:50,types:["dragon","ground"],moves:[{power:100,category:"physical",type:"ground",accuracy:100}],opponents:[{id:"foe",stats:{hp:160,atk:110,def:100,spa:90,spd:100,spe:100}}]};
 test("budget endpoints",()=>{assert.equal(gpBudget(200),313);assert.equal(gpBudget(100),156);});
-test("stat calculation",()=>{assert.deepEqual(actualStats(base,empty,50),{hp:223,atk:135,def:100,spa:85,spd:90,spe:107});});
+test("stat calculation",()=>{assert.deepEqual(actualStats(base,empty,50),{hp:168,atk:135,def:100,spa:85,spd:90,spe:107});});
 test("score finite and marginal values",()=>{assert.ok(Number.isFinite(scoreGP(empty,ctx)));assert.equal(Object.keys(gpMarginalValues(empty,ctx)).length,6);});
 test("growth deterministic, bounded and conservative",()=>{
  const initial={...empty,hp:1};validateGP(initial,1);
