@@ -39,7 +39,7 @@ export function evaluateMove(entry, {foeTypes = [], ownAbility, ownItem, ownType
     if (data.status || data.volatileStatus || data.sideCondition || data.weather || data.pseudoWeather) return 29;
     return 12;
   }
-  const effectiveness = foeTypes.reduce((v,t)=>v * 2 ** Dex.getEffectiveness(data.type,[t]),1);
+  const effectiveness = foeTypes.reduce((v,t)=>v * (Dex.getImmunity(data.type,[t]) ? 2 ** Dex.getEffectiveness(data.type,[t]) : 0),1);
   const stab = ownTypes.includes(data.type) ? 1.5 : 1;
   const power = data.basePower || 40;
   const multiplier = knownModifier({ability:ownAbility,item:ownItem},data);
