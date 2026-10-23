@@ -57,8 +57,8 @@ export function generatePokemonTeams(club) {
   if(!club?.trainers||club.trainers.length!==5)throw new TypeError('Five trainers required');
   const pool=REGIONAL_POOLS[club.region];
   if(!pool)throw new RangeError('Unknown region: '+club.region);
-  const used=new Set();
   for(let t=0;t<5;t++){
+    const used=new Set();
     const trainer=club.trainers[t];
     const signature=t===0&&trainer.isCanonical?SIGNATURES[trainer.name]:null;
     const speciesList=[];
