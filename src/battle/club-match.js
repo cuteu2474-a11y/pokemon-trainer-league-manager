@@ -8,10 +8,11 @@ export async function simulateClubMatch(clubA, clubB, {seed, maxBattles = 9} = {
     }
   }
   let a = 0, b = 0, carryA = null, carryB = null;
+  let teamA = clubA[0].team, teamB = clubB[0].team;
   const rounds = [];
   while (a < 5 && b < 5) {
     if (rounds.length >= maxBattles) throw new Error('Club match exceeded maximum battles');
-    const result = await simulateSixVsSix(clubA[a].team, clubB[b].team, {
+    const result = await simulateSixVsSix(teamA, teamB, {
       ...(seed ? {seed: seed.map((v,i) => (v + rounds.length * 65537 + i) >>> 0)} : {}),
       carry: {p1: carryA, p2: carryB},
     });
@@ -24,16 +25,26 @@ export async function simulateClubMatch(clubA, clubB, {seed, maxBattles = 9} = {
     }));
     if (victor === 'A') {
       b++;
-      carryA = recover(result.finalState.p1);
+      const paired = teamA.map((entry, i) => ({entry, state: recover(result.finalState.p1)[i]}))
+        .sort((x, y) => Number(y.state.hp > 0) - Number(x.state.hp > 0));
+      teamA = paired.map(x => x.entry);
+      carryA = paired.map(x => x.state);
+      teamB = b < 5 ? clubB[b].team : null;
       carryB = null;
     } else if (victor === 'B') {
       a++;
-      carryB = recover(result.finalState.p2);
+      const paired = teamB.map((entry, i) => ({entry, state: recover(result.finalState.p2)[i]}))
+        .sort((x, y) => Number(y.state.hp > 0) - Number(x.state.hp > 0));
+      teamB = paired.map(x => x.entry);
+      carryB = paired.map(x => x.state);
+      teamA = a < 5 ? clubA[a].team : null;
       carryA = null;
     } else {
       a++;
       b++;
       carryA = carryB = null;
+      teamA = a < 5 ? clubA[a].team : null;
+      teamB = b < 5 ? clubB[b].team : null;
     }
   }
   return {winner: a === 5 && b === 5 ? 'tie' : a === 5 ? 'B' : 'A',
