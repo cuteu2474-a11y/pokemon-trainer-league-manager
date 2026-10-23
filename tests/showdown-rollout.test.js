@@ -14,7 +14,7 @@ function battle() {
   // This also verifies cloned state preserves GP-injected stats.
   injectBattleTeams(sim,a.map((m,i)=>convertPokemon({...m,natureModifiers:{}},sim.p1.pokemon[i].species)),
     b.map((m,i)=>convertPokemon({...m,natureModifiers:{}},sim.p2.pokemon[i].species)));
-  sim.makeChoices('move 1','move 1');
+  sim.makeChoices('default','default');
   return sim;
 }
 test('cloned Showdown turn evaluates actions without mutating original',{timeout:30000},()=>{
