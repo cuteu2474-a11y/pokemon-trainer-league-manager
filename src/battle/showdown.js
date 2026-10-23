@@ -21,7 +21,7 @@ export async function simulateSixVsSix(teamA, teamB, {formatid = 'gen9customgame
       chunks.push(chunk);
       turnCount += (chunk.match(/\|turn\|/g) || []).length;
       if (/\|(win|tie)\|/.test(chunk)) break;
-      if (turnCount > maxTurns) throw new Error(`Battle exceeded ${maxTurns} turns`);
+      if (turnCount > maxTurns) throw new Error(`Battle exceeded ${maxTurns} turns; tail: ${chunks.slice(-4).join(' ').slice(-1400)}`);
     }
     return chunks.join('\n');
   })();
