@@ -111,7 +111,17 @@ export function advanceSeason(league) {
 
 /** Authoritative 5-trainer relay adapter; 5 defeats to 0 produces a 5:0 league score. */
 export async function showdownLeagueMatch(home,away,options={}) {
-  const result=await simulateClubMatch(home.trainers,away.trainers,options);
+  const orderedTrainers = (club, order) => {
+    const trainers=club.trainers;
+    if(order==null)return trainers;
+    if(!Array.isArray(order)||order.length!==5||new Set(order).size!==5||
+       order.some(index=>!Number.isInteger(index)||index<0||index>=5))
+      throw new RangeError('Trainer order must be a permutation of indices 0..4');
+    return order.map(index=>trainers[index]);
+  };
+  const {homeOrder,awayOrder,...battleOptions}=options;
+  const result=await simulateClubMatch(
+    orderedTrainers(home,homeOrder),orderedTrainers(away,awayOrder),battleOptions);
   return {homeScore:result.trainersDefeated.B,awayScore:result.trainersDefeated.A,details:result};
 }
 
