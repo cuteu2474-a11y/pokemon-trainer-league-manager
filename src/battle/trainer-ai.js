@@ -1,5 +1,6 @@
 import {RandomPlayerAI, Dex} from '@pkmn/sim';
-import {selectTacticalMove} from './tactical-search.js';
+import {selectTacticalMove, searchBudget} from './tactical-search.js';
+import {rolloutActions} from './showdown-rollout.js';
 
 const clamp = x => Math.max(1, Math.min(20, Number.isFinite(x) ? x : 10));
 export function trainerSkill(trainer = {}) {
@@ -32,7 +33,9 @@ export class TrainerAI extends RandomPlayerAI {
     this.foeSpecies = null;
     this.team = options.team || [];
     this.ownActive = null;
-    this.decisions = {moves:0, switches:0};
+    this.battleProvider = options.battleProvider;
+    this.decisions = {moves:0, switches:0, rollouts:0, rolloutFallbacks:0};
+
   }
   receiveLine(line) {
     if (line.startsWith('|switch|') || line.startsWith('|drag|')) {
@@ -54,6 +57,23 @@ export class TrainerAI extends RandomPlayerAI {
     if (this.prng.random() > this.skill.tactics / 20) return super.chooseMove(active, moves);
     const types = Dex.species.get(this.foeSpecies || '').types || [];
     const ownSpecies = Dex.species.get(this.ownActive?.species || '');
+    const battle = this.battleProvider?.();
+    if (battle?.requestState === 'move' && battle[this.side]?.active?.[0]?.hp) {
+      try {
+        const choices = moves.map(m => m.choice).filter(choice => /^move [1-4](?:$|\\s)/.test(choice));
+        const {depth,samples} = searchBudget(this.skill.tactics);
+        const ranked = rolloutActions(battle, {
+          sideId:this.side, choices, depth, samples:Math.min(samples,4),
+        });
+        if (ranked[0]?.runs > 0 && Number.isFinite(ranked[0].score)) {
+          this.decisions.rollouts++;
+          return ranked[0].choice;
+        }
+        this.decisions.rolloutFallbacks++;
+      } catch {
+        this.decisions.rolloutFallbacks++;
+      }
+    }
     return selectTacticalMove(moves, {
       foeTypes: types,
       ownTypes: ownSpecies.exists ? ownSpecies.types : [],
