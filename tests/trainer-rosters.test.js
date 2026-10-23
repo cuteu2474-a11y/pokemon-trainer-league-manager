@@ -11,10 +11,10 @@ test('all forty clubs receive five distinct city-linked trainers',()=>{
   for(const club of clubs){
     assert.equal(club.trainers.length,5);
     assert.deepEqual(club.trainers.map(t=>t.role),['captain','ace','strategist','specialist','prospect']);
-    assert.ok(club.trainers.every(t=>t.origin===club.city&&t.team.length===0));
+    assert.ok(club.trainers.every(t=>t.origin===club.city&&t.team.length===6));
     assert.ok(club.trainers.every(t=>t.tactics>=1&&t.tactics<=20&&t.switching>=1&&t.switching<=20));
     if(LOCAL_ICONS[club.city])assert.equal(club.trainers[0].name,LOCAL_ICONS[club.city][0]);
-    assert.deepEqual(club.trainers,generateClubTrainers(club));
+    assert.deepEqual(club.trainers.map(t=>({...t,team:[]})),generateClubTrainers(club));
   }
 });
 test('large-city squads have stronger average tactical skills without prohibiting village icons',()=>{
