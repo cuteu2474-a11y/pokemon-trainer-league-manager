@@ -1,43 +1,62 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {convertPokemon,injectBattleStats,injectBattleTeams,applyFormChange,applyTransformStats} from '../src/battle/gp-adapter.js';
-const gp={hp:1,atk:0,def:0,spa:0,spd:0,spe:0};
-const species={id:'garchomp',baseStats:{hp:108,atk:130,def:95,spa:80,spd:85,spe:102}};
-test('converts CA and GP to independent battle stats',()=>{
- const result=convertPokemon({id:'g1',species:'Garchomp',ca:1,pa:180,gp,level:50},species);
- assert.equal(result.stats.hp,169);assert.equal(result.stats.atk,135);
-});
-test('injects stats into an initialized battle Pokemon-like object',()=>{
- const converted=convertPokemon({id:'g1',species:'Garchomp',ca:1,pa:180,gp,level:50},species);
- const obj={storedStats:{},baseStoredStats:{},maxhp:1,hp:1};
- injectBattleStats(obj,converted);
- assert.equal(obj.maxhp,169);assert.equal(obj.storedStats.atk,135);
-});
-test('rejects invalid CA/PA',()=>assert.throws(()=>convertPokemon({ca:100,pa:99,gp,level:50},species)));
+import {
+  convertPokemon, injectBattleStats, injectBattleTeams, applyFormChange, applyTransformStats
+} from '../src/battle/gp-adapter.js';
 
-test('injects both teams only when species and slots match',()=>{
- const a=convertPokemon({id:'a',species:'Garchomp',ca:1,pa:180,gp,level:50},species);
- const make=()=>({species:{name:'Garchomp'},storedStats:{},baseStoredStats:{},hp:1,maxhp:1});
- const battle={p1:{pokemon:[make()]},p2:{pokemon:[make()]}};
- injectBattleTeams(battle,[a],[a]);
- assert.equal(battle.p1.pokemon[0].maxhp,169);
- assert.equal(battle.p2.pokemon[0].storedStats.atk,135);
- assert.throws(()=>injectBattleTeams(battle,[{...a,species:'Pikachu'}],[a]),/Species mismatch/);
+const gp = {hp:1,atk:0,def:0,spa:0,spd:0,spe:0};
+const pokemon = {id:'g1',species:'Garchomp',ca:1,pa:180,gp,level:50};
+const species = {id:'garchomp',name:'Garchomp',baseStats:{hp:108,atk:130,def:95,spa:80,spd:85,spe:102}};
+function makeBattlePokemon() {
+  return {species:{name:'Garchomp'},storedStats:{},baseStoredStats:{},hp:1,maxhp:1,speed:1};
+}
+
+test('GP conversion uses flooring at level 50 (HP 168, attack 135)',()=>{
+  const converted = convertPokemon(pokemon,species);
+  assert.equal(converted.stats.hp,168);
+  assert.equal(converted.stats.atk,135);
 });
 
-test('form changes recalculate stats from unchanged GP without healing',()=>{
- const pokemon={id:'g1',species:'Garchomp',ca:1,pa:180,gp,level:50};
- const normal=convertPokemon(pokemon,species);
- const battle={storedStats:{...normal.stats},baseStoredStats:{...normal.stats},maxhp:normal.stats.hp,hp:normal.stats.hp-40};
- const mega={id:'megagarchomp',baseStats:{hp:108,atk:170,def:115,spa:120,spd:95,spe:92}};
- const updated=applyFormChange(battle,pokemon,mega);
- assert.equal(battle.storedStats.atk,175);
- assert.equal(battle.hp,129);
- assert.equal(updated.gp.hp,1);
+test('battle stat injection updates max HP, base HP, cached speed and base stats',()=>{
+  const converted = convertPokemon(pokemon,species);
+  const mon = injectBattleStats(makeBattlePokemon(),converted);
+  assert.equal(mon.maxhp,168);
+  assert.equal(mon.baseMaxhp,168);
+  assert.equal(mon.baseStoredStats.hp,168);
+  assert.equal(mon.storedStats.atk,135);
+  assert.equal(mon.speed,107);
 });
-test('Transform copies target stats but not HP',()=>{
- const self={storedStats:{atk:90,def:80,spa:70,spd:60,spe:50},hp:42,maxhp:100};
- const target={storedStats:{atk:180,def:150,spa:120,spd:100,spe:99},hp:200,maxhp:250};
- applyTransformStats(self,target);
- assert.equal(self.storedStats.atk,180);assert.equal(self.hp,42);assert.equal(self.maxhp,100);
+
+test('team injection verifies both teams before changing stats',()=>{
+  const converted = convertPokemon(pokemon,species);
+  const battle = {p1:{pokemon:[makeBattlePokemon()]},p2:{pokemon:[makeBattlePokemon()]}};
+  injectBattleTeams(battle,[converted],[converted]);
+  assert.equal(battle.p1.pokemon[0].maxhp,168);
+  assert.equal(battle.p2.pokemon[0].storedStats.atk,135);
+  assert.throws(()=>injectBattleTeams(battle,[{...converted,species:'Pikachu'}],[converted]),/Species mismatch/);
+});
+
+test('forme changes recalculate stats from GP while preserving existing damage',()=>{
+  const mon = injectBattleStats(makeBattlePokemon(),convertPokemon(pokemon,species));
+  mon.hp -= 40;
+  const newSpecies = {id:'megagarchomp',name:'Garchomp-Mega',baseStats:{hp:120,atk:170,def:115,spa:120,spd:95,spe:92}};
+  const updated = applyFormChange(mon,pokemon,newSpecies);
+  assert.equal(mon.storedStats.atk,175);
+  assert.equal(mon.maxhp,180);
+  assert.equal(mon.hp,140);
+  assert.deepEqual(updated.gp,gp);
+});
+
+test('Transform copies non-HP stats only',()=>{
+  const self = {storedStats:{atk:90,def:80,spa:70,spd:60,spe:50},hp:42,maxhp:100};
+  const target = {storedStats:{atk:180,def:150,spa:120,spd:100,spe:99},hp:200,maxhp:250};
+  applyTransformStats(self,target);
+  assert.equal(self.storedStats.atk,180);
+  assert.equal(self.storedStats.spe,99);
+  assert.equal(self.hp,42);
+  assert.equal(self.maxhp,100);
+});
+
+test('invalid CA/PA combination is rejected',()=> {
+  assert.throws(()=>convertPokemon({...pokemon,ca:100,pa:99},species));
 });
