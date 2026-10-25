@@ -28,6 +28,7 @@ test('cloned Showdown turn evaluates actions without mutating original',{timeout
   assert.equal(sim.p1.active[0].hp,sim.p1.active[0].maxhp);
   assert.equal(sim.p2.active[0].hp,sim.p2.active[0].maxhp);
   assert.equal(evaluateBattle(sim),0);
+  assert.equal(JSON.stringify(sim.toJSON()),before, 'search must not append hypothetical events to the live log');
 });
 test('rollout budgets are bounded',()=>{
   assert.throws(()=>rolloutActions(battle(),{choices:['move 1'],depth:4}),RangeError);

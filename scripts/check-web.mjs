@@ -10,6 +10,9 @@ let scripts = 0;
 for (const [, source] of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)) {
   new Script(source, {filename: `index.html:script-${++scripts}`});
 }
+for (const [, path] of html.matchAll(/<script\b[^>]*src="([^"]+)"[^>]*>/gi)) {
+  new Script(readFileSync(new URL(path, root), 'utf8'), {filename:path});
+}
 const assets = new Set(html.match(/assets\/ui\/[A-Za-z0-9_.-]+/g));
 for (const asset of assets) {
   if (!existsSync(new URL(asset, root))) throw new Error(`이미지 파일 누락: ${asset}`);

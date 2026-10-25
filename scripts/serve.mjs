@@ -1,3 +1,4 @@
+import matchHandler from '../api/match.js';
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {resolve, sep, extname} from 'node:path';
@@ -8,6 +9,17 @@ const types = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
 createServer(async (req, res) => {
   try {
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    if (pathname === '/api/match') {
+      let chunks = [], size = 0;
+      for await (const chunk of req) {
+        size += chunk.length;
+        if (size > 262144) {res.writeHead(413).end(); return;}
+        chunks.push(chunk);
+      }
+      try {req.body = JSON.parse(Buffer.concat(chunks).toString() || '{}');}
+      catch {res.writeHead(400).end(JSON.stringify({error:'요청 형식 오류'})); return;}
+      await matchHandler(req, res); return;
+    }
     const path = resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
     const relative = path.slice(root.length);
     if (!path.startsWith(root) || relative.split(sep).some(part => part.startsWith('.') || part === 'node_modules')) {

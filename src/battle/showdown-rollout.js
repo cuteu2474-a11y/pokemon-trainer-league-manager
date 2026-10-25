@@ -23,7 +23,9 @@ export function rolloutActions(battle, {sideId='p1', choices, opponentChoices, d
   for (const choice of choices) {
     let score = 0, runs = 0;
     for (let i=0;i<samples;i++) {
-      const clone = Battle.fromJSON(baseline);
+      // Showdown serialization retains the original log array by reference.
+      // Each search branch must own its log, including separate samples.
+      const clone = Battle.fromJSON(structuredClone(baseline));
       const enemy = opponentChoices?.[i % opponentChoices.length] ||
         legalRolloutMoves(clone,foeId)[i % Math.max(1,legalRolloutMoves(clone,foeId).length)]?.choice;
       if (!enemy) continue;
