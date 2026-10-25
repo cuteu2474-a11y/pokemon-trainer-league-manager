@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "check:web": "node scripts/check-web.mjs",
     "test": "node --test",
     "test:sim": "node --test tests/sim.test.js"
   },
