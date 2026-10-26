@@ -7,7 +7,8 @@ import {rolloutActions} from './showdown-rollout.js';
 const clamp=x=>Math.max(1,Math.min(20,Number.isFinite(x)?x:10));
 const limit=(x,a,b)=>Math.max(a,Math.min(b,x));
 export function trainerSkill(trainer={}){
-  return {tactics:clamp(trainer.tactics??10),switching:clamp(trainer.switching??10)};
+  return {tactics:clamp(trainer.moveJudgment??trainer.tactics??10),
+    switching:clamp(trainer.switchJudgment??trainer.switching??10)};
 }
 export function typeMultiplier(moveType,defenderTypes=[]){
   if(!moveType)return 1;
@@ -44,6 +45,7 @@ export class TrainerAI extends RandomPlayerAI{
     this.remaining=trainer.relayOpponentsRemaining??1;
     this.decisions={moves:0,switches:0,voluntarySwitches:0,rollouts:0,rolloutFallbacks:0,
       plan:this.plan,response:this.profile.response||'자율',preferred:this.profile.preferred,
+      traits:[...(this.profile.traits||[])],
       reasons:{},trace:[]};
   }
   record(kind,choice,reason,details={}){
@@ -90,6 +92,9 @@ export class TrainerAI extends RandomPlayerAI{
     if(this.plan==='offense'||this.plan==='tempo')chance-=.03;
     chance*=.35+this.profile.switchSkill/20;
     if(this.profile.preservation>=16&&this.remaining>1&&health<.55)chance+=.10;
+    // Earned play traits influence decision tendencies, not legal actions or stats.
+    if(this.profile.traits?.includes('적극적인 교체'))chance+=.075;
+    if(this.profile.traits?.includes('에이스 보존')&&this.remaining>1&&health<.75)chance+=.06;
     return 1-limit(chance,0,.48);
   }
   preference(move,battle){
@@ -103,7 +108,8 @@ export class TrainerAI extends RandomPlayerAI{
     const own=battle?.[this.side]?.active?.[0];
     if(!own)return 0;
     const hp=own.hp/Math.max(1,own.maxhp);
-    const conservation=Math.max(0,(this.profile.preservation-10)*.8+(this.remaining-1)*2);
+    const conservation=Math.max(0,(this.profile.preservation-10)*.8+(this.remaining-1)*2+
+      (this.profile.traits?.includes('에이스 보존')?5:0));
     if(move.heal&&hp<.65)return conservation+6;
     if(move.drain&&hp<.60)return conservation;
     if(move.selfdestruct||move.id==='explosion'||move.id==='selfdestruct')return -conservation*3;
@@ -122,7 +128,8 @@ export class TrainerAI extends RandomPlayerAI{
     const battle=this.battleProvider?.();
     const {ownTypes,foeTypes}=this.matchup();
     const context={foeTypes,ownTypes,ownAbility:this.ownActive?.ability,ownItem:this.ownActive?.item};
-    const clarity=this.profile.analysis/20,understands=this.prng.random()<this.skill.tactics/20;
+    const insight=this.profile.traits?.includes('전황 분석가')?2:0;
+    const clarity=limit((this.profile.analysis+insight)/20,0,1),understands=this.prng.random()<this.skill.tactics/20;
     if(!understands){
       const choice=super.chooseMove(active,moves);
       this.record('move',choice,'판단 실패 · 안전한 합법적 선택');
@@ -134,7 +141,7 @@ export class TrainerAI extends RandomPlayerAI{
         const choices=moves.map(x=>x.choice).filter(x=>/^move [1-4](?:$|\s)/.test(x));
         const {depth,samples}=searchBudget(this.profile.analysis);
         const ranked=rolloutActions(battle,{
-          sideId:this.side,choices,depth,samples:Math.min(samples,4),
+          sideId:this.side,choices,depth,samples:Math.min(samples+(insight?1:0),4),
         });
         for(const candidate of ranked){
           const index=Number(candidate.choice.split(' ')[1])-1;
