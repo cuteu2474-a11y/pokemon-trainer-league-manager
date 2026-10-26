@@ -147,21 +147,59 @@
       return task?.season===game.season&&task?.week===game.week;
     }).length;
   }
-  function optionStats(region,focus,skill=10){
-    const rare=focus==='rare',discovery=clamp(.89+skill*.004-(rare?.12:0),.3,.98);
-    const capture=clamp(.66+skill*.012-(rare?.09:0),.3,.94);
+  function optionStats(region,focus,skill=10,habitat='grass',time='day'){
+    const rare=focus==='rare';
+    const discovery=clamp(.89+skill*.004-(rare?.12:0)-
+      (habitat==='sea'?.025:0)-(time==='night'?.02:0),.3,.98);
+    const capture=clamp(.66+skill*.012-(rare?.09:0)-
+      (habitat==='cave'?.02:0),.3,.94);
     return {discovery,capture};
   }
-  function pickEncounter(region,focus,rand){
-    const names=REGIONS[region],weights=names.map(name=>{
-      const type=tier(name);
-      return type==='희귀'?(focus==='rare'?14:3):
-        type==='드묾'?(focus==='rare'?7:15):(focus==='rare'?3:26);
+  function timeWeight(name,time){
+    if(NIGHT_ACTIVE.has(name))
+      return time==='night'?3.0:time==='evening'?1.8:.3;
+    if(MORNING_ACTIVE.has(name))
+      return time==='morning'?2.8:time==='day'?1.1:.35;
+    if(EVENING_ACTIVE.has(name))
+      return time==='evening'?2.5:time==='night'?1.2:.5;
+    return time==='morning'?1.0:time==='day'?1.6:time==='evening'?.8:.4;
+  }
+  function encounterWeights(region,focus,habitat='grass',time='day'){
+    if(!Object.hasOwn(BIOMES,region)||!Object.hasOwn(HABITATS,habitat)||
+      !Object.hasOwn(TIMES,time)||!Object.hasOwn(FOCUSES,focus))
+      throw new RangeError('지역·생태계·시간·탐색 방향이 올바르지 않습니다.');
+    return BIOMES[region][habitat].map(name=>{
+      const rarity=tier(name);
+      const base=rarity==='희귀'?(focus==='rare'?14:3):
+        rarity==='드묾'?(focus==='rare'?7:15):(focus==='rare'?3:26);
+      return {name,rarity,weight:base*timeWeight(name,time)};
     });
-    const max=weights.reduce((sum,v)=>sum+v,0);
+  }
+  function captureChance(rarity,stats){
+    return clamp(stats.capture-(rarity==='희귀'?.19:rarity==='드묾'?.08:0),.25,.94);
+  }
+  /** Exact unrounded probabilities used for both UI and the actual RNG draws. */
+  function encounterTable(region,habitat='grass',time='day',focus='balanced',skill=10){
+    const entries=encounterWeights(region,focus,habitat,time);
+    const total=entries.reduce((sum,x)=>sum+x.weight,0);
+    const stats=optionStats(region,focus,skill,habitat,time);
+    const pokemon=entries.map(x=>{
+      const rate=x.weight/total;
+      const chance=captureChance(x.rarity,stats);
+      return {name:x.name,rarity:x.rarity,
+        encounterRate:rate,findRate:stats.discovery*rate,
+        captureRate:stats.discovery*rate*chance,captureIfFound:chance};
+    });
+    return {region,habitat,time,focus,skill,findChance:stats.discovery,
+      noEncounterChance:1-stats.discovery,pokemon,
+      totalCaptureChance:pokemon.reduce((sum,x)=>sum+x.captureRate,0)};
+  }
+  function pickEncounter(region,focus,rand,habitat='grass',time='day'){
+    const weights=encounterWeights(region,focus,habitat,time);
+    const max=weights.reduce((sum,x)=>sum+x.weight,0);
     let roll=rand()*max;
-    for(let i=0;i<names.length;i++){roll-=weights[i];if(roll<0)return names[i];}
-    return names.at(-1);
+    for(const entry of weights){roll-=entry.weight;if(roll<0)return entry.name;}
+    return weights.at(-1).name;
   }
   function candidatePokemon(name,focus,skill,rand,season){
     const rarity=tier(name);
@@ -175,12 +213,13 @@
   }
   function outcome(mission,skill,season){
     const rand=localRng(mission.seed);
-    const odds=optionStats(mission.region,mission.focus,skill);
+    const habitat=mission.habitat||'grass',time=mission.time||'day';
+    const odds=optionStats(mission.region,mission.focus,skill,habitat,time);
     if(rand()>=odds.discovery)
       return {status:'not-found',reason:'탐색했지만 포켓몬을 발견하지 못했습니다.'};
-    const name=pickEncounter(mission.region,mission.focus,rand);
+    const name=pickEncounter(mission.region,mission.focus,rand,habitat,time);
     const rarity=tier(name);
-    const catchChance=clamp(odds.capture-(rarity==='희귀'?.19:rarity==='드묾'?.08:0),.25,.94);
+    const catchChance=captureChance(rarity,odds);
     if(rand()>=catchChance)return {status:'escaped',name,rarity,
       reason:name+' 발견에 성공했지만 포획에는 실패했습니다.'};
     return {status:'captured',name,rarity,candidate:candidatePokemon(name,mission.focus,skill,rand,season),
@@ -197,10 +236,11 @@
       if(rating(trainer.pokemon[i])<rating(trainer.pokemon[worst]))worst=i;
     return {slot:worst,gain:Math.round(rating(mon)-rating(trainer.pokemon[worst]))};
   }
-  function dispatch(trainerKey,region,focus){
+  function dispatch(trainerKey,region,focus,habitat='grass',time='day'){
     if(!game)return {ok:false,error:'진행 중인 게임이 없습니다.'};
-    if(!Object.hasOwn(REGIONS,region)||!Object.hasOwn(FOCUSES,focus))
-      return {ok:false,error:'지역 또는 탐색 목적을 확인하세요.'};
+    if(!Object.hasOwn(REGIONS,region)||!Object.hasOwn(FOCUSES,focus)||
+      !Object.hasOwn(HABITATS,habitat)||!Object.hasOwn(TIMES,time))
+      return {ok:false,error:'지역·생태계·시간대·탐색 목적을 확인하세요.'};
     const record=findTrainer(trainerKey);
     if(!record)return {ok:false,error:'해당 트레이너가 현재 구단에 없습니다.'};
     const t=record.trainer,s=talent(t),due=cost(region);
@@ -212,10 +252,11 @@
     if(game.coins<due)return {ok:false,error:'파견 운영비가 부족합니다.'};
     // Record the expedition and deduct costs atomically. No instant rerolls.
     s.mission={status:'travel',season:game.season,week:game.week,region,focus,
-      cost:due,seed:hash([game.seed,game.season,game.week,keyOf(t),region,focus].join(':'))};
+      habitat,time,cost:due,
+      seed:hash([game.seed,game.season,game.week,keyOf(t),region,habitat,time,focus].join(':'))};
     game.coins-=due;
     data().missions++;
-    game.log.unshift(t.name+' '+region+' 포켓몬 탐색 출발 · '+FOCUSES[focus].label);
+    game.log.unshift(t.name+' '+region+' · '+HABITATS[habitat]+' · '+TIMES[time]+' 포켓몬 탐색 출발 · '+FOCUSES[focus].label);
     persist();renderOffice();
     return {ok:true,mission:s.mission};
   }
@@ -233,6 +274,7 @@
     s.experience++;
     if(s.experience>=4&&s.skill<20){s.experience=0;s.skill++;}
     const item={season:game.season,week:game.week,trainer:t.name,region:m.region,
+      habitat:m.habitat||'grass',time:m.time||'day',
       focus:m.focus,status:result.status,description:result.reason,
       name:result.name||null};
     s.history.unshift(item);s.history.length=Math.min(s.history.length,12);
