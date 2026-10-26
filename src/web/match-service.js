@@ -1,7 +1,9 @@
 import {readFileSync} from 'node:fs';
+import {battlePlan, planMoves} from '../battle/battle-plans.js';
 import {Dex} from '@pkmn/sim';
 import {simulateClubMatch} from '../battle/club-match.js';
 import {gpBudget, STATS, validateGP} from '../core/stats.js';
+const koreanMoves=JSON.parse(readFileSync(new URL('./moves-ko.json',import.meta.url),'utf8'));
 const korean = JSON.parse(readFileSync(new URL('./species-ko.json', import.meta.url), 'utf8'));
 const spriteNumbers = JSON.parse(readFileSync(new URL('./species-sprites.json', import.meta.url), 'utf8'));
 const byNumber = new Map(Dex.species.all().filter(s => !s.forme).map(s => [s.num, s.name]));
@@ -9,7 +11,7 @@ const int = (v, min, max, label) => {
   if (!Number.isInteger(v) || v < min || v > max) throw new RangeError(label);
   return v;
 };
-export function battlePokemon(p) {
+export function battlePokemon(p, plan='balanced') {
   if (!p || typeof p.name !== 'string') throw new TypeError('포켓몬 이름이 필요합니다.');
   const species = Dex.species.get(p.species || byNumber.get(korean[p.name] ?? ({뉴라:215})[p.name]) || p.name);
   if (!species.exists) throw new RangeError('전투 데이터가 없는 포켓몬: ' + p.name);
@@ -20,10 +22,7 @@ export function battlePokemon(p) {
   const gp = p.gp ? {...p.gp} : Object.fromEntries(STATS.map((stat, i) =>
     [stat, Math.floor(gpBudget(ca) / 6) + (i < gpBudget(ca) % 6 ? 1 : 0)]));
   validateGP(gp, ca);
-  const attacks = ['bodyslam','flamethrower','surf','thunderbolt','icebeam','energyball','closecombat','sludgebomb','earthquake','airslash','psychic','xscissor','rockslide','shadowball','dragonpulse','crunch','ironhead','playrough'];
-  const stab = attacks.filter(id => species.types.includes(Dex.moves.get(id).type));
-  const pool = [...new Set([...stab, ...(species.baseStats.atk >= species.baseStats.spa ? ['bodyslam','rockslide','crunch','earthquake'] : ['swift','shadowball','psychic','surf'])])];
-  const moves = p.moves ?? pool.slice(0, 4);
+  const moves = p.moves ?? planMoves(species,plan);
   if (!Array.isArray(moves) || moves.length < 1 || moves.length > 4 || moves.some(m => !Dex.moves.get(m).exists)) throw new RangeError('기술 데이터 오류: ' + p.name);
   const ability = p.ability ?? species.abilities['0'];
   if (!Dex.abilities.get(ability).exists) throw new RangeError('특성 데이터 오류');
@@ -33,7 +32,7 @@ export function battlePokemon(p) {
 export function prepareClub(club, order) {
   if (!club || !Array.isArray(club.trainers) || club.trainers.length !== 5 || club.trainers.some(t => !t || !Array.isArray(t.pokemon) || t.pokemon.length !== 6)) throw new RangeError('트레이너 5명과 각 포켓몬 6마리가 필요합니다.');
   if (!Array.isArray(order) || order.length !== 5 || new Set(order).size !== 5 || order.some(i => !Number.isInteger(i) || i < 0 || i > 4)) throw new RangeError('출전 순서 오류');
-  return order.map(i => ({name:club.trainers[i].name, tactics:club.trainers[i].tactics, switching:club.trainers[i].switching, team:club.trainers[i].pokemon.map(battlePokemon)}));
+  return order.map(i => ({name:club.trainers[i].name, tactics:club.trainers[i].tactics, switching:club.trainers[i].switching, battlePlan:battlePlan(club.trainers[i]), team:club.trainers[i].pokemon.map(p=>battlePokemon(p,battlePlan(club.trainers[i])))}));
 }
 export async function runMatch(body) {
   if (!body || body.home?.id === body.away?.id) throw new RangeError('경기 상대 오류');
@@ -51,7 +50,7 @@ export async function runMatch(body) {
     }
     if (part[1] === 'move') {
       const move = Dex.moves.get(part[3]);
-      if (move.exists) moveVisuals[part[3]] = {type:move.type, category:move.category};
+      if (move.exists) moveVisuals[part[3]] = {type:move.type, category:move.category, label:koreanMoves[move.id]||move.name};
     }
   }
   return {engine:'showdown', visuals, moveVisuals, home:body.home.id, away:body.away.id, aScore:result.trainersDefeated.B, bScore:result.trainersDefeated.A,

@@ -1,3 +1,4 @@
+import {battlePlan, planPreference} from './battle-plans.js';
 import {RandomPlayerAI, Dex} from '@pkmn/sim';
 import {selectTacticalMove, searchBudget} from './tactical-search.js';
 import {rolloutActions} from './showdown-rollout.js';
@@ -30,6 +31,7 @@ export class TrainerAI extends RandomPlayerAI {
     const skill = trainerSkill(trainer);
     super(stream, {move: Math.min(1, 0.70 + skill.tactics * 0.015), seed:options.seed});
     this.skill = skill;
+    this.plan = trainer.battlePlan ? battlePlan(trainer) : 'balanced';
     this.foeSpecies = null;
     this.team = options.team || [];
     this.ownActive = null;
@@ -65,6 +67,12 @@ export class TrainerAI extends RandomPlayerAI {
         const ranked = rolloutActions(battle, {
           sideId:this.side, choices, depth, samples:Math.min(samples,4),
         });
+        for (const candidate of ranked) {
+          const index=Number(candidate.choice.split(' ')[1])-1;
+          const move=Dex.moves.get(battle[this.side].active[0].moveSlots[index]?.id);
+          candidate.score += planPreference(move,battle,this.side,this.plan);
+        }
+        ranked.sort((a,b)=>b.score-a.score);
         if (ranked[0]?.runs > 0 && Number.isFinite(ranked[0].score)) {
           this.decisions.rollouts++;
           return ranked[0].choice;
