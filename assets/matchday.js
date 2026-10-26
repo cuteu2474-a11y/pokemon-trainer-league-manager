@@ -745,3 +745,271 @@
   });
   window.PokemonDetailView={open,close};
 })();
+
+
+/* Autonomous trainer development: director recommends; AI decides, trains, and reports.
+   CA and GP use the identical budget/cap rules as src/core/stats.js. */
+(function autonomousTrainerDevelopment(){
+  if(window.TrainerAutonomy)return;
+  const STATS=['hp','atk','def','spa','spd','spe'];
+  const STAT_KO={hp:'HP',atk:'공격',def:'방어',spa:'특수공격',spd:'특수방어',spe:'스피드'};
+  const FOCI={
+    balanced:{label:'균형 육성',stats:STATS},
+    physical:{label:'물리 공격 강화',stats:['atk','spe','hp','def','spd','spa']},
+    special:{label:'특수 공격 강화',stats:['spa','spe','hp','spd','def','atk']},
+    speed:{label:'스피드 집중',stats:['spe','atk','spa','hp','def','spd']},
+    defense:{label:'수비·지구력',stats:['hp','def','spd','spe','atk','spa']}
+  };
+  const STYLES=['balanced','physical','special','speed','defense'];
+  const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
+  const gpBudget=ca=>Math.floor(313*ca/200);
+  const number=value=>Number.isFinite(Number(value))&&value!==null&&value!==undefined&&value!==''?Number(value):null;
+  const hash=text=>{let h=2166136261;for(const char of String(text)){h=Math.imul(h^char.charCodeAt(0),16777619);}return h>>>0;};
+  const roll=key=>hash(key)/4294967296;
+  const identifier=(trainer,clubId,index)=>String(trainer.id??(String(clubId)+':'+index+':'+trainer.name));
+  const clock=game=>String(game.season??1)+':'+String(game.week??game.round??0);
+  const safe=value=>escapeHTML(String(value??''));
+  function skillValue(trainer,keys){
+    for(const key of keys){
+      const value=number(trainer[key]??trainer.skills?.[key]);
+      if(value!==null&&value>=0)return clamp(Math.round(value>20?value/5:value),1,20);
+    }
+    return 10; // neutral where old saves have no matching development attribute
+  }
+  function teachingSkill(trainer){return skillValue(trainer,['training','trainingSkill','coaching','development','growth','train']);}
+  function potentialSkill(trainer){return skillValue(trainer,['potentialDevelopment','potentialTraining','potentialSkill','training','coaching']);}
+  function profile(trainer,clubId,index){
+    if(trainer.autonomyAI?.version===1&&FOCI[trainer.autonomyAI.style])return trainer.autonomyAI;
+    const key=identifier(trainer,clubId,index);
+    trainer.autonomyAI={
+      version:1,style:STYLES[hash(key+':style')%STYLES.length],
+      openness:3+hash(key+':openness')%16,
+      conviction:3+hash(key+':conviction')%16
+    };
+    return trainer.autonomyAI;
+  }
+  function init(game){
+    if(!game.trainerAI||game.trainerAI.version!==1){
+      game.trainerAI={version:1,lastClock:clock(game),advice:{},issued:{},trust:{},reports:[]};
+    }
+    return game.trainerAI;
+  }
+  function recommend(game,trainer,clubId,index,focus){
+    const state=init(game),id=identifier(trainer,clubId,index),period=clock(game);
+    if(!FOCI[focus])return {ok:false,message:'알 수 없는 육성 방침입니다.'};
+    if(state.lastClock!==period)return {ok:false,message:'현재 주차 훈련을 먼저 정산해야 합니다.'};
+    if(state.issued[id]===period)return {ok:false,message:'이번 주에는 이미 이 트레이너에게 권고했습니다.'};
+    state.advice[id]={focus,issuedAt:period};state.issued[id]=period;
+    return {ok:true,message:'권고를 전달했습니다. 트레이너가 다음 훈련에서 독자적으로 판단합니다.'};
+  }
+  function decide(trainer,traits,request,trust){
+    if(!request)return {decision:'자율',focus:traits.style,reason:'감독 권고 없이 기존 육성 철학에 따라 진행'};
+    const aligned=request.focus===traits.style,compatible=traits.style==='balanced'||request.focus==='balanced';
+    const score=traits.openness*2+(trust??50)/8+teachingSkill(trainer)/4+
+      (aligned?15:compatible?5:-6)-traits.conviction*1.3;
+    if(score>=28)return {decision:'수용',focus:request.focus,
+      reason:aligned?'감독의 제안과 본인의 육성 철학이 일치함':'훈련 목적에 동의하고 감독의 제안을 채택'};
+    if(score>=16)return {decision:'절충',focus:request.focus,secondary:traits.style,
+      reason:'제안 취지는 받아들이되 기존 훈련 계획도 병행'};
+    return {decision:'거부',focus:traits.style,
+      reason:'현재 포켓몬 상태에 대한 본인의 판단을 우선함'};
+  }
+  function startingGP(ca){
+    const budget=gpBudget(ca),gp={};
+    STATS.forEach((stat,i)=>{gp[stat]=Math.floor(budget/6)+(i<budget%6?1:0);});
+    return gp;
+  }
+  function validGP(gp,ca){
+    return gp&&STATS.every(s=>Number.isInteger(gp[s])&&gp[s]>=0&&gp[s]<=94)&&
+      STATS.reduce((sum,s)=>sum+gp[s],0)===gpBudget(ca);
+  }
+  function allocate(gp,delta,focus,key){
+    const next={...gp};
+    const ordered=FOCI[focus]?.stats||STATS;
+    for(let point=0;point<delta;point++){
+      const rotation=hash(key+':point:'+point)%Math.min(3,ordered.length);
+      const candidates=ordered.slice(rotation).concat(ordered.slice(0,rotation));
+      const stat=candidates.find(s=>next[s]<94);
+      if(!stat)return null;
+      next[stat]++;
+    }
+    return next;
+  }
+  function trainMon(mon,focus,trainer,key){
+    const current=number(mon?.ca??mon?.power),max=number(mon?.pa??mon?.potential);
+    if(current===null||max===null||!Number.isInteger(current)||!Number.isInteger(max)||
+       current<1||max>200||current>=max||current>200)return null;
+    const gp=mon.gp??startingGP(current);
+    if(!validGP(gp,current))return null; // never corrupt an existing GP budget
+    const skill=teachingSkill(trainer),potential=potentialSkill(trainer);
+    const chance=clamp(.16+skill*.017+potential*.007+(max-current>25?.07:0),.16,.78);
+    if(roll(key+':growth')>=chance)return null;
+    const gain=skill>=17&&potential>=15&&roll(key+':bonus')<.12?2:1;
+    const newCA=Math.min(max,current+gain);
+    const newGP=allocate(gp,gpBudget(newCA)-gpBudget(current),focus,key);
+    if(!newGP||!validGP(newGP,newCA))return null;
+    const changes=STATS.filter(s=>newGP[s]!==gp[s]).map(s=>STAT_KO[s]+' +'+(newGP[s]-gp[s]));
+    mon.ca=newCA;
+    if(number(mon.power)!==null)mon.power=newCA;
+    mon.gp=newGP;
+    if(!Array.isArray(mon.trainingHistory))mon.trainingHistory=[];
+    mon.trainingHistory.unshift({week:key,from:current,to:newCA,focus,changes});
+    mon.trainingHistory.length=Math.min(mon.trainingHistory.length,12);
+    return {name:mon.name||mon.species||'포켓몬',from:current,to:newCA,changes};
+  }
+  function trainTrainer(trainer,clubId,index,period,request,trust){
+    const traits=profile(trainer,clubId,index),decision=decide(trainer,traits,request,trust);
+    const roster=Array.isArray(trainer.pokemon)?trainer.pokemon:[];
+    const seed=String(period)+':'+identifier(trainer,clubId,index);
+    // Trainers allocate a limited three-pokemon session, not direct 6-pokemon manager upgrades.
+    const candidates=roster.map((mon,i)=>({mon,i,ca:number(mon?.ca??mon?.power),pa:number(mon?.pa??mon?.potential)}))
+      .filter(x=>x.ca!==null&&x.pa!==null&&x.ca<x.pa)
+      .sort((a,b)=>{
+        if(traits.style==='balanced')return (a.ca/a.pa)-(b.ca/b.pa)||a.i-b.i;
+        if(traits.style==='physical'||traits.style==='special')return b.ca-a.ca||a.i-b.i;
+        return hash(seed+':slot:'+a.i)-hash(seed+':slot:'+b.i)||a.i-b.i;
+      }).slice(0,3);
+    const changes=[];
+    for(let n=0;n<candidates.length;n++){
+      const slot=candidates[n],focus=decision.secondary&&n%2?decision.secondary:decision.focus;
+      const outcome=trainMon(slot.mon,focus,trainer,seed+':'+slot.i);
+      if(outcome)changes.push(outcome);
+    }
+    return {id:identifier(trainer,clubId,index),name:trainer.name||'트레이너',skill:teachingSkill(trainer),
+      profile:{...traits},decision:decision.decision,focus:decision.focus,reason:decision.reason,
+      offered:request?.focus||null,trained:candidates.length,changes};
+  }
+  function advance(game,playerId){
+    const state=init(game),now=clock(game);
+    if(state.lastClock===now)return null;
+    const previous=state.lastClock;
+    const reports=[];
+    const clubs=Array.isArray(game.clubs)?game.clubs:Object.values(game.clubs||{});
+    for(let clubIndex=0;clubIndex<clubs.length;clubIndex++){
+      const club=clubs[clubIndex];
+      if(!club)continue;
+      const clubId=String(club.id??clubIndex),mine=clubId===String(playerId);
+      const group=(club.trainers||[]).concat(club.reserveTrainers||[]);
+      for(let i=0;i<group.length;i++){
+        const trainer=group[i];if(!trainer)continue;
+        const id=identifier(trainer,clubId,i);
+        const request=mine&&state.advice[id]?.issuedAt===previous?state.advice[id]:null;
+        const trust=state.trust[id]??50;
+        const outcome=trainTrainer(trainer,clubId,i,now,request,trust);
+        if(mine){
+          reports.push(outcome);
+          if(request){
+            state.trust[id]=clamp(trust+(outcome.decision==='수용'?2:outcome.decision==='절충'?1:-2),15,85);
+            delete state.advice[id];
+          }
+        }
+      }
+    }
+    state.lastClock=now;
+    const report={clock:now,previous,trainers:reports,
+      growth:reports.reduce((sum,t)=>sum+t.changes.reduce((a,c)=>a+c.to-c.from,0),0),
+      accepted:reports.filter(t=>t.decision==='수용').length,
+      compromised:reports.filter(t=>t.decision==='절충').length,
+      refused:reports.filter(t=>t.decision==='거부').length};
+    state.reports.unshift(report);
+    state.reports.length=Math.min(state.reports.length,10);
+    return report;
+  }
+  function observe(game,playerId){
+    const state=init(game),now=clock(game);
+    return state.lastClock===now?null:advance(game,playerId);
+  }
+  window.TrainerAutonomy={FOCI,STATS,gpBudget,init,profile,teachingSkill,potentialSkill,recommend,decide,advance,observe,trainMon,trainTrainer};
+  if(typeof document==='undefined')return;
+  const css=document.createElement('style');
+  css.textContent=[
+    '.at-panel{margin:14px 0;padding:16px;background:#172b3d;border:1px solid #496a80;border-radius:9px;color:#e5eff7}',
+    '.at-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.at-head strong{font-size:16px}.at-note{font-size:12px;color:#b6c8d5;line-height:1.6;margin:6px 0}',
+    '.at-panel button,.at-dialog button{padding:9px 14px;border:1px solid #55788c;border-radius:5px;background:#27516a;color:#eaf4f9;cursor:pointer;font:inherit}',
+    '.at-mask{position:fixed;inset:0;z-index:2700;background:#07111bdf;display:grid;place-items:center;padding:15px;font:14px "Malgun Gothic",sans-serif;color:#e7f0f6}',
+    '.at-dialog{position:relative;width:min(960px,100%);max-height:93vh;overflow:auto;background:#132438;border:1px solid #4a6b83;border-radius:10px;padding:23px;box-shadow:0 24px 65px #000a}',
+    '.at-dialog h2{margin:0 0 7px;font-size:24px}.at-dialog h3{font-size:16px;margin:0 0 10px}.at-close{position:absolute;top:14px;right:14px}',
+    '.at-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}',
+    '.at-card{background:#1c344b;border:1px solid #47637b;border-radius:8px;padding:14px;min-width:0}',
+    '.at-card h3{margin:0 0 6px}.at-meta{color:#b5c7d6;font-size:12px;line-height:1.65}',
+    '.at-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}.at-row select{flex:1;min-width:150px;max-width:280px;background:#112537;color:#eaf4f9;border:1px solid #658093;border-radius:5px;padding:9px}',
+    '.at-report{margin:15px 0;background:#0e2031;border:1px solid #3e5e75;border-radius:8px;padding:14px}.at-report ul{padding-left:20px;margin:7px 0}.at-report li{margin:6px 0;line-height:1.5}',
+    '.at-action{margin-top:10px;color:#bcd6e6;font-size:12px}.at-subtle{font-size:12px;color:#a8becd}',
+    '@media(max-width:650px){.at-dialog{padding:16px}.at-card-grid{grid-template-columns:1fr}.at-dialog h2{font-size:20px}}'
+  ].join('');
+  document.head.appendChild(css);
+  const oldRenderOffice=renderOffice;
+  let showing=false,feedback='';
+  function own(){
+    try{return typeof myClub==='function'?myClub():null;}catch{return null;}
+  }
+  function ensureAdvance(){
+    if(typeof game==='undefined'||!game)return;
+    const club=own();if(!club)return;
+    const result=observe(game,club.id);
+    if(result&&typeof persist==='function')persist();
+  }
+  function lastReport(){
+    return game?.trainerAI?.reports?.[0]||null;
+  }
+  function renderPanel(){
+    const panel=document.getElementById('dashpanel');
+    if(!panel||!own())return;
+    const report=lastReport(),element=document.createElement('div');element.className='at-panel';
+    element.innerHTML='<div class="at-head"><strong>트레이너 AI 육성 본부</strong><button type="button" class="at-open">훈련 보고서 · 감독 권고</button></div>'+
+      '<p class="at-note">훈련 대상·성장 방향은 트레이너가 결정합니다. 단장의 의견은 수용·절충·거절될 수 있습니다.</p>'+
+      '<div class="at-subtle">'+(report?'최근 '+safe(report.clock)+' · CA 성장 +'+report.growth+' · 권고 수용 '+report.accepted+' / 절충 '+report.compromised+' / 거부 '+report.refused:'이번 주 첫 훈련을 준비 중입니다.')+'</div>';
+    element.querySelector('.at-open').onclick=()=>{showing=true;showDialog();};
+    panel.appendChild(element);
+  }
+  function showDialog(){
+    const club=own();if(!club)return;
+    let mask=document.getElementById('at-overlay');
+    if(!mask){mask=document.createElement('div');mask.id='at-overlay';mask.className='at-mask';document.body.appendChild(mask);}
+    const ai=init(game),report=lastReport();
+    const rows=(club.trainers||[]).concat(club.reserveTrainers||[]).filter(Boolean).map((trainer,index)=>{
+      const id=identifier(trainer,club.id,index),traits=profile(trainer,club.id,index);
+      const prev=report?.trainers.find(row=>row.id===id);
+      const hasAdvice=ai.issued[id]===clock(game);
+      const style=FOCI[traits.style]?.label||'균형 육성';
+      const trust=ai.trust[id]??50;
+      const latest=prev?(prev.decision==='자율'?'자율 훈련':prev.decision+' · '+(FOCI[prev.focus]?.label||''))+' / '+prev.changes.length+'마리 성장':'주간 보고 대기';
+      return '<article class="at-card"><h3>'+safe(trainer.name)+'</h3>'+
+        '<div class="at-meta">훈련 지도 '+teachingSkill(trainer)+'/20 · 잠재력 개발 '+potentialSkill(trainer)+'/20'+
+        '<br>훈련 철학 '+safe(style)+' · 개방성 '+traits.openness+'/20 · 소신 '+traits.conviction+'/20'+
+        '<br>감독 신뢰 '+trust+'/100 · 최근 결과 '+safe(latest)+'</div>'+
+        '<div class="at-row"><select aria-label="'+safe(trainer.name)+' 훈련 권고" data-at-focus="'+index+'" '+(hasAdvice?'disabled':'')+'>'+
+        Object.entries(FOCI).map(([focus,data])=>'<option value="'+focus+'">'+safe(data.label)+'</option>').join('')+'</select>'+
+        '<button data-at-send="'+index+'" '+(hasAdvice?'disabled':'')+'>'+(hasAdvice?'이번 주 전달 완료':'권고 전달')+'</button></div>'+
+        (hasAdvice?'<div class="at-action">전달 방침: '+safe(FOCI[ai.advice[id]?.focus]?.label||'확인 완료')+'</div>':'')+
+        (prev?'<div class="at-action">'+safe(prev.reason)+'</div>':'')+
+        '</article>';
+    }).join('');
+    const reportHTML=report?'<section class="at-report"><h3>주간 성장 보고 · '+safe(report.clock)+'</h3>'+
+      '<p class="at-note">CA 증가 합계 +'+report.growth+' / 권고 수용 '+report.accepted+' · 절충 '+report.compromised+' · 거부 '+report.refused+'</p>'+
+      '<ul>'+report.trainers.map(trainer=>'<li><b>'+safe(trainer.name)+'</b> — '+safe(trainer.decision)+' ('+safe(FOCI[trainer.focus]?.label||'자율')+')'+
+      (trainer.changes.length?'<br>'+trainer.changes.map(x=>safe(x.name)+' CA '+x.from+'→'+x.to+' ['+safe(x.changes.join(', '))+']').join(' · '):' · 능력치 상승 없음')+'</li>').join('')+'</ul></section>':
+      '<section class="at-report"><h3>주간 성장 보고</h3><p class="at-note">첫 주차가 지나면 트레이너의 실제 훈련 성과가 기록됩니다.</p></section>';
+    mask.innerHTML='<div class="at-dialog" role="dialog" aria-modal="true" aria-labelledby="at-heading">'+
+      '<button class="at-close" type="button" aria-label="닫기">닫기</button><h2 id="at-heading">자율 훈련 · 감독 권고</h2>'+
+      '<p class="at-note">감독은 방향을 제시할 뿐, 기술·훈련 대상과 GP 배분은 트레이너 AI가 결정합니다. 권고는 트레이너별 주 1회만 가능하며 다음 훈련에서 판단됩니다.</p>'+
+      (feedback?'<p class="at-action" role="status">'+safe(feedback)+'</p>':'')+
+      reportHTML+'<div class="at-card-grid">'+rows+'</div></div>';
+    mask.querySelector('.at-close').onclick=()=>{showing=false;mask.remove();};
+    mask.onclick=event=>{if(event.target===mask){showing=false;mask.remove();}};
+    mask.querySelectorAll('[data-at-send]').forEach(button=>button.onclick=()=>{
+      const i=Number(button.dataset.atSend),trainer=(club.trainers||[]).concat(club.reserveTrainers||[])[i];
+      const focus=mask.querySelector('[data-at-focus="'+i+'"]')?.value;
+      const result=recommend(game,trainer,club.id,i,focus);
+      feedback=result.message;
+      if(result.ok&&typeof persist==='function')persist();
+      showDialog();
+    });
+  }
+  renderOffice=function(){
+    try{ensureAdvance();}catch(error){console.warn('트레이너 훈련 정산 문제:',error);}
+    oldRenderOffice();
+    try{renderPanel();if(showing&&document.getElementById('at-overlay'))showDialog();}catch(error){console.warn('트레이너 훈련 화면 문제:',error);}
+  };
+  window.TrainerAutonomy.showDialog=()=>{showing=true;showDialog();};
+})();
