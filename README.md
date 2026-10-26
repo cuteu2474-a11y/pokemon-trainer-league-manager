@@ -46,4 +46,5 @@ npm run dev
 - `src/battle/`: 실제 6대6 전투, AI, 5인 연승전.
 - `src/league/`: 선수단 생성, 일정, 순위 및 승강 처리.
 - `tests/`: 엔진 검증. 전체 시즌의 빠른 시뮬레이션과 일부 실제 Showdown 경기를 구분해 검증합니다.
+- [최신 코드 기준 앞으로 할 작업](docs/DEVELOPMENT_TODO.md)
 - [통합 기준 버전 및 남은 연결 작업](docs/ui-integration-status.md)
