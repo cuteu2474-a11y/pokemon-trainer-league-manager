@@ -80,7 +80,12 @@
     } catch(error) {p.phase='prepare';p.error=error.message;persist();render();}
   }
   const moveNames={BodySlam:'누르기',Flamethrower:'화염방사',Surf:'파도타기',Thunderbolt:'10만볼트',IceBeam:'냉동빔',EnergyBall:'에너지볼',CloseCombat:'인파이트',SludgeBomb:'오물폭탄',Earthquake:'지진',AirSlash:'에어슬래시',Psychic:'사이코키네시스',XScissor:'시저크로스',RockSlide:'스톤샤워',ShadowBall:'섀도볼',DragonPulse:'용의파동',Crunch:'깨물어부수기',IronHead:'아이언헤드',PlayRough:'치근거리기',Swift:'스피드스타'};
-  const koreanMove = name => pending()?.result?.moveVisuals?.[name]?.label||moveNames[name.replace(/[^A-Za-z]/g,'')]||name;
+  let moveDictionary={}, replayRequest=0;
+  const moveDictionaryReady=fetch('/src/web/moves-ko.json').then(response=>{
+    if(!response.ok)throw new Error('기술명 사전 로드 실패');
+    return response.json();
+  }).then(data=>{moveDictionary=data;}).catch(()=>{});
+  const koreanMove = name => moveDictionary[String(name).toLowerCase().replace(/[^a-z0-9]/g,'')]||pending()?.result?.moveVisuals?.[name]?.label||moveNames[String(name).replace(/[^A-Za-z]/g,'')]||name;
   // Presentation follows authoritative Showdown events; it never resolves a hit or changes HP.
   let visualState = {}, skipping = false;
   function resetVisuals(){visualState={p1:{trainer:-1,remaining:6,hp:null,maxhp:100},p2:{trainer:-1,remaining:6,hp:null,maxhp:100}};skipping=false;}
@@ -361,7 +366,7 @@
         const label=status?'변화':coefficient===null?'—':'×'+coefficient;
         const kind=status?'neutral':coefficient===0?'immune':coefficient>1?'effective':coefficient<1?'resisted':'neutral';
         const pp=Number.isInteger(slot.pp)?slot.pp+'/'+(slot.maxpp??'?'):'미확인';
-        return `<div class="md-move-card ${slot.id===used?'used':''} ${slot.pp===0?'exhausted':''}" data-move="${esc(slot.id)}"><div><strong>${esc(info.label||slot.name||slot.id)}</strong><b class="md-effectiveness ${kind}">${label}</b></div><small>${koTypes[info.type]||'타입 미확인'} · ${{Physical:'물리',Special:'특수',Status:'변화'}[info.category]||'—'} <span>PP ${pp}</span></small><small>위력 ${info.power||'—'} · 명중 ${info.accuracy===true?'필중':info.accuracy??'—'}</small></div>`;
+        return `<div class="md-move-card ${slot.id===used?'used':''} ${slot.pp===0?'exhausted':''}" data-move="${esc(slot.id)}"><div><strong>${esc(koreanMove(slot.id||slot.name))}</strong><b class="md-effectiveness ${kind}">${label}</b></div><small>${koTypes[info.type]||'타입 미확인'} · ${{Physical:'물리',Special:'특수',Status:'변화'}[info.category]||'—'} <span>PP ${pp}</span></small><small>위력 ${info.power||'—'} · 명중 ${info.accuracy===true?'필중':info.accuracy??'—'}</small></div>`;
       }).join('')+'<div class="md-matchup-note">기본 타입 상성 · 특성·도구 효과 별도</div>';
     }
   }
@@ -388,7 +393,10 @@
     @media(max-width:850px){#matchday .md-battle-layout{grid-template-columns:1fr 1fr}#matchday .md-battle-layout .md-field{grid-column:1/-1;grid-row:1;height:300px}#matchday .md-moves-panel{grid-row:2}#matchday .md-move-card{min-height:0}#matchday .md-move-card small{font-size:10px}#matchday .md-moves-target{min-height:0}#matchday .md-carry-row{grid-template-columns:85px 1fr}#matchday .md-carry-row small{grid-column:2}}
   `;document.head.append(skillStyles);
 
-  function startReplay() {
+  async function startReplay() {
+    const request=++replayRequest, replay=pending();
+    await moveDictionaryReady;
+    if(request!==replayRequest||pending()!==replay||replay?.phase!=='watch')return;
     clearTimeout(timer);cursor=0;events=[];paused=false;leadHistory={home:false,away:false};resetVisuals();
     const p=pending(), r=p.result, root=screen();
     root.innerHTML=`<div class="md-muted">${p.week}주차 · 리그 ${p.round}라운드 · Showdown 자동 관전</div><div class="md-top"><h1>${esc(game.clubs[p.home].name)} vs ${esc(game.clubs[p.away].name)}</h1><span class="md-score" id="md-score">0 : 0</span></div><div id="md-trainers"></div>${movesArenaHTML()}<details class="md-relay-check" id="md-relay-check" hidden><summary id="md-relay-summary"></summary><div id="md-relay-rows"></div></details>${partyHTML()}<div id="md-storyline" class="md-storyline">첫 선봉이 경기를 시작합니다.</div><div id="md-contributions" class="md-contributions"></div><div class="md-actions"><span id="md-stage" aria-live="polite">실제 전투 기록을 자동 재생합니다.</span><div><select id="md-mode" aria-label="관전 방식"><option value="highlights">주요 장면</option><option value="full">전체 관전</option></select> <button id="md-pause">일시정지</button> <select id="md-speed" aria-label="관전 속도"><option value="1">1배속</option><option value="4" selected>4배속</option><option value="16">16배속</option></select> <button id="md-next-moment">다음 주요 장면</button> <button id="md-skip">결과까지 보기</button></div></div><details class="md-report" id="md-report" hidden><summary>경기 활약 보고서</summary><div id="md-report-content"></div></details><details class="md-commentary"><summary>경기 중계 기록</summary><div id="md-log" role="log"></div></details><div class="md-actions"><span id="md-summary"></span><button id="md-finish" class="primary" disabled>경기 결과 확인 · 일정으로</button></div>`;
