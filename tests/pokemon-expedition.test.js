@@ -224,8 +224,13 @@ test('the pre-dispatch preview exposes species probabilities, habitat and time s
   assert.match(html,/id="ps-time"/);
   assert.match(html,/id="ps-focus"/);
   assert.match(html,/ps-chances/);
-  assert.match(html,/파견 1회 발견/);
-  assert.match(html,/파견 1회 포획/);
+  assert.match(html,/<th>발견<\/th>/);
+  assert.match(html,/<th>포획<\/th>/);
+  assert.match(html,/탐색력 <b>\d+\/20<\/b>/);
+  assert.match(html,/포획력 <b>\d+\/20<\/b>/);
+  assert.equal((html.match(/id="ps-send"/g)||[]).length,1);
+  assert.equal((html.match(/<button /g)||[]).length,1,'no secondary actions before scouting');
+  assert.doesNotMatch(html,/ps-team|ps-timeline/);
   assert.match(html,/고오스|쏘드라|피카츄|구구/);
   const cfg=api.data();
   cfg.region='관동';cfg.habitat='cave';cfg.time='night';
@@ -264,4 +269,63 @@ test('observed deterministic 30k expeditions follow the published probabilities'
   assert.ok(Math.abs(captured/count-table.totalCaptureChance)<.025);
   for(const p of table.pokemon)
     assert.ok(Math.abs((observed.get(p.name)||0)/count-p.findRate)<.03,p.name);
+});
+
+
+test('independent trainer exploration and capture abilities alter distinct real probabilities',()=>{
+  const {api}=setup();
+  const weak={skill:3,captureSkill:3},finder={skill:19,captureSkill:3},
+    catcher={skill:3,captureSkill:19};
+  const query=stats=>api.encounterTable('관동','cave','night','balanced',stats);
+  const base=query(weak),find=query(finder),capture=query(catcher);
+  assert.ok(find.findChance>base.findChance,'higher search ability improves finding');
+  assert.equal(find.totalCaptureChance>base.totalCaptureChance,true);
+  assert.equal(capture.findChance,base.findChance,'capture ability must not change discovery');
+  assert.ok(capture.totalCaptureChance>base.totalCaptureChance);
+  assert.equal(find.pokemon.find(x=>x.name==='고오스').encounterRate,
+    base.pokemon.find(x=>x.name==='고오스').encounterRate,
+    'skill must not alter fixed species mix');
+  for(const entry of [base,find,capture]){
+    assert.ok(entry.totalCaptureChance<=entry.findChance);
+  }
+});
+test('trainer selection displays that trainer exact scouting and capture rates',()=>{
+  const {api,game}=setup();
+  const a=game.clubs[0].trainers[0],b=game.clubs[0].trainers[1];
+  a.pokemonScouting={skill:4,captureSkill:5};
+  b.pokemonScouting={skill:18,captureSkill:19};
+  const cfg=api.data();
+  cfg.region='관동';cfg.habitat='sea';cfg.time='morning';cfg.focus='balanced';
+  cfg.selectedTrainer=api.keyOf(a);
+  const weak=api.render();
+  const expectedWeak=api.encounterTable('관동','sea','morning','balanced',a.pokemonScouting);
+  assert.match(weak,/탐색력 <b>4\/20<\/b>/);
+  assert.match(weak,/포획력 <b>5\/20<\/b>/);
+  assert.ok(weak.includes((expectedWeak.totalCaptureChance*100).toFixed(2)+'%'));
+  cfg.selectedTrainer=api.keyOf(b);
+  const strong=api.render();
+  const expectedStrong=api.encounterTable('관동','sea','morning','balanced',b.pokemonScouting);
+  assert.match(strong,/탐색력 <b>18\/20<\/b>/);
+  assert.match(strong,/포획력 <b>19\/20<\/b>/);
+  assert.ok(strong.includes((expectedStrong.totalCaptureChance*100).toFixed(2)+'%'));
+  assert.ok(expectedStrong.totalCaptureChance>expectedWeak.totalCaptureChance);
+  assert.ok(expectedStrong.findChance>expectedWeak.findChance);
+});
+test('starting the expedition snapshots both skill values against later trainer changes',()=>{
+  const {api,game}=setup();
+  const t=game.clubs[0].trainers[0],scout=api.talent(t);
+  scout.skill=6;scout.captureSkill=8;
+  const table=api.encounterTable('관동','cave','night','rare',scout);
+  const started=api.dispatch('1','관동','rare','cave','night');
+  assert.equal(started.ok,true);
+  assert.equal(started.mission.scoutSkill,6);
+  assert.equal(started.mission.captureSkill,8);
+  const original=api.outcome(started.mission,scout,game.season);
+  scout.skill=20;scout.captureSkill=20;
+  assert.deepEqual({...api.outcome(started.mission,scout,game.season)}, {...original},
+    'future improvements must not change in-flight encounter probabilities');
+  const shipped=api.encounterTable('관동','cave','night','rare',
+    {skill:started.mission.scoutSkill,captureSkill:started.mission.captureSkill});
+  assert.equal(shipped.findChance,table.findChance);
+  assert.equal(shipped.totalCaptureChance,table.totalCaptureChance);
 });
