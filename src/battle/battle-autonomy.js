@@ -18,24 +18,44 @@ export function trainerPersonality(trainer={}){
   if(!valid(preferred))preferred=(trainer.switching??10)>(trainer.tactics??10)+3?'control':
     (trainer.tactics??10)>(trainer.switching??10)+3?'offense':'balanced';
   const traits=Array.isArray(ai.playTraits)?ai.playTraits.filter(x=>['적극적인 교체','에이스 보존','전황 분석가'].includes(x)):[];
-  const goal=trainer.aiDevelopment;
-  const development=goal&&goal.status==='active'&&['수용','절충'].includes(goal.response)&&
-    ['switch','preserve','analysis'].includes(goal.target)?
-    {target:goal.target,response:goal.response,intensity:goal.intensity,
-      weight:goal.response==='수용'?1:.45}:null;
-  return {preferred,traits,development,openness:skill(ai.openness),conviction:skill(ai.conviction),
+  const habitScores=Object.fromEntries(['switch','preserve','analysis'].map(key=>[
+    key,clamp(Number(ai.habitScores?.[key])||0,0,100)
+  ]));
+  const advised=String(trainer.directorBehaviorAdvice||'');
+  const behaviorAdvice=['switch','preserve','analysis'].includes(advised)?advised:null;
+  return {preferred,traits,habitScores,behaviorAdvice,openness:skill(ai.openness),conviction:skill(ai.conviction),
     moveSkill:skill(trainer.moveJudgment??trainer.movesSkill??trainer.tactics),
     switchSkill:skill(trainer.switchJudgment??trainer.switching),
     analysis:skill(trainer.battleAnalysis??trainer.analysis??trainer.tactics),
     preservation:skill(trainer.resourceManagement??trainer.management??trainer.switching)};
 }
+
+/** A pre-match suggestion affects one match's choices; it does not award traits. */
+export function resolveBehaviorAdvice(personality,trust=50){
+  const target=personality.behaviorAdvice;
+  if(!target)return {behaviorAdvice:null,behaviorResponse:'자율',behaviorWeight:0,
+    behaviorReason:'감독의 특정 행동 권고 없음'};
+  const affinity=target==='switch'?['control','tempo'].includes(personality.preferred):
+    target==='preserve'?['endurance','balanced'].includes(personality.preferred):
+    ['control','balanced'].includes(personality.preferred);
+  const confidence=personality.openness*1.5+trust*.2-
+    personality.conviction*.95+personality.analysis*.3+(affinity?9:-5);
+  if(confidence>=27)return {behaviorAdvice:target,behaviorResponse:'수용',behaviorWeight:1,
+    behaviorReason:'감독과 상의한 플레이 방식을 실제 상황에서 검토하기로 함'};
+  if(confidence>=14)return {behaviorAdvice:target,behaviorResponse:'절충',behaviorWeight:.45,
+    behaviorReason:'자신의 전술을 유지하며 적절한 상황에서만 감독 제안을 검토'};
+  return {behaviorAdvice:target,behaviorResponse:'거부',behaviorWeight:0,
+    behaviorReason:'개인적인 판단을 우선해 감독의 행동 권고를 따르지 않음'};
+}
+
 /** Allows acceptance, compromise or refusal; no roll is required or manager command applied unconditionally. */
 export function resolveBattleAutonomy(trainer={},relationship=50){
   const personality=trainerPersonality(trainer);
   const requested=valid(trainer.directorAdvice)?trainer.directorAdvice:null;
   const trust=clamp(Number.isFinite(Number(relationship))?Number(relationship):50,15,85);
   const {preferred,openness,conviction}=personality;
-  const base={...personality,requested,preferred,trust,plan:preferred,
+  const behavior=resolveBehaviorAdvice(personality,trust);
+  const base={...personality,...behavior,requested,preferred,trust,plan:preferred,
     secondaryPlan:null,adviceWeight:0,response:'자율',reason:'트레이너의 선호 전술에 따라 자율적으로 경기 운영'};
   if(!requested)return base;
   const aligned=requested===preferred;
