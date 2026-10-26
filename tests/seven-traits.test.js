@@ -107,7 +107,7 @@ test('trained status and PP habits actually choose different legal moves at equa
     const foe={hp:120,maxhp:150,types:foeTypes,getTypes:()=>foeTypes,status:''};
     const battle={requestState:'idle',p1:{active:[own],sideConditions:{}},
       p2:{active:[foe],sideConditions:{}}};
-    const trainer={tactics:20,switching:18,
+    const trainer={tactics:20,switching:18,relayOpponentsRemaining:4,
       autonomyAI:{preferredPlay:'balanced',openness:15,conviction:10,
         habitScores:{[kind]:score}}};
     const ai=new TrainerAI({}, {...trainer,aiProfile:resolveBattleAutonomy(trainer,50)},
