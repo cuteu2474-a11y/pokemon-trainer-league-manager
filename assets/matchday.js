@@ -339,6 +339,7 @@
   }
   function reportHTML(result){
     const report=result.report;if(!report)return '';
+    const actualLearning=game?.lastMatch?.replay===result?game.lastMatch.learning:null;
     const leaders='<div class="md-report-grid">'+['home','away'].map((key,k)=>
       '<section><h2>'+esc(game.clubs[k===0?result.home:result.away].name)+' 활약</h2>'+
       report[key].slice(0,3).map((mon,i)=>'<div class="md-report-row"><b>'+(i+1)+'</b><div><strong>'+
@@ -360,6 +361,9 @@
           for(const r of replay)for(const [reason,count] of Object.entries(r.reasons||{})){
             reasons[reason]=(reasons[reason]||0)+count;
           }
+          const learning=actualLearning?.participants?.find(entry=>
+            entry.side===key&&entry.slot===slot);
+          const recommended=profile.behaviorAdvice, learned=learning?.progress?.[recommended];
           const highlights=Object.entries(reasons).sort((a,b)=>b[1]-a[1]).slice(0,2)
             .map(([why,count])=>esc(why)+' '+count+'회').join(' · ');
           return '<div class="md-coach-entry"><strong>'+(slot+1)+'. '+esc(profile.name)+'</strong>'+
@@ -368,6 +372,14 @@
             ' · 감독 권고 '+(profile.requested?esc(planLabels[profile.requested]||profile.requested):'없음')+
             ' → <b>'+esc(profile.response||'자율')+'</b></small>'+
             '<small>'+esc(profile.reason||'자율 결정')+'</small>'+
+            '<small>경기 전 플레이 권고: '+
+              (recommended?esc(behaviorLabels[recommended]||recommended)+' → <b>'+
+                esc(profile.behaviorResponse||'자율')+'</b>':'없음')+'</small>'+
+            (recommended&&learning?'<small>검증된 성공 경험 '+
+              Number(learning.qualified?.[recommended]||0)+'회 · '+ 
+              '자율 성향 '+Number(learned?.before||0)+'→'+Number(learned?.after||0)+
+              (learning.learned?.length?' · 새 선플 '+learning.learned.map(esc).join(', '):'')+
+              '</small>':'')+
             '<small>자율 교체 '+switches+'회 · 전황 시뮬레이션 '+analyses+'회'+
               (highlights?' · '+highlights:'')+'</small></div>';
         }).join('')+'</section>';
@@ -538,8 +550,10 @@
         game.trainerAI.coachMatchReports.unshift({season:p.season,round:p.round,won,entries});
         game.trainerAI.coachMatchReports.length=Math.min(10,game.trainerAI.coachMatchReports.length);
       }
-      if(window.TrainerCareer?.applyMatch){window.TrainerCareer.applyMatch(game,p,myClub().id);}
+      const careerReport=window.TrainerCareer?.applyMatch?
+        window.TrainerCareer.applyMatch(game,p,myClub().id):null;
       game.lastMatch.engine='showdown';game.lastMatch.replay=p.result;
+      if(careerReport)game.lastMatch.learning=careerReport;
       delete game.pendingMatch;persist();clearTimeout(timer);document.getElementById('matchday')?.remove();for(const id of ['mainmenu','clubselect','clubtrainers']){const node=document.getElementById(id);if(node)node.hidden=true;}document.getElementById('dashboard').hidden=false;tab='fixtures';renderOffice();
     } catch(error){game=before;persist();alert(error.message);}finally{active=null;}
   }
