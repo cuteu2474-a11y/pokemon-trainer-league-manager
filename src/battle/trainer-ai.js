@@ -152,7 +152,7 @@ export class TrainerAI extends RandomPlayerAI{
       const preference=this.preference(move,battle);
       const bonus=this.contextualBonus(move,battle);
       const lean=move.exists?(this.plan==='tempo'&&move.priority>0?13:
-        this.plan==='control'&&move.category==='Status'?9:
+        this.plan==='control'&&move.category==='Status'?26:
         this.plan==='offense'&&move.category!=='Status'?5:
         this.plan==='endurance'&&move.heal?12:0):0;
       return {entry,i,value:value+preference+bonus+lean};
