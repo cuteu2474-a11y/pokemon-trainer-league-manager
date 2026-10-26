@@ -141,10 +141,16 @@ export class TrainerAI extends RandomPlayerAI{
     const battle=this.battleProvider?.();
     const {ownTypes,foeTypes}=this.matchup();
     const context={foeTypes,ownTypes,ownAbility:this.ownActive?.ability,ownItem:this.ownActive?.item};
+    const analysisHabit=Math.min(100,Math.max(0,Number(this.profile.habitScores?.analysis)||0));
+    const meetingBoost=this.profile.behaviorAdvice==='analysis'?
+      1.5*(this.profile.behaviorWeight||0):0;
     const insight=(this.profile.traits?.includes('전황 분석가')?2:0)+
-      Math.min(100,Number(this.profile.habitScores?.analysis)||0)/35+
-      (this.profile.behaviorAdvice==='analysis'?1.5*(this.profile.behaviorWeight||0):0);
-    const clarity=limit((this.profile.analysis+insight)/20,0,1),understands=this.prng.random()<this.skill.tactics/20;
+      analysisHabit/35+meetingBoost;
+    const clarity=limit((this.profile.analysis+insight)/20,0,1);
+    // Positive analysis experience raises the chance the trainer will choose
+    // deliberate tactical reasoning again without another coach instruction.
+    const understands=this.prng.random()<
+      limit((this.skill.tactics+analysisHabit/25+meetingBoost)/20,.05,.98);
     if(!understands){
       const choice=super.chooseMove(active,moves);
       this.record('move',choice,'판단 실패 · 안전한 합법적 선택');
