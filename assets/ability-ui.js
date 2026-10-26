@@ -10,6 +10,7 @@ import {
 const escape=s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;')
   .replaceAll('>','&gt;').replaceAll('"','&quot;');
 let migrationCount=0;
+const growthEvents=[];
 
 function allPokemon(){
   if(typeof game==='undefined'||!game?.clubs)return [];
@@ -28,6 +29,11 @@ function increaseOne(mon){
   const upgraded=growStat(mon,stat);
   mon.statCA=upgraded.statCA;
   mon.statPA=upgraded.statPA;
+  if(upgraded.delta){
+    growthEvents.push({name:mon.name||mon.species,stat,
+      statName:ABILITY_NAMES[stat],before:upgraded.oldValue,after:upgraded.newValue});
+    if(growthEvents.length>150)growthEvents.splice(0,growthEvents.length-150);
+  }
   return {stat,delta:upgraded.delta,statName:ABILITY_NAMES[stat]};
 }
 /** Upgrade each owned or academy Pokémon only once; later growth is per-stat. */
@@ -135,18 +141,20 @@ window.renderOffice=function(){
 const previousWeekly=typeof applyWeeklyProgram==='function'?applyWeeklyProgram:null;
 if(previousWeekly){
   window.applyWeeklyProgram=function(){
-    const before=typeof game==='undefined'||!game?[]:allPokemon().map(p=>[p,Number(p.power)||0]);
     const training=typeof weeklyDraft!=='undefined'&&weeklyDraft==='power';
+    const growthStart=growthEvents.length;
     const done=previousWeekly();
     // The wrapped renderOffice migrates all +Power changes to real CA before
     // the old weekly program returns. The public coaching record is corrected.
     if(done&&training){
-      const changed=before.filter(([p,n])=>Number(p._abilityMirror)!==n);
+      const newGrowth=growthEvents.slice(growthStart);
       const record=game.weeklyPrograms?.at(-1);
       if(record){
-        const affected=changed.length?changed.map(([p])=>p.name).join(', '):'훈련 경험 축적';
+        const detail=newGrowth.length?newGrowth.map(x=>
+          x.name+' '+x.statName+' CA '+x.before+'→'+x.after).join(', '):
+          '훈련 경험 축적';
         record.detail=record.detail.replace(/전투력 \+1/g,'개별 CA 성장')+
-          ' · '+affected;
+          ' · '+detail;
         game.log[0]=game.log[0].replace(/전투력 \+1/g,'개별 CA 성장');
         persist();
       }
