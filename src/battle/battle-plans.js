@@ -1,5 +1,5 @@
 import {Dex} from '@pkmn/sim';
-export const PLAN_LABELS = Object.freeze({balanced:'균형',offense:'공세',control:'견제',endurance:'유지력'});
+export const PLAN_LABELS = Object.freeze({balanced:'균형',offense:'공세',control:'견제',endurance:'유지력',tempo:'속공'});
 export function battlePlan(trainer={}) {
   if (Object.hasOwn(PLAN_LABELS,trainer.battlePlan)) return trainer.battlePlan;
   if ((trainer.switching??10) >= (trainer.tactics??10)+3) return 'control';
@@ -33,20 +33,40 @@ export function planMoves(species, plan='balanced') {
   if(!selected.length)throw new RangeError('사용 가능한 기술이 없습니다: '+species.name);
   return selected;
 }
-/** Small tie-break preferences; Showdown still determines every effect and damage roll. */
-export function planPreference(move,battle,side,plan='balanced') {
-  if(plan==='balanced'||!battle?.[side]?.active?.[0])return 0;
+/** Small situational preferences; they never override Showdown legality or damage. */
+export function planPreference(move,battle,side,plan='balanced'){
+  if(!move?.exists||!battle?.[side]?.active?.[0])return 0;
   const own=battle[side].active[0],foe=battle[side==='p1'?'p2':'p1']?.active?.[0];
-  if(!foe)return 0;
-  if(move.heal||['synthesis','moonlight','morningsun','strengthsap'].includes(move.id))return own.hp/own.maxhp>=.8?-50:plan==='endurance'?12:0;
-  if(move.status){
-    if(foe.status||!Dex.getImmunity(move.status,foe.types)||!Dex.getImmunity(move.type,foe.types)||((move.status==='tox'||move.status==='psn')&&foe.types.some(t=>['Steel','Poison'].includes(t))))return -30;
-    return plan==='control'?14:0;
+  if(!foe||!own.maxhp)return 0;
+  const health=own.hp/own.maxhp;
+  const healing=Boolean(move.heal||move.id==='rest'||move.id==='recover'||
+    ['synthesis','moonlight','morningsun','strengthsap','slackoff','roost','softboiled'].includes(move.id));
+  if(healing){
+    if(health>=.80)return -65;
+    return plan==='endurance'?24:plan==='balanced'?9:4;
   }
-  if(move.boosts){
-    const useful=Object.entries(move.boosts).some(([stat,n])=>n>0&&(own.boosts[stat]||0)<3);
-    return useful&&own.hp/own.maxhp>.55&&plan==='offense'?14:-15;
+  if(move.category==='Status'){
+    if(move.status){
+      // Immunity must be checked against the move's *type*, never a status ID.
+      if(foe.status||!Dex.getImmunity(move.type,foe.types)||
+        ((move.status==='tox'||move.status==='psn')&&foe.types.some(t=>['Steel','Poison'].includes(t)))||
+        (move.status==='brn'&&foe.types.includes('Fire')))return -70;
+      return plan==='control'?18:plan==='endurance'?7:0;
+    }
+    const boosts=move.boosts||move.self?.boosts;
+    if(boosts){
+      const useful=Object.entries(boosts).some(([stat,n])=>n>0&&(own.boosts?.[stat]||0)<3);
+      if(!useful||health<=.30)return -45;
+      return plan==='offense'?15:plan==='tempo'?8:4;
+    }
+    if(move.sideCondition){
+      const target=battle[side==='p1'?'p2':'p1'];
+      if(target.sideConditions?.[move.sideCondition])return -45;
+      return plan==='control'?13:5;
+    }
   }
-  if(move.sideCondition)return battle[side==='p1'?'p2':'p1'].sideConditions?.[move.sideCondition]?-30:plan==='control'?10:0;
-  return plan==='offense'&&move.category!=='Status'?2:0;
+  if(plan==='tempo'&&move.priority>0)return 15;
+  if(plan==='offense'&&move.category!=='Status')return 5;
+  if(plan==='endurance'&&move.drain)return 13;
+  return 0;
 }
