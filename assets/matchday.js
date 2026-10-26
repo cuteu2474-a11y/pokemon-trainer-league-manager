@@ -730,7 +730,7 @@
     if(target.matches('.pkm-art[data-pkm-record]'))return target;
     return target.closest('.pkm-profile-card,.pkm-choose-card,.pkm-owned-card,#marketDetail .fm-detail-mon')?.querySelector('.pkm-art[data-pkm-record]')||null;
   }
-  document.addEventListener('click',event=>{const img=pick(event.target);if(!img)return;const mon=ui.getRecord(img.dataset.pkmRecord);if(mon){event.preventDefault();open(mon);}});
+  document.addEventListener('click',event=>{const img=pick(event.target);if(!img)return;const mon=ui.getRecord(img.dataset.pkmRecord);if(mon){event.preventDefault();event.stopPropagation();open(mon);}},true);
   document.addEventListener('keydown',event=>{
     if(event.key==='Escape'&&active){event.preventDefault();close();return;}
     if(active&&event.key==='Tab'){
