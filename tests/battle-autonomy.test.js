@@ -75,7 +75,7 @@ test('actual Showdown turn policy records analysis and choice reasons without ch
         tactics:20,switching:19,autonomyAI:{preferredPlay:'endurance',openness:16,conviction:8},
         directorAdvice:'control'},65)};
     const result=await simulateSixVsSix(team(species),team('Magikarp'),{
-      trainerA,trainerB:{tactics:1,switching:1},seed:[5,6,7,8],
+      trainerA:{...trainerA,relayOpponentsRemaining:5},trainerB:{tactics:1,switching:1},seed:[5,6,7,8],
     });
     assert.equal(result.winner,'Club A');
     const choices=result.aiDecisions.p1;
@@ -83,6 +83,7 @@ test('actual Showdown turn policy records analysis and choice reasons without ch
     assert.equal(choices.plan,'endurance');
     assert.ok(choices.trace.length>0);
     assert.ok(Object.keys(choices.reasons).length>0);
+    assert.ok(choices.trace.some(x=>x.reason.includes('연승 전력 관리')));
   });
 test('match UI uses recommendations, not mandatory battlePlan overrides',()=>{
   const html=readFileSync(new URL('../assets/matchday.js',import.meta.url),'utf8');
