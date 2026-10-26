@@ -19,8 +19,8 @@ test('a mixed relay keeps fainted identities and PP attached to the correct Poke
  const r=await runMatch({home:a,away:b,homeOrder:[0,1,2,3,4],awayOrder:[0,1,2,3,4],seed:[1,2,3,4]});
  assert.equal(r.rounds[0].winner,'A');
  const next=r.rounds[1].initial.p1;
- const first=r.rounds[0].result.finalState.p1;
- const originalNames=r.rounds[0].pokemonOrder.p1;
+ const first=r.rounds[0].final.p1;
+ const originalNames=r.rounds[0].initial.p1.map(mon=>mon.name);
  const saved=new Map(originalNames.map((name,i)=>[name,first[i]]));
  // No level-based forced knockout assumption: track the actual remaining HP.
  for(const pokemon of next){
