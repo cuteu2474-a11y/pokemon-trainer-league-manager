@@ -1335,6 +1335,15 @@
   const trainerId=(trainer,clubId,index)=>
     String(trainer.id??(String(clubId)+':'+index+':'+trainer.name));
   const threshold=skill=>20+skill*5;
+  const GOALS=Object.freeze({
+    switch:{label:'적극적인 교체',description:'불리한 대면에서 실제 유리한 교체 시도',points:7,matches:3},
+    preserve:{label:'에이스 보존',description:'실제 회복·위험 회피로 연승 전력 보존',points:5,matches:3},
+    analysis:{label:'전황 분석가',description:'여러 전술 후보를 검토해 우수한 선택',points:10,matches:4}
+  });
+  const INTENSITY=Object.freeze({
+    suggest:'권고',focus:'집중 요청',demand:'강한 요구'
+  });
+  const epoch=g=>(Math.max(1,Number(g?.season)||1)-1)*64+Math.max(1,Number(g?.week)||1);
   function skill(trainer,field){
     return val(trainer?.[field],val(trainer?.[FIELDS[field]?.fallback]));
   }
@@ -1347,6 +1356,7 @@
     existing.careerApplied ||= {};
     existing.careerReports ||= [];
     existing.careerFeedback ||= [];
+    existing.developmentReviews ||= [];
     return existing;
   }
   function getCareer(trainer){
@@ -1354,23 +1364,37 @@
     const career={version:1,matches:0,duels:0,wins:0,losses:0,
       experience:Object.fromEntries(Object.keys(FIELDS).map(field=>[field,0])),
       observed:{switches:0,voluntary:0,analyses:0,preservation:0},
+      quality:Object.fromEntries(Object.keys(GOALS).map(k=>[k,{points:0,matches:0}])),
       events:[]};
     trainer.aiCareer=career;
     return career;
   }
   function roundEvidence(round,side){
-    const ai=round.aiDecisions?.[side==='home'?'p1':'p2']||{};
-    const won=(side==='home'&&round.winner==='A')||
-      (side==='away'&&round.winner==='B');
-    const lost=(side==='home'&&round.winner==='B')||
-      (side==='away'&&round.winner==='A');
+    const sideId=side==='home'?'p1':'p2';
+    const ai=round.aiDecisions?.[sideId]||{};
+    const won=(side==='home'&&round.winner==='A')||(side==='away'&&round.winner==='B');
+    const lost=(side==='home'&&round.winner==='B')||(side==='away'&&round.winner==='A');
     const trace=Array.isArray(ai.trace)?ai.trace:[];
+    // Judge observed action quality, not a raw "switch 10 times" counter.
+    const qualifiedSwitch=trace.filter(x=>x.kind==='switch'&&x.quality?.switch===true).length;
+    const qualifiedAnalysis=trace.filter(x=>x.kind==='move'&&x.quality?.analysis===true).length;
+    const preservedByMove=trace.filter(x=>x.kind==='move'&&x.quality?.preserve===true).length;
+    const heals=String(round.log||'').split('\n').filter(line=>line.startsWith('|-heal|'+sideId)).length;
+    const final=round.final?.[sideId]||[];
+    const survived=Array.isArray(final)&&final.some(mon=>Number(mon.hp)>0);
+    const avoidedThreat=survived?trace.filter(x=>x.kind==='switch'&&x.quality?.preserve===true).length:0;
+    const goalQuality={
+      switch:Math.min(2,qualifiedSwitch),
+      preserve:Math.min(2,Math.min(preservedByMove,heals)+Math.min(1,avoidedThreat)),
+      analysis:Math.min(3,qualifiedAnalysis)
+    };
     return {duels:1,wins:Number(won),losses:Number(lost),
       moves:Math.min(300,Math.max(0,Number(ai.moves)||0)),
       switches:Math.min(100,Math.max(0,Number(ai.switches)||0)),
       voluntary:Math.min(100,Math.max(0,Number(ai.voluntarySwitches)||0)),
       analyses:Math.min(300,Math.max(0,Number(ai.rollouts)||0)),
-      preservation:trace.filter(item=>String(item.reason||'').includes('연승 전력 관리')).length};
+      preservation:trace.filter(item=>String(item.reason||'').includes('연승 전력 관리')).length,
+      goalSwitch:goalQuality.switch,goalPreserve:goalQuality.preserve,goalAnalysis:goalQuality.analysis};
   }
   function applyEvidence(trainer,evidence,key,side,slot){
     const career=getCareer(trainer);
@@ -1405,19 +1429,47 @@
     const ai=trainer.autonomyAI ||= {};
     const traits=ai.playTraits ||= [];
     const learned=[];
-    const add=(trait,ready)=>{
-      if(ready&&!traits.includes(trait)&&traits.length<3){
-        traits.push(trait);learned.push(trait);
+    career.quality ||= {};
+    const currentGoal=trainer.aiDevelopment;
+    const qualified={switch:evidence.goalSwitch||0,preserve:evidence.goalPreserve||0,
+      analysis:evidence.goalAnalysis||0};
+    const progress={};
+    for(const [kind,config] of Object.entries(GOALS)){
+      const quality=career.quality[kind] ||= {points:0,matches:0};
+      const points=Math.min(6,Math.max(0,qualified[kind]||0));
+      const matching=currentGoal?.status==='active'&&currentGoal.target===kind;
+      const directed=matching&&currentGoal.response==='수용'?1.4:
+        matching&&currentGoal.response==='절충'?1.15:1;
+      const credited=points*directed;
+      quality.points=Number((quality.points+credited).toFixed(2));
+      if(points>0)quality.matches++;
+      if(matching){
+        currentGoal.progress=Number((currentGoal.progress+credited).toFixed(2));
+        currentGoal.evidenceMatches+=(points>0?1:0);
+        currentGoal.observedMatches++;
+        currentGoal.recentExamples ||= [];
+        if(points>0){
+          currentGoal.recentExamples.unshift({
+            key,detail:kind==='switch'?'불리한 대면에서 유리한 교체':
+              kind==='preserve'?'실제 회복 또는 HP 위험 회피':'복수 후보 비교 후 우수한 선택',
+            quality:points
+          });
+          currentGoal.recentExamples.length=Math.min(currentGoal.recentExamples.length,8);
+        }
       }
-    };
-    // Traits reflect repeatedly observed play, not merely manager wishes.
-    add('적극적인 교체',career.matches>=3&&career.observed.voluntary>=8);
-    add('에이스 보존',career.matches>=4&&career.observed.preservation>=9&&career.wins>=4);
-    add('전황 분석가',career.matches>=5&&career.observed.analyses>=35);
+      progress[kind]={points:quality.points,matches:quality.matches};
+      if(!traits.includes(config.label)&&traits.length<3&&
+         quality.points>=config.points&&quality.matches>=config.matches){
+        traits.push(config.label);
+        learned.push(config.label);
+        if(matching){currentGoal.status='mastered';currentGoal.completedAt=key;}
+      }
+    }
+    // Existing learned traits are retained; old saves do not lose their achievements.
     const event={key,side,slot,name:trainer.name||'트레이너',
       duels:evidence.duels,wins:evidence.wins,losses:evidence.losses,
       moves:evidence.moves,voluntary:evidence.voluntary,analyses:evidence.analyses,
-      levels,learned,trainerId:String(trainer.id??'')};
+      qualified,progress,levels,learned,trainerId:String(trainer.id??'')};
     career.events.unshift(event);
     career.events.length=Math.min(career.events.length,18);
     return event;
@@ -1448,7 +1500,8 @@
         let total=collected.get(index);
         if(!total){
           total={slot,index,trainer,duels:0,wins:0,losses:0,moves:0,
-            switches:0,voluntary:0,analyses:0,preservation:0};
+            switches:0,voluntary:0,analyses:0,preservation:0,
+          goalSwitch:0,goalPreserve:0,goalAnalysis:0};
           collected.set(index,total);
         }
         for(const k of Object.keys(evidence))total[k]+=evidence[k];
