@@ -3,6 +3,8 @@
   const priorNextWeek = nextWeek, priorPlayNext = playNext, priorMatchSim = matchSim;
   let active = null, timer = null, cursor = 0, events = [], speed = 4, paused = false;
   const planLabels={balanced:'균형',offense:'공세',control:'견제',endurance:'유지력',tempo:'속공'};
+  const behaviorLabels={switch:'불리할 때 적극적으로 교체',preserve:'연승전을 위해 에이스 보존',
+    analysis:'상대를 분석해 유리한 수 선택'};
   let watchMode='highlights', highlightFlags=[], contributions=null, currentBattle=null, skippedEvents=0;
   const esc = value => escapeHTML(value ?? '');
   const copy = value => JSON.parse(JSON.stringify(value));
@@ -24,7 +26,7 @@
   function openPreparation() {
     if (!game || pending()) {if (pending()) render();return;}
     const f = fixture(); if (!f) return;
-    game.pendingMatch = {...f, season:game.season, phase:'prepare', order:[...game.order], plans:myClub().trainers.map(()=>null)};
+    game.pendingMatch = {...f, season:game.season, phase:'prepare', order:[...game.order], plans:myClub().trainers.map(()=>null), behaviors:myClub().trainers.map(()=>null)};
     persist(); render();
   }
   nextWeek = function() {
@@ -42,6 +44,7 @@
     return priorMatchSim(a,b);
   };
   const styles = document.createElement('style');styles.textContent=`
+    #matchday .md-meeting-controls{display:flex;gap:7px;flex-wrap:wrap}#matchday .md-meeting-controls select{max-width:240px;padding:8px} 
     #matchday{position:fixed;inset:0;z-index:1000;background:#101a29;color:#e8edf4;overflow:auto;font:14px 'Malgun Gothic',sans-serif;padding:28px max(20px,calc((100vw - 1180px)/2))}
     #matchday h1{font-size:25px;margin:10px 0 20px}#matchday h2{font-size:18px}#matchday button,#matchday select{font:inherit;padding:10px 16px;border:1px solid #537087;background:#20384a;color:white;border-radius:4px;cursor:pointer}#matchday select{width:auto}#matchday button:disabled{opacity:.45;cursor:default}#matchday .primary{background:#197b76}#matchday .md-top,#matchday .md-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:15px 0}#matchday .md-muted{color:#a5b5c6;line-height:1.7}#matchday .md-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;background:#182b3d;border-bottom:1px solid #304558}#matchday .md-row small{display:block;color:#b1c3d3;line-height:1.6;margin-top:6px}#matchday .md-row button{padding:7px 12px}#matchday .md-arena{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:20px 0}#matchday .md-side{padding:24px;background:#1b3046;border:1px solid #42566e;border-radius:6px}#matchday .md-side h2{font-size:24px}#matchday progress{width:100%;accent-color:#54c2a0}#matchday #md-log{height:34vh;overflow:auto;background:#091321;padding:16px;line-height:1.9;white-space:pre-wrap}#matchday .md-error{color:#ffb4ac;margin:16px 0}#matchday .md-score{font-size:32px;font-weight:bold} @media(max-width:650px){#matchday{padding:16px}#matchday .md-row{flex-wrap:wrap}#matchday .md-arena{gap:8px}#matchday .md-side{padding:12px}}
   `;document.head.append(styles);
@@ -49,17 +52,19 @@
     const p = pending();if (!p) return;
     if (p.phase === 'watch') {startReplay();return;}
     p.plans ||= myClub().trainers.map(()=>null);
+    p.behaviors ||= myClub().trainers.map(()=>null);
     const c=myClub(), opponent=game.clubs[p.home === c.id ? p.away : p.home];
     const root=screen(), busy=p.phase==='running';
-    root.innerHTML=`<div class="md-muted">${p.week}주차 · 리그 ${p.round}라운드</div><h1>${esc(c.name)} vs ${esc(opponent.name)}</h1><div class="md-top"><strong>경기 준비 · 출전 순서 확정</strong><span>구단 피로 ${c.fatigue??0}/100 · 사기 ${c.morale??50}/100</span></div><p class="md-muted">트레이너별 컨디션은 아직 수집되지 않았습니다. 능력과 포켓몬 편성을 확인해 출전 순서를 정하세요.</p>`+
-      p.order.map((index,slot)=>{const t=c.trainers[index];return `<div class="md-row"><div><strong>${slot+1}. ${esc(t?.name||'출전 불가')}</strong><small>개별 컨디션 미측정 · 전술 분석 ${t?.tactics??'—'} · 교체 판단 ${t?.switching??'—'}<br>${(t?.pokemon||[]).map(mon=>esc(mon.name)+' Lv.'+mon.level).join(' · ')}</small></div><div><select data-plan="${index}" aria-label="${esc(t?.name)} 감독 전술 권고" ${busy?'disabled':''}><option value="" ${!p.plans[index]?'selected':''}>권고 없음 · AI 자율 판단</option>${Object.entries(planLabels).map(([key,label])=>`<option value="${key}" ${p.plans[index]===key?'selected':''}>${label}</option>`).join('')}</select> <button data-up="${slot}" aria-label="${slot+1}번 트레이너 위로" ${busy||slot===0?'disabled':''}>↑</button> <button data-down="${slot}" aria-label="${slot+1}번 트레이너 아래로" ${busy||slot===4?'disabled':''}>↓</button></div></div>`}).join('')+
-      '<p class="md-muted">등록된 전투 세트를 사용합니다. 기존 저장에 세트가 없으면 현재 레벨·전력에서 CA/GP를 구성하고, 종이 배울 수 있는 기술 중 선택한 전술에 맞춰 자동 편성합니다. 명시적으로 등록된 기술은 유지합니다.</p>'+
+    root.innerHTML=`<div class="md-muted">${p.week}주차 · 리그 ${p.round}라운드</div><h1>${esc(c.name)} vs ${esc(opponent.name)}</h1><div class="md-top"><strong>경기 전 미팅 · 출전 순서와 플레이 방식 권고</strong><span>구단 피로 ${c.fatigue??0}/100 · 사기 ${c.morale??50}/100</span></div><p class="md-muted">감독의 제안은 명령이 아닙니다. 트레이너가 수용·절충·거부하며, 실제 경기에서 좋은 결과를 경험한 행동은 다음 경기의 자율 선택에도 영향을 줍니다.</p>`+
+      p.order.map((index,slot)=>{const t=c.trainers[index];return `<div class="md-row"><div><strong>${slot+1}. ${esc(t?.name||'출전 불가')}</strong><small>개별 컨디션 미측정 · 전술 분석 ${t?.tactics??'—'} · 교체 판단 ${t?.switching??'—'}<br>${(t?.pokemon||[]).map(mon=>esc(mon.name)+' Lv.'+mon.level).join(' · ')}</small></div><div><div class="md-meeting-controls"><select data-plan="${index}" aria-label="${esc(t?.name)} 전술 방향" ${busy?'disabled':''}><option value="" ${!p.plans[index]?'selected':''}>전술 방향: AI 자율</option>${Object.entries(planLabels).map(([key,label])=>`<option value="${key}" ${p.plans[index]===key?'selected':''}>${label}</option>`).join('')}</select><select data-behavior="${index}" aria-label="${esc(t?.name)} 플레이 방식 권고" ${busy?'disabled':''}><option value="" ${!p.behaviors[index]?'selected':''}>플레이 방식: 권고 없음</option>${Object.entries(behaviorLabels).map(([key,label])=>`<option value="${key}" ${p.behaviors[index]===key?'selected':''}>${label}</option>`).join('')}</select></div> <button data-up="${slot}" aria-label="${slot+1}번 트레이너 위로" ${busy||slot===0?'disabled':''}>↑</button> <button data-down="${slot}" aria-label="${slot+1}번 트레이너 아래로" ${busy||slot===4?'disabled':''}>↓</button></div></div>`}).join('')+
+      '<p class="md-muted">이미 등록된 기술과 능력치는 변경하지 않습니다. 권고가 효과적이었다고 확인된 경기만 트레이너의 플레이 성향 학습에 반영됩니다.</p>'+
       `<div class="md-error" role="alert">${esc(p.error)}</div><div class="md-actions"><button id="md-cancel" ${busy?'disabled':''}>구단 화면으로</button><button id="md-confirm" class="primary" ${busy?'disabled':''}>${busy?'Showdown 경기 계산 중…':'출전 순서 확정 · 경기 시작'}</button></div>`;
     for (const button of root.querySelectorAll('[data-up],[data-down]')) button.onclick=()=>{
       const slot=Number(button.dataset.up??button.dataset.down), target=slot+(button.dataset.up!==undefined?-1:1);
       [p.order[slot],p.order[target]]=[p.order[target],p.order[slot]];persist();render();
     };
     for(const select of root.querySelectorAll('[data-plan]'))select.onchange=()=>{p.plans[Number(select.dataset.plan)]=select.value||null;persist();};
+    for(const select of root.querySelectorAll('[data-behavior]'))select.onchange=()=>{p.behaviors[Number(select.dataset.behavior)]=select.value||null;persist();};
     root.querySelector('#md-cancel').onclick=()=>{delete game.pendingMatch;persist();root.remove();};
     root.querySelector('#md-confirm').onclick=run;
   }
@@ -71,6 +76,7 @@
     const request={home:copy(game.clubs[p.home]),away:copy(game.clubs[p.away]),homeOrder:p.home===mine?order:identity,awayOrder:p.away===mine?order:identity,seed:[game.seed>>>0,p.season,p.round,7919]};
     request[p.home===mine?'home':'away'].trainers.forEach((trainer,i)=>{
       trainer.directorAdvice=p.plans?.[i]||null;
+      trainer.directorBehaviorAdvice=p.behaviors?.[i]||null;
       const tid=String(trainer.id??(String(mine)+':'+i+':'+trainer.name));
       trainer.directorTrust=game.trainerAI?.trust?.[tid]??50;
     });
