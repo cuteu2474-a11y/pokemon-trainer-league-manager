@@ -1,23 +1,24 @@
 import {BattleStreams, Teams} from '@pkmn/sim';
 import {convertPokemon, injectBattleTeams, applyFormChange} from './gp-adapter.js';
-import {validateGP} from '../core/stats.js';
+import {normalizeStatPairs} from '../core/stat-potential.js';
+import {installLevelFreeDamage} from './level-free-damage.js';
 
 const IDS = ['hp','atk','def','spa','spd','spe'];
 const zeroEVs = Object.fromEntries(IDS.map(s => [s,0]));
 const neutralIVs = Object.fromEntries(IDS.map(s => [s,31]));
 
-/** Pack ordinary Showdown entry fields, stripping CA/PA/GP. IV/EV are inert placeholders. */
+/** Showdown protocol adapter: strip league CA/PA; no public Level field. */
 export function packGPTeam(team) {
   if (!Array.isArray(team) || team.length !== 6) throw new RangeError('Six Pokemon are required on each team');
   const plain = team.map((entry, i) => {
     if (!entry?.species || !Array.isArray(entry.moves) || !entry.moves.length || entry.moves.length > 4) {
       throw new TypeError(`Invalid species or moves at slot ${i}`);
     }
-    validateGP(entry.gp, entry.ca);
-    if (!Number.isInteger(entry.pa) || entry.pa < entry.ca || entry.pa > 200) throw new RangeError('Invalid PA');
-    if (!Number.isInteger(entry.level) || entry.level < 1 || entry.level > 100) throw new RangeError('Invalid level');
-    const {ca, pa, gp, natureModifiers, ...showdownSet} = entry;
-    return {...showdownSet, ivs: {...neutralIVs}, evs: {...zeroEVs}};
+    normalizeStatPairs(entry);
+    const {statCA,statPA,ca,pa,gp,level,power,natureModifiers,...showdownSet}=entry;
+    // The upstream simulator may internally default a protocol level, but our
+    // battle damage, confusion, and fixed-damage moves never use that field.
+    return {...showdownSet,ivs:{...neutralIVs},evs:{...zeroEVs}};
   });
   return Teams.pack(plain);
 }
@@ -80,6 +81,7 @@ export class GPBattleStream extends BattleStreams.BattleStream {
     if (type !== 'start') return;
     const battle = this.battle;
     if (!battle) throw new Error('Showdown did not create a Battle');
+    installLevelFreeDamage(battle);
     const originalSend=battle.send, sentStates=new Map();
     battle.send=function(type,data){
       if(type==='update'&&Array.isArray(data)&&battle.started){
