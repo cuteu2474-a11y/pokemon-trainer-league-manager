@@ -59,21 +59,28 @@ export function assessMoveTraits({move,battle,side='p1',profile={},remaining=1,o
     bonus-=75; // A trait never rewards immune or already-statused targets.
   }
   const pp=traitValue(profile,'pp');
-  if(attacking&&remaining>1&&pp>0) {
-    const slot=own.moveSlots?.find(s=>s.id===move.id);
-    const low=slot?.pp>=0&&slot.maxpp>=5&&slot.pp<=Math.max(2,Math.round(slot.maxpp*.20));
-    // Save a scarce attack only when a similarly effective alternative remains.
-    const alternative=options.some(option=>{
-      if(option.id===move.id||option.category==='Status')return false;
-      const ownTypes=own.getTypes?.()||own.types||[];
-      const foeTypes=foe.getTypes?.()||foe.types||[];
-      const eff=m=>foeTypes.reduce((n,t)=>n*(Dex.getImmunity(m.type,[t])?2**Dex.getEffectiveness(m.type,[t]):0),1);
-      const estimate=m=>(m.basePower||0)*(m.accuracy===true?1:(Number(m.accuracy)||100)/100)*
-        eff(m)*(ownTypes.includes(m.type)?1.5:1);
-      return estimate(option)>=estimate(move)*.82;
+  if(attacking&&remaining>1&&pp>0&&Array.isArray(own.moveSlots)) {
+    const ownTypes=own.getTypes?.()||own.types||[];
+    const foeTypes=foe.getTypes?.()||foe.types||[];
+    const estimate=m=>(m.basePower||0)*
+      (m.accuracy===true?1:(Number(m.accuracy)||100)/100)*
+      foeTypes.reduce((n,t)=>n*(Dex.getImmunity(m.type,[t])?2**Dex.getEffectiveness(m.type,[t]):0),1)*
+      (ownTypes.includes(m.type)?1.5:1);
+    const scarce=options.filter(option=>{
+      if(option.category==='Status'||!option.basePower||option.id===move.id)return false;
+      const slot=own.moveSlots.find(s=>s.id===option.id);
+      return slot&&slot.maxpp>=5&&slot.pp<=Math.max(2,Math.floor(slot.maxpp*.2));
     });
-    const ko=chance>=.5;
-    if(low&&alternative&&!ko){bonus-=pp*24;quality.pp=true;}
+    const ownSlot=own.moveSlots.find(s=>s.id===move.id);
+    const ownLow=ownSlot&&ownSlot.maxpp>=5&&ownSlot.pp<=Math.max(2,Math.floor(ownSlot.maxpp*.2));
+    if(ownLow&&options.some(m=>m.id!==move.id&&m.category!=='Status'&&
+       estimate(m)>=estimate(move)*.82) && chance<.5){
+      bonus-=pp*24;
+    } else if(!ownLow&&scarce.some(m=>estimate(move)>=estimate(m)*.82)&&chance<.5) {
+      // Picking a sufficiently strong, non-scarce alternative preserves rare PP.
+      bonus+=pp*8;
+      quality.pp=true;
+    }
   }
   return {bonus,quality};
 }
