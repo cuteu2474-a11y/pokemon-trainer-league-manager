@@ -481,6 +481,8 @@
   const ball = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="#eef3f7" stroke="#293e52" stroke-width="7"/><path d="M9 50a41 41 0 0 1 82 0H9" fill="#dc5660"/><path d="M9 50h82" stroke="#293e52" stroke-width="8"/><circle cx="50" cy="50" r="12" fill="#f8f8f8" stroke="#293e52" stroke-width="7"/></svg>');
   let koreanIds = Object.create(null), spriteIds = Object.create(null), baseKeys = Object.create(null), dataReady = false;
+  let artworkSerial=0;
+  const artworkRecord=new Map();
   const safe = value => escapeHTML(String(value ?? ''));
   const key = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const koreanForms = [['메가X','megax'],['메가Y','megay'],['메가','mega'],['알로라','alola'],['가라르','galar'],['히스이','hisui'],['팔데아','paldea'],['원시','primal'],['영물','therian'],['오리진','origin'],['스카이','sky'],['거다이맥스','gmax']];
@@ -511,7 +513,10 @@
   function image(pokemon, size='large') {
     const info=resolve(pokemon), number=info.id;
     const src=number ? artworkRoot+'other/official-artwork/'+number+'.png' : ball;
-    return '<img class="pkm-art pkm-art-'+size+'" src="'+src+'" alt="'+safe(info.name)+' 이미지" loading="lazy" decoding="async" width="96" height="96" data-pkm-step="0" data-pkm-id="'+number+'" data-pkm-base="'+info.baseId+'">';
+    const ref=String(++artworkSerial);
+    artworkRecord.set(ref,pokemon);
+    if(artworkRecord.size>3000)artworkRecord.delete(artworkRecord.keys().next().value);
+    return '<img class="pkm-art pkm-art-'+size+'" src="'+src+'" alt="'+safe(info.name)+' 정보 보기" role="button" tabindex="0" aria-haspopup="dialog" loading="lazy" decoding="async" width="96" height="96" data-pkm-record="'+ref+'" data-pkm-step="0" data-pkm-id="'+number+'" data-pkm-base="'+info.baseId+'">';
   }
   function miniRoster(pokemon) {
     return '<div class="pkm-roster-mini" aria-label="보유 포켓몬 이미지">'+(pokemon||[]).map(p=>image(p,'mini')).join('')+'</div>';
@@ -593,7 +598,7 @@
     '@media(max-width:780px){.pkm-profile-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pkm-profile-card .pkm-art{width:68px;height:72px}}'+
     '@media(max-width:460px){.pkm-profile-grid{grid-template-columns:1fr}}';
   document.head.appendChild(css);
-  window.PokemonArtworkUI={resolve,image};
+  window.PokemonArtworkUI={resolve,image,getRecord:ref=>artworkRecord.get(String(ref))};
   Promise.all([
     fetch('/src/web/species-ko.json').then(r=>{if(!r.ok)throw Error('Korean species data');return r.json();}),
     fetch('/src/web/species-sprites.json').then(r=>{if(!r.ok)throw Error('Form and sprite data');return r.json();})
@@ -604,4 +609,140 @@
     if(game&&['team','profile','pokemon','transfer'].includes(tab))renderOffice();
     if(document.querySelector('#clubtrainers [data-preview-index]'))renderClubTrainers();
   }).catch(error=>{console.warn('포켓몬 이미지 식별 데이터 로딩 실패:',error.message);});
+})();
+
+/* Trainer Pokémon detail: recorded game state is never synthesized from Pokédex data. */
+(function pokemonDetailView(){
+  if(window.PokemonDetailView)return;
+  const ui=window.PokemonArtworkUI;
+  if(!ui)return;
+  const esc=value=>escapeHTML(String(value??''));
+  const exists=value=>value!==null&&value!==undefined&&value!=='';
+  const show=value=>exists(value)?esc(value):'미기록';
+  const num=value=>exists(value)&&Number.isFinite(Number(value))?Number(value):null;
+  const labels={hp:'HP',atk:'공격',def:'방어',spa:'특수공격',spd:'특수방어',spe:'스피드'};
+  const conditions={par:'마비',brn:'화상',slp:'잠듦',tox:'맹독',psn:'독',frz:'얼음',fnt:'기절'};
+  const types={normal:'노말',fire:'불꽃',water:'물',electric:'전기',grass:'풀',ice:'얼음',fighting:'격투',poison:'독',ground:'땅',flying:'비행',psychic:'에스퍼',bug:'벌레',rock:'바위',ghost:'고스트',dragon:'드래곤',dark:'악',steel:'강철',fairy:'페어리'};
+  const color={normal:'#929bab',fire:'#d47b5b',water:'#448cb7',electric:'#c8a43f',grass:'#529c71',ice:'#5fbbc4',fighting:'#ad6e57',poison:'#9870b1',ground:'#ae8755',flying:'#719eb4',psychic:'#ba72a0',bug:'#829d58',rock:'#9b9170',ghost:'#766db5',dragon:'#5f75ca',dark:'#6e7185',steel:'#7c979f',fairy:'#d18bba'};
+  let active=null,focusBefore=null,serial=0,moveNames={},dexCache=new Map();
+  const css=document.createElement('style');
+  css.textContent=[
+    '.pkm-art[role=button]{cursor:pointer}.pkm-art[role=button]:focus-visible{outline:3px solid #75cddd;outline-offset:3px;border-radius:6px}',
+    '.pki-shade{position:fixed;inset:0;z-index:2500;background:#07111cde;display:grid;place-items:center;padding:18px;color:#e7f0f8;font:14px "Malgun Gothic",sans-serif}',
+    '.pki-panel{position:relative;width:min(850px,100%);max-height:92vh;overflow:auto;background:linear-gradient(145deg,#19334a,#101d2f);border:1px solid #56758a;border-radius:12px;box-shadow:0 22px 80px #000b}',
+    '.pki-top{display:flex;align-items:center;gap:22px;padding:23px 55px 23px 20px;border-bottom:1px solid #39556e}',
+    '.pki-image{width:158px;height:158px;flex:none;display:grid;place-items:center;background:#0a1d31;border:1px solid #41637b;border-radius:10px}',
+    '.pki-image img{width:144px;height:144px;object-fit:contain}.pki-top h2{font-size:25px;margin:3px 0 10px}.pki-top small{color:#acc7d7}',
+    '.pki-types{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.pki-type{padding:4px 11px;border-radius:16px;font-size:12px}',
+    '.pki-close{position:absolute;top:12px;right:13px;background:#243f56;border:1px solid #648297;color:white;border-radius:6px;width:38px;height:38px;font-size:23px;cursor:pointer}',
+    '.pki-body{padding:19px 22px 23px;display:grid;gap:18px}.pki-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}',
+    '.pki-kpi,.pki-fact,.pki-move{background:#162e43;border:1px solid #38556e;border-radius:7px;padding:12px;min-width:0}',
+    '.pki-kpi small,.pki-fact small{display:block;color:#aac4d6;margin-bottom:6px;font-size:12px}.pki-kpi strong{display:block;font-size:18px;overflow-wrap:anywhere}',
+    '.pki-block{border-top:1px solid #395166;padding-top:13px}.pki-block h3{font-size:15px;margin:0 0 11px}',
+    '.pki-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.pki-fact strong{overflow-wrap:anywhere;font-size:13px}',
+    '.pki-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 20px}.pki-stat{display:flex;align-items:center;gap:8px}',
+    '.pki-stat span{width:68px;flex:none;font-size:12px}.pki-stat b{width:35px;text-align:right}.pki-meter{flex:1;height:7px;background:#395166;border-radius:5px;overflow:hidden}.pki-meter i{display:block;height:100%;background:#62b9a2}',
+    '.pki-moves{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.pki-move{display:flex;justify-content:space-between;align-items:center;gap:8px}.pki-move small{color:#aac4d6}',
+    '.pki-note{color:#adc3d2;font-size:12px;line-height:1.6;margin:6px 0 0}',
+    '@media(max-width:630px){.pki-shade{padding:7px}.pki-body{padding:13px}.pki-top{padding:16px 48px 16px 13px;gap:11px}.pki-top h2{font-size:20px}.pki-image{width:106px;height:112px}.pki-image img{width:100px;height:106px}.pki-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.pki-grid,.pki-stats,.pki-moves{grid-template-columns:repeat(2,minmax(0,1fr))}}',
+    '@media(max-width:380px){.pki-grid,.pki-stats,.pki-moves{grid-template-columns:1fr}}'
+  ].join('');
+  document.head.appendChild(css);
+  fetch('/src/web/moves-ko.json').then(r=>r.ok?r.json():{}).then(data=>{moveNames=data;if(active)render(active.id);}).catch(()=>{});
+  const field=(name,value)=>'<div class="pki-fact"><small>'+esc(name)+'</small><strong>'+show(value)+'</strong></div>';
+  const section=(name,inner)=>'<section class="pki-block"><h3>'+esc(name)+'</h3>'+inner+'</section>';
+  function stats(data,max){
+    return '<div class="pki-stats">'+Object.entries(labels).map(([key,label])=>{
+      const value=num(data?.[key]);
+      return '<div class="pki-stat"><span>'+label+'</span><div class="pki-meter"><i style="width:'+(value===null?0:Math.min(100,Math.max(0,value/max*100)))+'%"></i></div><b>'+(value===null?'—':value)+'</b></div>';
+    }).join('')+'</div>';
+  }
+  function moves(mon){
+    const slots=Array.isArray(mon?.moves)?mon.moves:Array.isArray(mon?.moveSlots)?mon.moveSlots:[];
+    if(!slots.length)return '<p class="pki-note">저장된 기술이 없습니다. 경기 준비 때 자동 편성될 수 있습니다.</p>';
+    return '<div class="pki-moves">'+slots.map((slot,index)=>{
+      const id=typeof slot==='string'?slot:(slot?.id||slot?.move||slot?.name||'');
+      const key=String(id).toLowerCase().replace(/[^a-z0-9]/g,'');
+      const pp=num(slot?.pp??mon?.pp?.[index]),max=num(slot?.maxpp??mon?.maxpp?.[index]);
+      return '<div class="pki-move"><strong>'+esc(moveNames[key]||id||'미확인')+'</strong><small>PP '+(pp===null?'미기록':pp)+(max===null?'':' / '+max)+'</small></div>';
+    }).join('')+'</div>';
+  }
+  function dex(id){
+    if(!id)return Promise.resolve(null);
+    if(dexCache.has(id))return dexCache.get(id);
+    const promise=fetch('https://pokeapi.co/api/v2/pokemon/'+id+'/').then(r=>{if(!r.ok)throw Error('not found');return r.json();}).then(raw=>({
+      types:(raw.types||[]).sort((a,b)=>a.slot-b.slot).map(x=>x.type.name),
+      base:Object.fromEntries((raw.stats||[]).map(x=>[({'hp':'hp','attack':'atk','defense':'def','special-attack':'spa','special-defense':'spd','speed':'spe'})[x.stat.name],x.base_stat])),
+      height:raw.height/10,weight:raw.weight/10
+    })).catch(()=>null);
+    dexCache.set(id,promise);return promise;
+  }
+  function render(id){
+    if(!active||active.id!==id)return;
+    const root=document.getElementById('pki-overlay');if(!root)return;
+    const mon=active.mon,meta=active.dex,info=ui.resolve(mon);
+    const savedTypes=Array.isArray(mon?.types)?mon.types:(exists(mon?.type)?String(mon.type).split('/'):[]);
+    const monTypes=savedTypes.length?savedTypes:meta?.types||[];
+    const hp=num(mon?.hp??mon?.currentHp),maximum=num(mon?.maxhp??mon?.maxHp);
+    const condition=exists(mon?.status)?conditions[mon.status]||mon.status:(hp===0?'기절':hp===null?'미기록':'정상');
+    const ca=mon?.ca??mon?.power,pa=mon?.pa;
+    const kpis=[['현재 HP',hp===null?'미기록':String(hp)+(maximum!==null?' / '+maximum:'')],['상태',condition],['현재 능력 (CA)',ca],['잠재 능력 (PA)',pa]];
+    const kpiHTML='<div class="pki-kpis">'+kpis.map(([k,v])=>'<div class="pki-kpi"><small>'+esc(k)+'</small><strong>'+show(v)+'</strong></div>').join('')+'</div>';
+    const facts='<div class="pki-grid">'+field('레벨',mon?.level)+field('특성',mon?.ability)+field('지닌 도구',mon?.item||'없음')+
+      field('성격',mon?.nature)+field('활동 시즌',mon?.careerSeasons)+field('폼',mon?.form||mon?.forme||'기본')+
+      (meta?field('종족 신장',meta.height+'m')+field('종족 체중',meta.weight+'kg'):'')+'</div>';
+    const gp=mon?.gp,stats=mon?.stats??mon?.battleStats;
+    const hasStats=stats&&Object.keys(labels).some(k=>num(stats[k])!==null);
+    const hasGP=gp&&Object.keys(labels).some(k=>num(gp[k])!==null);
+    const hasBase=meta?.base&&Object.keys(labels).some(k=>num(meta.base[k])!==null);
+    const statsHTML=(hasStats?section('저장된 전투 능력치',statsHTMLSafe(stats,600)):'')+
+      (hasGP?section('성장 포인트 (GP)',stats(gp,100)+'<p class="pki-note">GP는 성장 데이터이며 전투 능력치와 다릅니다.</p>'):'')+
+      (hasBase?section('종족값 · 도감 참고 정보',stats(meta.base,255)+'<p class="pki-note">외부 도감의 종족값이며 개체의 전투 능력치가 아닙니다.</p>'):'')+
+      (!hasStats&&!hasGP&&!hasBase?'<p class="pki-note">능력치 데이터는 아직 기록되지 않았습니다.</p>':'');
+    const image=ui.image(mon).replace('tabindex="0"','tabindex="-1"');
+    root.innerHTML='<div class="pki-panel" role="dialog" aria-modal="true" aria-labelledby="pki-heading" tabindex="-1">'+
+      '<button class="pki-close" type="button" aria-label="상세 정보 닫기">×</button>'+
+      '<header class="pki-top"><div class="pki-image">'+image+'</div><div><small>'+(info.baseId?'도감 No. '+String(info.baseId).padStart(4,'0'):'도감 번호 미확인')+'</small>'+
+      '<h2 id="pki-heading">'+show(mon?.name||mon?.species)+'</h2><div>Lv. '+show(mon?.level)+'</div><div class="pki-types">'+monTypes.map(t=>'<span class="pki-type" style="background:'+(color[String(t).toLowerCase()]||'#51677b')+'">'+esc(types[String(t).toLowerCase()]||t)+'</span>').join('')+'</div></div></header>'+
+      '<div class="pki-body">'+kpiHTML+section('기본 정보',facts)+section('기술과 PP',moves(mon))+statsHTML+
+      '<p class="pki-note">현재 HP·상태·CA·PA·GP·기술은 저장된 값만 표시합니다. 종족값은 참고용 외부 도감 자료입니다.</p></div></div>';
+    root.querySelector('.pki-close').onclick=close;
+    root.querySelector('.pki-panel').focus({preventScroll:true});
+  }
+  function statsHTMLSafe(value,max){return stats(value,max);}
+  function close(){
+    document.getElementById('pki-overlay')?.remove();active=null;serial++;
+    if(focusBefore?.isConnected)focusBefore.focus({preventScroll:true});
+    focusBefore=null;
+  }
+  function open(mon){
+    if(!mon)return;
+    focusBefore=document.activeElement;
+    const id=++serial;active={id,mon,dex:null};
+    document.getElementById('pki-overlay')?.remove();
+    const root=document.createElement('div');root.id='pki-overlay';root.className='pki-shade';
+    root.onclick=e=>{if(e.target===root)close();};
+    document.body.appendChild(root);render(id);
+    const info=ui.resolve(mon);
+    dex(info.id||info.baseId).then(data=>{if(active?.id!==id)return;active.dex=data;render(id);});
+  }
+  function pick(target){
+    if(!(target instanceof Element)||target.closest('#pki-overlay'))return null;
+    if(target.matches('.pkm-art[data-pkm-record]'))return target;
+    return target.closest('.pkm-profile-card,.pkm-choose-card,.pkm-owned-card,#marketDetail .fm-detail-mon')?.querySelector('.pkm-art[data-pkm-record]')||null;
+  }
+  document.addEventListener('click',event=>{const img=pick(event.target);if(!img)return;const mon=ui.getRecord(img.dataset.pkmRecord);if(mon){event.preventDefault();open(mon);}});
+  document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&active){event.preventDefault();close();return;}
+    if(active&&event.key==='Tab'){
+      const panel=document.querySelector('#pki-overlay .pki-panel');
+      if(panel&&!panel.contains(document.activeElement)){event.preventDefault();panel.querySelector('.pki-close')?.focus();}
+      return;
+    }
+    if((event.key==='Enter'||event.key===' ')&&event.target?.matches?.('.pkm-art[data-pkm-record]')){
+      const mon=ui.getRecord(event.target.dataset.pkmRecord);
+      if(mon){event.preventDefault();open(mon);}
+    }
+  });
+  window.PokemonDetailView={open,close};
 })();
