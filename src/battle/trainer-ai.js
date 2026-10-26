@@ -46,6 +46,8 @@ export class TrainerAI extends RandomPlayerAI{
     this.decisions={moves:0,switches:0,voluntarySwitches:0,rollouts:0,rolloutFallbacks:0,
       plan:this.plan,response:this.profile.response||'자율',preferred:this.profile.preferred,
       traits:[...(this.profile.traits||[])],
+      behaviorAdvice:this.profile.behaviorAdvice||null,
+      behaviorResponse:this.profile.behaviorResponse||'자율',
       reasons:{},trace:[]};
   }
   record(kind,choice,reason,details={}){
@@ -95,10 +97,15 @@ export class TrainerAI extends RandomPlayerAI{
     // Earned play traits influence decision tendencies, not legal actions or stats.
     if(this.profile.traits?.includes('적극적인 교체'))chance+=.075;
     if(this.profile.traits?.includes('에이스 보존')&&this.remaining>1&&health<.75)chance+=.06;
-    const development=this.profile.development;
-    // Training requests only increase consideration of a *plausibly beneficial* option.
-    if(development?.target==='switch'&&mismatch)chance+=.075*development.weight;
-    if(development?.target==='preserve'&&this.remaining>1&&health<.45&&danger>=2)chance+=.06*development.weight;
+    // Successful previous choices strengthen a habit even without fresh manager input.
+    const switchHabit=Math.max(0,Math.min(100,Number(this.profile.habitScores?.switch)||0));
+    const preserveHabit=Math.max(0,Math.min(100,Number(this.profile.habitScores?.preserve)||0));
+    if(mismatch)chance+=.001*switchHabit;
+    if(this.remaining>1&&health<.45&&danger>=2)chance+=.0006*preserveHabit;
+    if(this.profile.behaviorAdvice==='switch'&&mismatch)
+      chance+=.075*(this.profile.behaviorWeight||0);
+    if(this.profile.behaviorAdvice==='preserve'&&this.remaining>1&&health<.45&&danger>=2)
+      chance+=.06*(this.profile.behaviorWeight||0);
     return 1-limit(chance,0,.48);
   }
   preference(move,battle){
@@ -114,7 +121,8 @@ export class TrainerAI extends RandomPlayerAI{
     const hp=own.hp/Math.max(1,own.maxhp);
     const conservation=Math.max(0,(this.profile.preservation-10)*.8+(this.remaining-1)*2+
       (this.profile.traits?.includes('에이스 보존')?5:0)+
-      (this.profile.development?.target==='preserve'?3*this.profile.development.weight:0));
+      (Math.min(100,Number(this.profile.habitScores?.preserve)||0)/20)+
+      (this.profile.behaviorAdvice==='preserve'?3*(this.profile.behaviorWeight||0):0));
     if(move.heal&&hp<.65)return conservation+6;
     if(move.drain&&hp<.60)return conservation;
     if(move.selfdestruct||move.id==='explosion'||move.id==='selfdestruct')return -conservation*3;
@@ -134,7 +142,8 @@ export class TrainerAI extends RandomPlayerAI{
     const {ownTypes,foeTypes}=this.matchup();
     const context={foeTypes,ownTypes,ownAbility:this.ownActive?.ability,ownItem:this.ownActive?.item};
     const insight=(this.profile.traits?.includes('전황 분석가')?2:0)+
-      (this.profile.development?.target==='analysis'?this.profile.development.weight*1.5:0);
+      Math.min(100,Number(this.profile.habitScores?.analysis)||0)/35+
+      (this.profile.behaviorAdvice==='analysis'?1.5*(this.profile.behaviorWeight||0):0);
     const clarity=limit((this.profile.analysis+insight)/20,0,1),understands=this.prng.random()<this.skill.tactics/20;
     if(!understands){
       const choice=super.chooseMove(active,moves);
