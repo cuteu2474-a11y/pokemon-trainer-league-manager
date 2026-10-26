@@ -76,7 +76,7 @@ test('reinforced battle analysis changes voluntary reasoning probability without
     const ai=new TrainerAI({}, {...trainer,aiProfile:resolveBattleAutonomy(trainer,50)},
       {seed:[1,2,3,4],team:[{species:'Pikachu',ability:'Static'}]});
     ai.foeSpecies='Blastoise';ai.ownActive={species:'Pikachu',ability:'Static'};
-    ai.prng.random=()=>.58;
+    ai.prng.random=(max)=>max?Math.floor(.58*max):.58;
     return ai;
   };
   const moves=[{choice:'move 1',move:{id:'thunderwave'}},
