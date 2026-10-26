@@ -1,5 +1,5 @@
 import {Dex} from '@pkmn/sim';
-import {gpBudget,STATS} from '../core/stats.js';
+import {ABILITY_STATS} from '../core/stat-potential.js';
 
 /** Curated signature partners. Other roster members are game-generated, not claims about canon. */
 export const SIGNATURES=Object.freeze({
@@ -29,16 +29,15 @@ const REGIONAL_POOLS={
 };
 const hash=s=>{let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(0),16777619);return h>>>0;};
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,Math.round(n)));
-function allocateGP(ca,seed){
-  let remaining=gpBudget(ca);
-  const gp=Object.fromEntries(STATS.map(s=>[s,0]));
-  const order=[...STATS].sort((a,b)=>(hash(seed+a)%100)-(hash(seed+b)%100));
-  while(remaining) {
-    let changed=false;
-    for(const stat of order)if(gp[stat]<94&&remaining>0){gp[stat]++;remaining--;changed=true;}
-    if(!changed)throw new Error('GP budget exceeds stat capacity');
+function allocateAbilityPairs(current,potential,seed){
+  const statCA={},statPA={};
+  for(const stat of ABILITY_STATS){
+    const offset=(hash(seed+':'+stat)%19)-9;
+    const now=clamp(current+offset,1,200);
+    const cap=clamp(potential+(hash(seed+':potential:'+stat)%17)-8,now,200);
+    statCA[stat]=now;statPA[stat]=cap;
   }
-  return gp;
+  return {statCA,statPA};
 }
 function movesFor(species){
   const data=Dex.species.get(species);
@@ -74,9 +73,8 @@ export function generatePokemonTeams(club) {
       const bonus=trainer.isCanonical&&index===0?15:0;
       const ca=clamp(30+club.populationIndex*.55+(hash(seed)%19)-9+bonus,15,115);
       const pa=clamp(ca+15+(hash(seed+'potential')%41),ca,200);
-      return {species,level:clamp(25+club.populationIndex*.35+(hash(seed+'level')%9),20,75),
-        nature:'Hardy',ability:Dex.species.get(species).abilities['0']||'',
-        moves:movesFor(species),ca,pa,gp:allocateGP(ca,seed)};
+      return {species,nature:'Hardy',ability:Dex.species.get(species).abilities['0']||'',
+        moves:movesFor(species),...allocateAbilityPairs(ca,pa,seed)};
     });
   }
   return club;
