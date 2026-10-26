@@ -2123,3 +2123,13 @@
   script.async=false;
   document.body.append(script);
 })();
+
+
+/* Trainer-led wild Pokémon scouting bootstrap. */
+(function loadWildPokemonScouting(){
+  if(typeof document==='undefined'||!document.body?.append||window.PokemonExpedition)return;
+  const script=document.createElement('script');
+  script.src='assets/pokemon-expedition.js';
+  script.async=false;
+  document.body.append(script);
+})();
