@@ -219,8 +219,14 @@
     const potential=19+Math.floor(rand()*36)+(focus==='growth'?18:0)+(rarity==='희귀'?8:0);
     ca=clamp(ca+(focus==='power'?8:0),1,110);
     const pa=clamp(ca+potential,ca,200);
-    return {name,level:clamp(24+Math.floor(rand()*17)+(focus==='power'?5:0),1,100),
-      power:ca,ca,pa,careerSeasons:1,debutSeason:season,
+    const statCA={},statPA={};
+    for(const stat of ['hp','atk','def','spa','spd','spe']){
+      const now=clamp(ca+Math.round((rand()-.5)*18),1,200);
+      const cap=clamp(pa+Math.round((rand()-.5)*18),now,200);
+      statCA[stat]=now;
+      statPA[stat]=cap;
+    }
+    return {name,statCA,statPA,careerSeasons:1,debutSeason:season,
       source:'wild-scout',scoutRarity:rarity};
   }
   function outcome(mission,skills,season){
@@ -245,9 +251,14 @@
   function suggestedSlot(trainer,mon){
     const preferences=trainer.autonomyAI?.preferredPlay||'balanced';
     const futureBias=preferences==='endurance'?.32:.22;
-    const rating=p=>Number(p.power??p.ca??50)+futureBias*Math.max(0,
-      Number(p.pa??p.power??50)-Number(p.power??p.ca??50))-
-      Math.max(0,Number(p.careerSeasons||1)-5)*1.5;
+    const rating=p=>{
+      const ca=p.statCA?Object.values(p.statCA).reduce((a,b)=>a+b,0)/6:
+        Number(p.power??p.ca??50);
+      const pa=p.statPA?Object.values(p.statPA).reduce((a,b)=>a+b,0)/6:
+        Number(p.pa??ca);
+      return ca+futureBias*Math.max(0,pa-ca)-
+        Math.max(0,Number(p.careerSeasons||1)-5)*1.5;
+    };
     let worst=0;
     for(let i=1;i<trainer.pokemon.length;i++)
       if(rating(trainer.pokemon[i])<rating(trainer.pokemon[worst]))worst=i;
@@ -328,7 +339,7 @@
     game.releasedPokemon ||= [];
     game.releasedPokemon.unshift({season:game.season,week:game.week,
       club:myClub().name,trainer:t.name,name:old.name,
-      power:old.power,careerSeasons:old.careerSeasons,reason:'탐색 포켓몬 등록'});
+      statCA:old.statCA,statPA:old.statPA,careerSeasons:old.careerSeasons,reason:'탐색 포켓몬 등록'});
     game.releasedPokemon.length=Math.min(game.releasedPokemon.length,80);
     game.scout=(Number(game.scout)||0)+1;
     game.log.unshift(t.name+' 포켓몬 등록: '+old.name+' → '+candidate.name+' · 6마리 유지');
@@ -355,15 +366,20 @@
         '이번 주 탐색 완료': '파견 가능';
     const suggestion=cand?suggestedSlot(trainer,cand):null;
     const rows=cand?'<section class="ps-candidate"><strong>포획 보고: '+esc(cand.name)+'</strong>'+
-      '<p>Lv.'+cand.level+' · 현재 능력 '+cand.ca+' / 성장 잠재력 '+cand.pa+
-      ' · '+esc(cand.scoutRarity)+' · '+FOCUSES[m?.focus||'balanced'].label+'</p>'+
+      '<p>능력치별 CA/PA · '+esc(cand.scoutRarity)+' · '+
+      FOCUSES[m?.focus||'balanced'].label+'</p>'+
+      '<div class="ps-stats">'+Object.entries({hp:'체력',atk:'공격',def:'방어',
+        spa:'특수공격',spd:'특수방어',spe:'스피드'}).map(([stat,label])=>
+        '<span>'+label+' <b>'+cand.statCA[stat]+'/'+cand.statPA[stat]+'</b></span>').join('')+
+      '</div>'+
       '<p>트레이너의 추천: '+(suggestion.gain>0?'교체를 긍정적으로 검토':
         '현재 선수단을 유지하는 편이 유리할 수 있음')+
       ' · 추천 교체 대상 '+esc(trainer.pokemon[suggestion.slot].name)+
       ' (평가차 '+(suggestion.gain>=0?'+':'')+suggestion.gain+')</p>'+
       '<label>등록 시 팀에서 제외할 포켓몬<select id="ps-slot-'+esc(key)+'">'+
       trainer.pokemon.map((p,i)=>'<option value="'+i+'" '+(i===suggestion.slot?'selected':'')+'>'+
-        esc(p.name)+' · 전력 '+esc(p.power)+' · 활동 '+esc(p.careerSeasons||1)+'/8시즌</option>').join('')+
+        esc(p.name)+' · 평균 CA '+esc(p.statCA?Math.round(Object.values(p.statCA).reduce((a,b)=>a+b,0)/6):p.power)+
+        ' · 활동 '+esc(p.careerSeasons||1)+'/8시즌</option>').join('')+
       '</select></label><div class="ps-actions"><button data-ps-recruit="'+esc(key)+'" type="button">확인 후 팀 등록</button>'+
       '<button data-ps-dismiss="'+esc(key)+'" type="button">후보 보내기</button></div></section>':'';
     return '<div class="ps-trainer"><div><b>'+esc(trainer.name)+'</b>'+
@@ -545,6 +561,10 @@
     '#dashpanel .ps-trainer>span{color:#9ce3c4;font-size:12px}',
     '#dashpanel .ps-candidate{background:#203d4b;border:1px solid #427b7c;border-radius:7px;padding:12px;margin-top:8px}',
     '#dashpanel .ps-candidate p{font-size:12px;line-height:1.7;color:#c3d7dd}',
+    '#dashpanel .ps-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:12px 0}',
+    '#dashpanel .ps-stats span{background:#18384c;padding:8px;border-radius:5px;font-size:11px}',
+    '#dashpanel .ps-stats b{display:block;color:#a6e3c5}',
+
     '#dashpanel .ps-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0}',
     '#dashpanel .ps-actions button{padding:9px 13px;border-radius:5px;background:#23516e;color:white;border:1px solid #5b8ba1;cursor:pointer}',
     '#dashpanel .ps-history{border-top:1px solid #3b5269;padding:9px 0;font-size:12px}',
