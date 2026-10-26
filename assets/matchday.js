@@ -3,8 +3,12 @@
   const priorNextWeek = nextWeek, priorPlayNext = playNext, priorMatchSim = matchSim;
   let active = null, timer = null, cursor = 0, events = [], speed = 4, paused = false;
   const planLabels={balanced:'균형',offense:'공세',control:'견제',endurance:'유지력',tempo:'속공'};
-  const behaviorLabels={switch:'불리할 때 적극적으로 교체',preserve:'연승전을 위해 에이스 보존',
-    analysis:'상대를 분석해 유리한 수 선택'};
+  const behaviorLabels={
+    kill:'처치 기회를 확실히 노려라',switch:'불리할 때 적극적으로 교체',
+    matchup:'유리한 교체 대상을 선택해라',preserve:'연승전을 위해 에이스를 보존해라',
+    pp:'강력한 기술의 PP를 아껴라',status:'효과적인 상태이상으로 견제해라',
+    analysis:'상대를 분석해 유리한 수를 선택해라'
+  };
   let watchMode='highlights', highlightFlags=[], contributions=null, currentBattle=null, skippedEvents=0;
   const esc = value => escapeHTML(value ?? '');
   const copy = value => JSON.parse(JSON.stringify(value));
@@ -1356,8 +1360,12 @@
     String(trainer.id??(String(clubId)+':'+index+':'+trainer.name));
   const threshold=skill=>20+skill*5;
   const HABITS=Object.freeze({
-    switch:{label:'적극적인 교체',description:'유리한 교체로 실제 대결을 이긴 경험',threshold:55,matches:3},
-    preserve:{label:'에이스 보존',description:'HP·PP 보존으로 연승전에 기여한 경험',threshold:50,matches:3},
+    kill:{label:'킬각 포착',description:'직접 공격으로 상대를 마무리한 성공 경험',threshold:55,matches:3},
+    switch:{label:'적극적인 교체',description:'불리한 상성을 벗어나는 교체 성공 경험',threshold:55,matches:3},
+    matchup:{label:'상성 교체 전문가',description:'방어·공격 상성이 좋은 교체 대상을 선택한 성공 경험',threshold:55,matches:3},
+    preserve:{label:'에이스 보존',description:'연승전에서 회복·위험 회피에 성공한 경험',threshold:50,matches:3},
+    pp:{label:'PP 관리자',description:'대체 기술로 승리하며 희소 PP를 보존한 경험',threshold:55,matches:3},
+    status:{label:'상태이상 전문가',description:'상대에게 실제 상태이상을 적용한 승리 경험',threshold:55,matches:3},
     analysis:{label:'전황 분석가',description:'후보 기술을 분석해 승리한 경험',threshold:60,matches:4}
   });
   function skill(trainer,field){
@@ -1384,6 +1392,30 @@
     trainer.aiCareer=career;
     return career;
   }
+  /** Check real Showdown logs, not a move's intended outcome or a name tag. */
+  function actualBattleEvents(log,sideId){
+    const foe=sideId==='p1'?'p2':'p1';
+    let current=null,kill=0,status=0;
+    for(const line of String(log||'').split('\n')){
+      const parts=line.split('|'),type=parts[1]||'';
+      if(type==='move'){
+        current={own:(parts[2]||'').startsWith(sideId),indirect:false,damaged:false};
+      }else if(type==='-damage'&&current){
+        if((parts[2]||'').startsWith(foe)){
+          current.damaged=true;
+          current.indirect=parts.some(v=>v.startsWith('[from]'));
+        }
+      }else if(type==='-status'&&current?.own&&(parts[2]||'').startsWith(foe)){
+        if(!parts.some(v=>v.startsWith('[from]')))status++;
+      }else if(type==='faint'&&current?.own&&(parts[2]||'').startsWith(foe)){
+        if(current.damaged&&!current.indirect)kill++;
+        current=null;
+      }else if((type==='upkeep'||type==='turn')&&current){
+        current=null;
+      }
+    }
+    return {kill,status};
+  }
   function roundEvidence(round,side){
     const sideId=side==='home'?'p1':'p2';
     const ai=round.aiDecisions?.[sideId]||{};
@@ -1392,6 +1424,9 @@
     const trace=Array.isArray(ai.trace)?ai.trace:[];
     // Judge observed action quality, not a raw "switch 10 times" counter.
     const qualifiedSwitch=trace.filter(x=>x.kind==='switch'&&x.quality?.switch===true).length;
+    const qualifiedMatchup=trace.filter(x=>x.kind==='switch'&&x.quality?.matchup===true).length;
+    const qualifiedPP=trace.filter(x=>x.kind==='move'&&x.quality?.pp===true).length;
+    const observed=actualBattleEvents(round.log,sideId);
     // A trainer can make multiple informed choices and win without a large
     // numerical gap between ranked moves. Reward observed useful analysis, not
     // an arbitrary score-gap threshold or simulations on a lost duel.
@@ -1407,8 +1442,12 @@
     // A good action is only reinforced when that trainer also won this duel.
     // Executing a recommendation repeatedly without success cannot build a trait.
     const goalQuality={
+      kill:won?Math.min(3,observed.kill):0,
       switch:won?Math.min(2,qualifiedSwitch):0,
+      matchup:won?Math.min(2,qualifiedMatchup):0,
       preserve:won?Math.min(2,Math.min(preservedByMove,heals)+Math.min(1,avoidedThreat)):0,
+      pp:won?Math.min(2,qualifiedPP):0,
+      status:won?Math.min(2,observed.status):0,
       analysis:won?Math.min(3,qualifiedAnalysis):0
     };
     return {duels:1,wins:Number(won),losses:Number(lost),
@@ -1417,7 +1456,9 @@
       voluntary:Math.min(100,Math.max(0,Number(ai.voluntarySwitches)||0)),
       analyses:Math.min(300,Math.max(0,Number(ai.rollouts)||0)),
       preservation:trace.filter(item=>String(item.reason||'').includes('연승 전력 관리')).length,
-      goalSwitch:goalQuality.switch,goalPreserve:goalQuality.preserve,goalAnalysis:goalQuality.analysis};
+      goalKill:goalQuality.kill,goalSwitch:goalQuality.switch,goalMatchup:goalQuality.matchup,
+      goalPreserve:goalQuality.preserve,goalPp:goalQuality.pp,goalStatus:goalQuality.status,
+      goalAnalysis:goalQuality.analysis};
   }
   function applyEvidence(trainer,evidence,key,side,slot,coaching){
     const career=getCareer(trainer);
@@ -1452,13 +1493,14 @@
     const ai=trainer.autonomyAI ||= {};
     const traits=ai.playTraits ||= [];
     const learned=[];
-    const behaviorScores=ai.habitScores ||= {switch:0,preserve:0,analysis:0};
-    const successfulMatches=ai.habitSuccessfulMatches ||= {switch:0,preserve:0,analysis:0};
+    const behaviorScores=ai.habitScores ||= {};
+    const successfulMatches=ai.habitSuccessfulMatches ||= {};
     career.quality ||= {};
     const advice=coaching?.behaviorAdvice||null;
     const response=coaching?.behaviorResponse||'자율';
-    const qualified={switch:evidence.goalSwitch||0,preserve:evidence.goalPreserve||0,
-      analysis:evidence.goalAnalysis||0};
+    const qualified={kill:evidence.goalKill||0,switch:evidence.goalSwitch||0,
+      matchup:evidence.goalMatchup||0,preserve:evidence.goalPreserve||0,
+      pp:evidence.goalPp||0,status:evidence.goalStatus||0,analysis:evidence.goalAnalysis||0};
     const progress={};
     for(const [kind,config] of Object.entries(HABITS)){
       const quality=career.quality[kind] ||= {points:0,matches:0};
@@ -1520,7 +1562,8 @@
         if(!total){
           total={slot,index,trainer,duels:0,wins:0,losses:0,moves:0,
             switches:0,voluntary:0,analyses:0,preservation:0,
-          goalSwitch:0,goalPreserve:0,goalAnalysis:0};
+          goalKill:0,goalSwitch:0,goalMatchup:0,goalPreserve:0,goalPp:0,
+          goalStatus:0,goalAnalysis:0};
           collected.set(index,total);
         }
         for(const k of Object.keys(evidence))total[k]+=evidence[k];
@@ -1597,7 +1640,7 @@
   }
 
   window.TrainerCareer={FIELDS,FEEDBACK,HABITS,skill,threshold,state,getCareer,applyMatch,
-    offerFeedback,roundEvidence,trainerId};
+    offerFeedback,roundEvidence,actualBattleEvents,trainerId};
   if(typeof document==='undefined')return;
   let visible=false,notice='';
   const getClub=()=>{try{return typeof myClub==='function'?myClub():null;}catch{return null;}};
