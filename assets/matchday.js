@@ -333,8 +333,49 @@
   }
   function reportHTML(result){
     const report=result.report;if(!report)return '';
-    return `<div class="md-report-grid">${['home','away'].map((key,k)=>`<section><h2>${esc(game.clubs[k===0?result.home:result.away].name)} 활약</h2>${report[key].slice(0,3).map((mon,i)=>`<div class="md-report-row"><b>${i+1}</b><div><strong>${esc(mon.displayName)}</strong><small>${esc(mon.trainer)} · ${mon.entries}회 투입</small></div><span>직접 격파 ${mon.knockouts}<small>직접 피해 ${mon.damage} HP</small></span></div>`).join('')||'<p>집계된 출전 기록이 없습니다.</p>'}</section>`).join('')}</div><p class="md-muted">실제 공격으로 가한 피해와 격파를 집계합니다. 독·날씨 등 간접 피해는 제외합니다.</p>`;
+    const leaders='<div class="md-report-grid">'+['home','away'].map((key,k)=>
+      '<section><h2>'+esc(game.clubs[k===0?result.home:result.away].name)+' 활약</h2>'+
+      report[key].slice(0,3).map((mon,i)=>'<div class="md-report-row"><b>'+(i+1)+'</b><div><strong>'+
+        esc(mon.displayName)+'</strong><small>'+esc(mon.trainer)+' · '+mon.entries+
+        '회 투입</small></div><span>직접 격파 '+mon.knockouts+
+        '<small>직접 피해 '+mon.damage+' HP</small></span></div>').join('')+
+      '</section>').join('')+'</div>';
+    const strategy=result.coaching?'<div class="md-coach-grid">'+['home','away'].map(key=>{
+      const team=result.coaching[key]||[];
+      return '<section><h2>'+esc(game.clubs[key==='home'?result.home:result.away].name)+' · AI 전술 평가</h2>'+
+        team.map((profile,slot)=>{
+          const replay=(result.rounds||[]).flatMap(round=>{
+            const matchIndex=key==='home'?round.trainerA:round.trainerB;
+            return matchIndex===slot?[round.aiDecisions?.[key==='home'?'p1':'p2']]:[];
+          }).filter(Boolean);
+          const switches=replay.reduce((n,r)=>n+(r.voluntarySwitches||0),0);
+          const analyses=replay.reduce((n,r)=>n+(r.rollouts||0),0);
+          const reasons={};
+          for(const r of replay)for(const [reason,count] of Object.entries(r.reasons||{})){
+            reasons[reason]=(reasons[reason]||0)+count;
+          }
+          const highlights=Object.entries(reasons).sort((a,b)=>b[1]-a[1]).slice(0,2)
+            .map(([why,count])=>esc(why)+' '+count+'회').join(' · ');
+          return '<div class="md-coach-entry"><strong>'+(slot+1)+'. '+esc(profile.name)+'</strong>'+
+            '<small>선플 '+esc(planLabels[profile.preferred]||'균형')+
+            ' · 실제 전술 '+esc(planLabels[profile.plan]||'균형')+
+            ' · 감독 권고 '+(profile.requested?esc(planLabels[profile.requested]||profile.requested):'없음')+
+            ' → <b>'+esc(profile.response||'자율')+'</b></small>'+
+            '<small>'+esc(profile.reason||'자율 결정')+'</small>'+
+            '<small>자율 교체 '+switches+'회 · 전황 시뮬레이션 '+analyses+'회'+
+              (highlights?' · '+highlights:'')+'</small></div>';
+        }).join('')+'</section>';
+      }).join('')+'</div>':'';
+    return leaders+'<p class="md-muted">직접 공격 피해와 격파만 집계합니다. 독·날씨 등의 간접 피해는 제외합니다.</p>'+
+      '<h2>감독 권고 및 트레이너 AI 판단</h2>'+strategy;
   }
+  const coachStyles=document.createElement('style');
+  coachStyles.textContent='#matchday .md-coach-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0}'+
+    '#matchday .md-coach-grid h2{font-size:15px;margin:6px 0 12px}'+
+    '#matchday .md-coach-entry{background:#172b3e;padding:9px 11px;border:1px solid #36526a;border-radius:6px;margin-bottom:7px}'+
+    '#matchday .md-coach-entry strong{font-size:12px}#matchday .md-coach-entry small{display:block;color:#acc5d4;font-size:11px;line-height:1.6;margin-top:4px}'+
+    '@media(max-width:650px){#matchday .md-coach-grid{grid-template-columns:1fr}}';
+  document.head.appendChild(coachStyles);
   function nextMoment(){
     clearTimeout(timer);let target=cursor;
     while(target<events.length){const e=events[target];if(highlightFlags[target]&&(e.intro!==undefined||e.end||e.line?.startsWith('|turn|')))break;target++;}
