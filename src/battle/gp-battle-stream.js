@@ -35,7 +35,7 @@ function currentStats(battle) {
   const [p1, p2] = [battle.p1, battle.p2].map(side => side.pokemon.map(mon => ({
     species: mon.species.name,
     hp: mon.hp, maxhp: mon.maxhp, status: mon.status,
-    pp: mon.baseMoveSlots.map(slot => slot.pp),
+    pp: mon.baseMoveSlots.map(slot => slot.pp), maxpp:mon.baseMoveSlots.map(slot=>slot.maxpp),
     atk: mon.storedStats.atk, def: mon.storedStats.def, spa: mon.storedStats.spa,
     spd: mon.storedStats.spd, spe: mon.storedStats.spe,
   })));
@@ -80,6 +80,19 @@ export class GPBattleStream extends BattleStreams.BattleStream {
     if (type !== 'start') return;
     const battle = this.battle;
     if (!battle) throw new Error('Showdown did not create a Battle');
+    const originalSend=battle.send, sentStates=new Map();
+    battle.send=function(type,data){
+      if(type==='update'&&Array.isArray(data)&&battle.started){
+        const extra=[];
+        for(const side of [battle.p1,battle.p2])for(const mon of side.pokemon){
+          const state=JSON.stringify({types:mon.getTypes(),basePP:mon.baseMoveSlots.map(slot=>slot.pp),moves:mon.moveSlots.map(slot=>({id:slot.id,name:slot.move,pp:slot.pp,maxpp:slot.maxpp}))});
+          const key=side.id+': '+mon.name;
+          if(sentStates.get(key)!==state){sentStates.set(key,state);extra.push('|league-state|'+key+'|'+state);}
+        }
+        data=[...data,...extra];
+      }
+      return originalSend.call(this,type,data);
+    };
     const originalStart = battle.start;
     const self = this;
     battle.start = function (...args) {
@@ -113,6 +126,8 @@ export class GPBattleStream extends BattleStreams.BattleStream {
       }
       for (const side of sides) side.pokemonLeft = side.pokemon.filter(mon => mon.hp > 0).length;
       installFormHooks(battle, self.gpTeams, self.formEvents);
+      // Side.pokemon is reordered on every switch; retain original object identities.
+      self.originalPokemon=Object.fromEntries(['p1','p2'].map((key,i)=>[key,[...sides[i].pokemon]]));
       self.initialStats = currentStats(battle);
       return originalStart.apply(this, args);
     };

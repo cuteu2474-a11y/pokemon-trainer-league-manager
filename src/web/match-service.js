@@ -48,6 +48,10 @@ export async function runMatch(body) {
   const home = prepareClub(body.home, body.homeOrder), away = prepareClub(body.away, body.awayOrder);
   const result = await simulateClubMatch(home, away, {seed});
   const visuals = {}, moveVisuals = {};
+  const moveInfo=move=>({id:move.id,type:move.type,category:move.category,power:move.basePower,accuracy:move.accuracy,label:koreanMoves[move.id]||move.name});
+  for(const trainer of [...home,...away])for(const mon of trainer.team)for(const id of mon.moves){const move=Dex.moves.get(id);moveVisuals[move.name]=moveInfo(move);moveVisuals[move.id]=moveInfo(move);}
+  const types=Dex.types.all().map(t=>t.name);
+  const typeChart=Object.fromEntries(types.map(attack=>[attack,Object.fromEntries(types.map(defense=>[defense,Dex.getImmunity(attack,[defense])?2**Dex.getEffectiveness(attack,[defense]):0]))]));
   for(const trainer of [...home,...away])for(const mon of trainer.team){const species=Dex.species.get(mon.species);visuals[species.name]={id:species.spriteid,num:spriteNumbers[species.id]||species.num,types:species.types};}
   for (const round of result.rounds) for (const line of round.result.log.split('\n')) {
     const part = line.split('|');
@@ -58,9 +62,9 @@ export async function runMatch(body) {
     }
     if (part[1] === 'move') {
       const move = Dex.moves.get(part[3]);
-      if (move.exists) moveVisuals[part[3]] = {type:move.type, category:move.category, label:koreanMoves[move.id]||move.name};
+      if (move.exists) moveVisuals[part[3]] = moveInfo(move);
     }
   }
-  return {engine:'showdown', visuals, moveVisuals, report:buildBattleReport(result.rounds,home,away), home:body.home.id, away:body.away.id, aScore:result.trainersDefeated.B, bScore:result.trainersDefeated.A,
-    teams:{home,away}, rounds:result.rounds.map(r => ({trainerA:r.trainerA, trainerB:r.trainerB, winner:r.winner, initial:Object.fromEntries(['p1','p2'].map(side=>[side,r.result.initialStats[side].map((state,i)=>({name:r.pokemonOrder[side][i],hp:state.hp,maxhp:state.maxhp,status:state.status}))])), log:r.result.log}))};
+  return {engine:'showdown', visuals, moveVisuals, report:buildBattleReport(result.rounds,home,away), typeChart, home:body.home.id, away:body.away.id, aScore:result.trainersDefeated.B, bScore:result.trainersDefeated.A,
+    teams:{home,away}, rounds:result.rounds.map(r => ({trainerA:r.trainerA, trainerB:r.trainerB, winner:r.winner, initial:Object.fromEntries(['p1','p2'].map(side=>[side,r.result.initialStats[side].map((state,i)=>({name:r.pokemonOrder[side][i],hp:state.hp,maxhp:state.maxhp,status:state.status,pp:state.pp,maxpp:state.maxpp}))])), log:r.result.log}))};
 }

@@ -40,7 +40,7 @@ export async function simulateSixVsSix(teamA, teamB, {formatid = 'gen9customgame
     const winner = log.match(/\|win\|([^\n]+)/)?.[1] ?? (log.includes('|tie|') ? 'tie' : null);
     if (!winner) throw new Error('Battle finished without a winner or tie');
     const finalState = Object.fromEntries(['p1','p2'].map(key => [key,
-      stream.battle[key].pokemon.map(mon => ({
+      (stream.originalPokemon?.[key] || stream.battle[key].pokemon).map(mon => ({
         hp: mon.hp, maxhp: mon.maxhp, status: mon.status,
         pp: mon.baseMoveSlots.map(slot => slot.pp),
       }))
