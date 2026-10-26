@@ -27,7 +27,7 @@ function fixture(round=1){
               quality:{switch:true,preserve:true}})),
             ...Array.from({length:7},()=>({kind:'move',reason:'전황 분석·연승 전력 관리',
               quality:{analysis:true,preserve:true}})),
-          ]}},
+          ]},
         p2:{moves:7,switches:2,voluntarySwitches:0,rollouts:1,trace:[]}}},
       {trainerA:0,trainerB:1,winner:'A',log:'|-heal|p1a: Mewtwo|205/250',final:{p1:[{hp:215}],p2:[]},
         aiDecisions:{p1:{moves:28,switches:5,voluntarySwitches:4,rollouts:14,
@@ -36,7 +36,7 @@ function fixture(round=1){
               quality:{switch:true,preserve:true}})),
             ...Array.from({length:6},()=>({kind:'move',reason:'전황 분석·연승 전력 관리',
               quality:{analysis:true,preserve:true}})),
-          ]}},
+          ]},
         p2:{moves:9,switches:1,voluntarySwitches:0,rollouts:3,trace:[]}}},
     ]}};
 }
