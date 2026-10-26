@@ -345,7 +345,8 @@
     return '<div class="ps-trainer"><div><b>'+esc(trainer.name)+'</b>'+
       '<small>탐색 능력 '+scout.skill+'/20 · 경험 '+scout.experience+'/4 · 포켓몬 6마리</small>'+
       '</div><span>'+state+'</span></div>'+
-      (m?'<p class="ps-mission">최근 탐색: '+esc(m.region)+' · '+esc(FOCUSES[m.focus]?.label||'균형 탐색')+
+      (m?'<p class="ps-mission">최근 탐색: '+esc(m.region)+' · '+esc(HABITATS[m.habitat||'grass'])+
+      ' · '+esc(TIMES[m.time||'day'])+' · '+esc(FOCUSES[m.focus]?.label||'균형 탐색')+
       ' · '+(m.status==='travel'?'다음 주 완료 예정':esc(m.result||'결과 없음'))+'</p>':'')+rows;
   }
   function render(){
@@ -355,6 +356,8 @@
     if(!findTrainer(cfg.selectedTrainer))cfg.selectedTrainer=keyOf(members[0]?.trainer);
     if(!Object.hasOwn(REGIONS,cfg.region))cfg.region=worldClubRegion(myClub());
     if(!Object.hasOwn(FOCUSES,cfg.focus))cfg.focus='balanced';
+    if(!Object.hasOwn(HABITATS,cfg.habitat))cfg.habitat='grass';
+    if(!Object.hasOwn(TIMES,cfg.time))cfg.time='day';
     const current=findTrainer(cfg.selectedTrainer);
     const scouting=members.map(({trainer},index)=>
       '<div class="ps-person">'+display(trainer)+'</div>').join('');
@@ -362,7 +365,28 @@
       '<option value="'+esc(value)+'" '+(value===selected?'selected':'')+'>'+esc(label)+'</option>').join('');
     const history=(cfg.history||[]).slice(0,8).map(item=>
       '<div class="ps-history"><span>'+esc(item.season)+'시즌 '+esc(item.week)+
-      '주 · '+esc(item.trainer)+' · '+esc(item.region)+'</span><p>'+esc(item.description)+'</p></div>').join('');
+      '주 · '+esc(item.trainer)+' · '+esc(item.region)+' · '+
+      esc(HABITATS[item.habitat||'grass'])+' · '+esc(TIMES[item.time||'day'])+
+      '</span><p>'+esc(item.description)+'</p></div>').join('');
+    const probability=encounterTable(cfg.region,cfg.habitat,cfg.time,cfg.focus,
+      current?talent(current.trainer).skill:10);
+    const percent=n=>(n*100).toFixed(2)+'%';
+    const encounters=probability.pokemon.slice().sort((a,b)=>b.findRate-a.findRate)
+      .map(mon=>'<tr><td>'+esc(mon.name)+'</td><td>'+esc(mon.rarity)+
+        '</td><td>'+percent(mon.encounterRate)+'</td><td>'+percent(mon.findRate)+
+        '</td><td>'+percent(mon.captureRate)+'</td></tr>').join('');
+    const preview='<section class="ps-chances"><h3>현재 조건의 포켓몬 출현 확률</h3>'+
+      '<p>포켓몬 발견 성공 <strong>'+percent(probability.findChance)+
+      '</strong> · 발견하지 못할 확률 <strong>'+percent(probability.noEncounterChance)+
+      '</strong> · 포획까지 성공할 확률 <strong>'+percent(probability.totalCaptureChance)+'</strong></p>'+
+      '<div class="ps-prob-scroll"><table><thead><tr>'+
+      '<th>포켓몬</th><th>희귀도</th><th>발견 시 종 비중</th>'+
+      '<th>파견 1회 발견</th><th>파견 1회 포획</th>'+
+      '</tr></thead><tbody>'+encounters+'</tbody></table></div>'+
+      '<p class="ps-disclaimer">이 표는 게임 전용 지역·생태계·시간대 확률이며 원작 게임의 공식 야생 포켓몬 출현율과는 다릅니다. '+
+      '확률은 현재 트레이너의 탐색 능력·탐색 방향을 반영하며 소수점 둘째 자리로 반올림합니다. '+
+      '‘발견 시 종 비중’은 포켓몬을 만났을 경우의 종류별 확률, ‘파견 1회 발견’은 아무것도 못 찾을 가능성까지 반영한 수치입니다. '+
+      '‘파견 1회 포획’은 발견과 포획을 모두 성공할 확률입니다.</p></section>';
     return '<div class="eyebrow">TRAINER / POKÉMON EXPLORATION</div>'+
       '<h2>트레이너 포켓몬 탐색</h2>'+
       '<p class="g-muted">단장이 파견 방향을 정하면 트레이너가 직접 탐색·포획을 시도합니다. 결과는 다음 주에 도착하며, 트레이너 고유의 탐색 능력과 경험이 성공률에 영향을 줍니다. 단순한 포켓몬 뽑기나 개별 구매 기능이 아닙니다.</p>'+
@@ -374,8 +398,10 @@
       '<div class="ps-form"><label>파견 트레이너<select id="ps-trainer">'+
       opts(Object.fromEntries(members.map(({trainer})=>[keyOf(trainer),trainer.name+
         ' · 탐색 '+talent(trainer).skill+'/20'])),cfg.selectedTrainer)+'</select></label>'+
-      '<label>탐색 지역<select id="ps-region">'+opts(
-        Object.fromEntries(Object.keys(REGIONS).map(k=>[k,k+'지방'])),cfg.region)+'</select></label>'+
+      '<label>탐색 지역(세대)<select id="ps-region">'+opts(
+        Object.fromEntries(Object.keys(REGIONS).map((k,i)=>[k,(i+1)+'세대 · '+k+'지방'])),cfg.region)+'</select></label>'+
+      '<label>생태계<select id="ps-habitat">'+opts(HABITATS,cfg.habitat)+'</select></label>'+
+      '<label>탐색 시간대<select id="ps-time">'+opts(TIMES,cfg.time)+'</select></label>'+
       '<label>탐색 방향<select id="ps-focus">'+opts(
         Object.fromEntries(Object.entries(FOCUSES).map(([k,v])=>[k,v.label])),cfg.focus)+'</select></label></div>'+
       '<p class="ps-info">'+esc(FOCUSES[cfg.focus]?.description)+' · 방문 지역에 따라 발견 가능한 포켓몬이 달라집니다.</p>'+
@@ -386,6 +412,7 @@
         (current.trainer.pokemonScouting?.mission?.season===game.season&&
          current.trainer.pokemonScouting?.mission?.week===game.week)?'disabled':'')+
       '>트레이너 탐색 파견</button></section>'+
+      preview+
       '<section class="ps-team"><h3>트레이너별 탐색 진행 상황</h3>'+
       (scouting||'<p>소속 트레이너가 없습니다.</p>')+'</section>'+
       '<section class="ps-timeline"><h3>최근 탐색 결과</h3>'+
@@ -404,9 +431,10 @@
       cfg[field]=e.target.value;
       persist();renderOffice();
     });
-    bind('#ps-trainer','selectedTrainer');bind('#ps-region','region');bind('#ps-focus','focus');
+    bind('#ps-trainer','selectedTrainer');bind('#ps-region','region');
+    bind('#ps-habitat','habitat');bind('#ps-time','time');bind('#ps-focus','focus');
     panel.querySelector('#ps-send')?.addEventListener('click',()=>{
-      const result=dispatch(cfg.selectedTrainer,cfg.region,cfg.focus);
+      const result=dispatch(cfg.selectedTrainer,cfg.region,cfg.focus,cfg.habitat,cfg.time);
       if(!result.ok)alert(result.error);
     });
     panel.querySelectorAll('[data-ps-recruit]').forEach(button=>{
@@ -439,11 +467,19 @@
   };
   const style=document.createElement('style');
   style.textContent=[
-    '#dashpanel .ps-selection,#dashpanel .ps-team,#dashpanel .ps-timeline{background:#182e43;border:1px solid #365268;border-radius:9px;padding:15px;margin:16px 0}',
+    '#dashpanel .ps-selection,#dashpanel .ps-team,#dashpanel .ps-timeline,#dashpanel .ps-chances{background:#182e43;border:1px solid #365268;border-radius:9px;padding:15px;margin:16px 0}',
     '#dashpanel .ps-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0}',
     '#dashpanel .ps-form label,#dashpanel .ps-candidate label{display:grid;gap:6px;color:#b7d2df;font-size:12px}',
     '#dashpanel .ps-form select,#dashpanel .ps-candidate select{padding:9px;min-width:0;width:100%;color:#f4fafc;background:#234257;border:1px solid #5d7c91;border-radius:6px}',
-    '#dashpanel .ps-selection h3,#dashpanel .ps-team h3,#dashpanel .ps-timeline h3{margin:0 0 12px;font-size:17px}',
+    '#dashpanel .ps-selection h3,#dashpanel .ps-team h3,#dashpanel .ps-timeline h3,#dashpanel .ps-chances h3{margin:0 0 12px;font-size:17px}',
+    '#dashpanel .ps-chances p{color:#cad7df;font-size:12px;line-height:1.7}',
+    '#dashpanel .ps-chances strong{color:#a6e7cc}',
+    '#dashpanel .ps-prob-scroll{overflow-x:auto}',
+    '#dashpanel .ps-prob-scroll table{width:100%;min-width:590px;border-collapse:collapse}',
+    '#dashpanel .ps-prob-scroll td,#dashpanel .ps-prob-scroll th{text-align:right;font-size:12px;white-space:nowrap;border-bottom:1px solid #3d566a;padding:9px}',
+    '#dashpanel .ps-prob-scroll th{color:#98d7d1}',
+    '#dashpanel .ps-prob-scroll td:first-child,#dashpanel .ps-prob-scroll th:first-child{text-align:left}',
+    '#dashpanel .ps-disclaimer{font-size:11px!important;color:#9cb5c1!important}',
     '#dashpanel .ps-info,#dashpanel .ps-mission{color:#bbccd9;font-size:12px;line-height:1.7}',
     '#dashpanel .ps-person{border-top:1px solid #3a5668;padding:13px 0}',
     '#dashpanel .ps-person:first-of-type{border-top:0}',
@@ -460,7 +496,8 @@
   ].join('');
   document.head.append(style);
   window.PokemonExpedition={
-    REGIONS,FOCUSES,MAX_WEEKLY,tier,talent,outcome,optionStats,suggestedSlot,
+    REGIONS,FOCUSES,HABITATS,TIMES,BIOMES,MAX_WEEKLY,tier,talent,outcome,optionStats,
+    encounterTable,pickEncounter,suggestedSlot,
     keyOf,findTrainer,dispatch,recruit,dismiss,resolvePlayer,render,data,weekCount,cost,
   };
   if(game)renderOffice();
