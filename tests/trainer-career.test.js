@@ -38,7 +38,7 @@ test('only trainers who actually played grow; reordered starters remain correctl
   const api=careerApi(),save=game(),p=fixture();
   const report=api.applyMatch(save,p,0);
   assert.equal(report.participants.length,3);
-  assert.deepEqual(report.participants.map(x=>x.index),[2,0,1]);
+  assert.deepEqual(Array.from(report.participants,x=>x.index),[2,0,1]);
   assert.equal(save.clubs[0].trainers[2].aiCareer.duels,2);
   assert.equal(save.clubs[0].trainers[0].aiCareer,undefined);
   assert.equal(save.clubs[0].trainers[2].aiCareer.wins,2);
