@@ -1689,6 +1689,41 @@
           '<div class="tc-meter"><i style="width:'+Math.min(100,Math.round(progress/threshold(current)*100))+'%"></i></div></div>';
       }).join('');
       const feedback=last?.feedback;
+      const goal=trainer.aiDevelopment,settings=goal&&GOALS[goal.target];
+      const progress=goal?.status==='mastered'?100:
+        settings?Math.min(100,Math.floor((goal.progress||0)/settings.points*100)):0;
+      const review=goal?.reviews?.[0];
+      const weeksLeft=goal?.status==='active'?
+        Math.max(0,(goal.nextReviewEpoch||0)-epoch(game)):0;
+      const changeAllowed=!goal||goal.status!=='active'||Boolean(review);
+      const development=goal?'<div class="tc-development"><strong>현재 개인 개발: '+
+        esc(settings?.label||'미지정')+'</strong><span class="tc-response">'+
+        esc(goal.status==='mastered'?'선플 습득 완료':
+          goal.status==='active'?'AI 반응 '+goal.response:'목표 종료')+'</span>'+
+        '<p class="tc-muted">'+esc(goal.reason||'')+'</p>'+
+        '<div class="tc-meter"><i style="width:'+progress+'%"></i></div>'+
+        '<p class="tc-muted">증명된 성장 '+Number(goal.progress||0).toFixed(1)+' / '+
+        (settings?.points||'?')+'점 · 실제 행동을 입증한 경기 '+(goal.evidenceMatches||0)+
+        '회 · 습득 기준 '+(settings?.matches||'?')+'경기'+
+        (goal.status==='active'?' · 다음 평가까지 '+weeksLeft+'주':'')+'</p>'+
+        (review?'<p class="tc-muted">최근 4주 평가: '+esc(review.result)+
+          ' · 기간 중 성장 '+Number(review.gained).toFixed(1)+'점</p>':'')+
+        (goal.recentExamples?.length?'<p class="tc-muted">근거: '+
+          esc(goal.recentExamples[0].detail)+' ('+esc(goal.recentExamples[0].key)+')</p>':'')+
+        '</div>':'';
+      const goalsMenu='<div class="tc-goals"><h4>감독의 선플 개발 요청</h4>'+
+        '<div class="tc-goal-actions"><select data-tc-target="'+index+'" aria-label="'+esc(trainer.name)+' 개발 선플" '+(!changeAllowed?'disabled':'')+'>'+
+        Object.entries(GOALS).map(([key,config])=>'<option value="'+key+'" '+
+          (goal?.target===key?'selected':'')+'>'+esc(config.label)+'</option>').join('')+
+        '</select><select data-tc-intensity="'+index+'" aria-label="권고 강도" '+
+          (!changeAllowed?'disabled':'')+'>'+
+        Object.entries(INTENSITY).map(([key,label])=>'<option value="'+key+'" '+
+          (goal?.intensity===key?'selected':'')+'>'+esc(label)+'</option>').join('')+
+        '</select><button type="button" data-tc-goal="'+index+'" '+
+          (!changeAllowed?'disabled':'')+'>'+(goal?.status==='active'?'개발 목표 변경':'개발 요청')+
+        '</button></div>'+
+        (!changeAllowed?'<p class="tc-muted">첫 4주 중간 평가 전에는 다른 목표로 변경할 수 없습니다.</p>':'')+
+        '</div>';
       const actions=last?feedback?
         '<p class="tc-response">면담 '+esc(feedback.label)+' · '+esc(feedback.response)+'<br>'+esc(feedback.reason)+'</p>':
         '<div class="tc-choices">'+Object.entries(FEEDBACK).map(([kind,label])=>
@@ -1704,7 +1739,7 @@
           '회 · 자율 교체 '+last.voluntary+'회</p>'+
           (last.levels.length?'<p class="tc-gain">능력 성장: '+last.levels.map(x=>esc(x.label)+' '+x.from+'→'+x.to).join(', ')+'</p>':'')+
           (last.learned.length?'<p class="tc-gain">새 선플: '+last.learned.map(esc).join(', ')+'</p>':''):'')+
-        actions+'</article>';
+        development+goalsMenu+actions+'</article>';
     }).join('');
     overlay.innerHTML='<section class="tc-dialog" role="dialog" aria-modal="true" aria-labelledby="tc-title">'+
       '<button type="button" class="tc-close">닫기</button>'+
@@ -1720,6 +1755,15 @@
     overlay.onclick=event=>{
       if(event.target===overlay){visible=false;overlay.remove();}
     };
+    overlay.querySelectorAll('[data-tc-goal]').forEach(button=>button.onclick=()=>{
+      const index=Number(button.dataset.tcGoal);
+      const target=overlay.querySelector('[data-tc-target="'+index+'"]')?.value;
+      const intensity=overlay.querySelector('[data-tc-intensity="'+index+'"]')?.value;
+      const answer=setDevelopmentGoal(game,club.id,index,target,intensity);
+      notice=answer.message;
+      if(answer.ok&&typeof persist==='function')persist();
+      show();
+    });
     overlay.querySelectorAll('[data-tc-feedback]').forEach(button=>button.onclick=()=>{
       const index=Number(button.dataset.tcFeedback);
       const answer=offerFeedback(game,club.id,latest?.key,index,button.dataset.tcKind);
@@ -1746,6 +1790,12 @@
     '.tc-meter{grid-column:1/-1;height:5px;background:#334f62;border-radius:5px;overflow:hidden}',
     '.tc-meter i{display:block;background:#71c6ac;height:100%}',
     '.tc-summary{margin:12px 0 16px;background:#102135;border:1px solid #3d6178;padding:12px;border-radius:7px;font-size:13px}',
+    '.tc-development{margin:12px 0;background:#102c3b;border:1px solid #3d6c73;padding:12px;border-radius:7px}',
+    '.tc-development strong{font-size:13px;display:block;margin-bottom:5px}.tc-development .tc-meter{margin:9px 0;height:8px}',
+    '.tc-goals{border-top:1px solid #3c6277;padding-top:11px;margin-top:12px}',
+    '.tc-goals h4{font-size:13px;margin:0 0 8px;color:#bde0dc}.tc-goal-actions{display:flex;gap:7px;flex-wrap:wrap}',
+    '.tc-goal-actions select{min-width:105px;flex:1;background:#213d54;border:1px solid #5b7e94;border-radius:6px;color:#f4fbff;padding:8px;font:inherit}',
+    '.tc-dialog button:disabled,.tc-dialog select:disabled{opacity:.5;cursor:default}',
     '.tc-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}',
     '.tc-gain{font-size:12px;color:#8fe0b9;line-height:1.6}.tc-response{color:#8fe0b9;font-size:12px;line-height:1.7}',
     '@media(max-width:680px){.tc-grid{grid-template-columns:1fr}.tc-dialog{padding:16px}.tc-dialog h2{font-size:19px}}'
@@ -1753,6 +1803,11 @@
   document.head.append(style);
   const previousRender=renderOffice;
   renderOffice=function(){
+    const beforeClub=getClub();
+    if(beforeClub){
+      const reviews=reviewDevelopment(game,beforeClub.id);
+      if(reviews.length&&typeof persist==='function')persist();
+    }
     previousRender();
     const c=getClub(),panel=document.querySelector('#dashpanel .at-panel');
     if(!c||!panel||panel.querySelector('.tc-open'))return;
