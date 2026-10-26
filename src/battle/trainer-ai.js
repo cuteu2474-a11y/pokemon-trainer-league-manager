@@ -99,15 +99,21 @@ export class TrainerAI extends RandomPlayerAI{
     return primary*(1-this.adviceWeight)+alternate*this.adviceWeight;
   }
   contextualBonus(move,battle){
-    if(!move?.exists)return 0;
+    if(!move?.exists||this.remaining<=1)return 0;
     const own=battle?.[this.side]?.active?.[0];
     if(!own)return 0;
     const hp=own.hp/Math.max(1,own.maxhp);
-    if(hp>=.85||this.remaining<=1)return 0;
-    const conservation=(this.profile.preservation-10)*.8+(this.remaining-1)*2;
-    if(move.heal&&hp<.65)return Math.max(0,conservation)+6;
-    if(move.drain&&hp<.6)return Math.max(0,conservation);
-    if(move.selfdestruct||move.id==='explosion'||move.id==='selfdestruct')return -Math.max(0,conservation*3);
+    const conservation=Math.max(0,(this.profile.preservation-10)*.8+(this.remaining-1)*2);
+    if(move.heal&&hp<.65)return conservation+6;
+    if(move.drain&&hp<.60)return conservation;
+    if(move.selfdestruct||move.id==='explosion'||move.id==='selfdestruct')return -conservation*3;
+    // Low remaining PP matters across KOF challengers. This is a tie-break,
+    // never a substitute for a clear knockout or Showdown's PP accounting.
+    const slot=own.moveSlots?.find(entry=>entry.id===move.id);
+    if(this.profile.preservation>=14&&slot&&slot.pp<=2&&slot.maxpp>=5&&
+      move.category!=='Status'&&move.basePower>=70){
+      return -Math.min(8,conservation*.8);
+    }
     return 0;
   }
   chooseMove(active,moves){
@@ -138,7 +144,7 @@ export class TrainerAI extends RandomPlayerAI{
         ranked.sort((a,b)=>b.score-a.score||a.choice.localeCompare(b.choice));
         if(ranked[0]?.runs>0&&Number.isFinite(ranked[0].score)){
           this.decisions.rollouts++;
-          this.record('move',ranked[0].choice,'전황 분석·실전 시뮬레이션',{plan:this.plan,
+          this.record('move',ranked[0].choice,this.profile.preservation>=14&&this.remaining>1?'전황 분석·연승 전력 관리':'전황 분석·실전 시뮬레이션',{plan:this.plan,
             advantage:Number(ranked[0].score.toFixed(1))});
           return ranked[0].choice;
         }
