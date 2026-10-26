@@ -1342,9 +1342,9 @@
     String(trainer.id??(String(clubId)+':'+index+':'+trainer.name));
   const threshold=skill=>20+skill*5;
   const HABITS=Object.freeze({
-    switch:{label:'적극적인 교체',description:'유리한 교체로 실제 대결을 이긴 경험',threshold:26,matches:3},
-    preserve:{label:'에이스 보존',description:'HP·PP 보존으로 연승전에 기여한 경험',threshold:26,matches:3},
-    analysis:{label:'전황 분석가',description:'후보 기술을 분석해 승리한 경험',threshold:30,matches:4}
+    switch:{label:'적극적인 교체',description:'유리한 교체로 실제 대결을 이긴 경험',threshold:55,matches:3},
+    preserve:{label:'에이스 보존',description:'HP·PP 보존으로 연승전에 기여한 경험',threshold:50,matches:3},
+    analysis:{label:'전황 분석가',description:'후보 기술을 분석해 승리한 경험',threshold:60,matches:4}
   });
   function skill(trainer,field){
     return val(trainer?.[field],val(trainer?.[FIELDS[field]?.fallback]));
@@ -1447,7 +1447,7 @@
       const strength=coached?(response==='수용'?1.65:1.25):1;
       // Real positive results make the trainer more likely to choose the same
       // behavior *without* future instructions. Advice is only a multiplier.
-      const reinforced=points>0?Math.min(16,Math.round(points*5*strength)):0;
+      const reinforced=points>0?Math.min(28,Math.round(points*5*strength)):0;
       const before=clamp(Number(behaviorScores[kind])||0,0,100);
       const after=clamp(before+reinforced,0,100);
       behaviorScores[kind]=after;
