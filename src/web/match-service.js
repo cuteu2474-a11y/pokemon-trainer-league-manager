@@ -4,7 +4,7 @@ import {resolveBattleAutonomy} from '../battle/battle-autonomy.js';
 import {buildBattleReport} from '../battle/replay-report.js';
 import {Dex} from '@pkmn/sim';
 import {simulateClubMatch} from '../battle/club-match.js';
-import {gpBudget, STATS, validateGP} from '../core/stats.js';
+import {normalizeStatPairs} from '../core/stat-potential.js';
 const koreanMoves=JSON.parse(readFileSync(new URL('./moves-ko.json',import.meta.url),'utf8'));
 const korean = JSON.parse(readFileSync(new URL('./species-ko.json', import.meta.url), 'utf8'));
 const spriteNumbers = JSON.parse(readFileSync(new URL('./species-sprites.json', import.meta.url), 'utf8'));
@@ -17,19 +17,16 @@ export function battlePokemon(p, plan='balanced') {
   if (!p || typeof p.name !== 'string') throw new TypeError('포켓몬 이름이 필요합니다.');
   const species = Dex.species.get(p.species || byNumber.get(korean[p.name] ?? ({뉴라:215})[p.name]) || p.name);
   if (!species.exists) throw new RangeError('전투 데이터가 없는 포켓몬: ' + p.name);
-  const level = int(p.level, 1, 100, '레벨 범위 오류');
-  // Legacy UI power becomes CA only when the save has no explicit CA/GP yet.
-  const ca = int(p.ca ?? p.power, 1, 200, '현재 능력 범위 오류');
-  const pa = int(p.pa ?? ca, ca, 200, '잠재 능력 범위 오류');
-  const gp = p.gp ? {...p.gp} : Object.fromEntries(STATS.map((stat, i) =>
-    [stat, Math.floor(gpBudget(ca) / 6) + (i < gpBudget(ca) % 6 ? 1 : 0)]));
-  validateGP(gp, ca);
+  // Six separate CA/PA pairs; legacy saves are upgraded deterministically.
+  // A Pokémon's legacy "level" and aggregate "power" are not combat inputs.
+  const {statCA,statPA}=normalizeStatPairs(p);
   const moves = p.moves ?? planMoves(species,plan);
   if (!Array.isArray(moves) || moves.length < 1 || moves.length > 4 || moves.some(m => !Dex.moves.get(m).exists)) throw new RangeError('기술 데이터 오류: ' + p.name);
   const ability = p.ability ?? species.abilities['0'];
   if (!Dex.abilities.get(ability).exists) throw new RangeError('특성 데이터 오류');
   if (p.item && !Dex.items.get(p.item).exists) throw new RangeError('도구 데이터 오류');
-  return {name:p.name, species:species.name, level, ca, pa, gp, nature:p.nature || 'Hardy', ability, item:p.item || '', moves};
+  return {name:p.name,species:species.name,statCA,statPA,
+    nature:p.nature||'Hardy',ability,item:p.item||'',moves};
 }
 export function prepareClub(club, order) {
   if (!club || !Array.isArray(club.trainers) || club.trainers.length !== 5 || club.trainers.some(t => !t || !Array.isArray(t.pokemon) || t.pokemon.length !== 6)) throw new RangeError('트레이너 5명과 각 포켓몬 6마리가 필요합니다.');
