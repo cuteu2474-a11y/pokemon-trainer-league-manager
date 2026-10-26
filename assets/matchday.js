@@ -1013,3 +1013,231 @@
   };
   window.TrainerAutonomy.showDialog=()=>{showing=true;showDialog();};
 })();
+
+
+/* AI move research and relationship */
+(function autonomousMoveResearch(){
+  if(window.TrainerMoveAI||!window.TrainerAutonomy)return;
+  const training=window.TrainerAutonomy;
+  const plays={
+    balanced:'균형·타입 대응',offense:'공격 압박',control:'상태이상·견제',
+    endurance:'회복·장기전',tempo:'속공·선공'
+  };
+  const keys=Object.keys(plays);
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const hash=text=>{let h=2166136261;for(const ch of String(text))h=Math.imul(h^ch.charCodeAt(0),16777619);return h>>>0;};
+  const ident=(t,c,i)=>String(t.id??(String(c)+':'+i+':'+t.name));
+  const week=()=>String(game?.season??1)+':'+String(game?.week??game?.round??0);
+  const safe=value=>escapeHTML(String(value??''));
+  let pending=null,visible=false,feedback='';
+  const club=()=>{try{return myClub();}catch{return null;}};
+  function state(){
+    const a=training.init(game);
+    a.moveAdvice ||= {};
+    a.moveIssued ||= {};
+    a.moveReports ||= [];
+    a.moveAttempts ||= {};
+    a.moveTrustLog ||= [];
+    return a;
+  }
+  function tech(t){
+    for(const k of ['moveTraining','technical','techniqueTeaching','trainingSkill','tactics','coaching','training']){
+      const value=Number(t?.[k]??t?.skills?.[k]);
+      if(Number.isFinite(value)&&value>0)return clamp(Math.round(value>20?value/5:value),1,20);
+    }
+    return 10;
+  }
+  function play(t,c,i){
+    const p=training.profile(t,c,i);
+    if(plays[p.preferredPlay])return p.preferredPlay;
+    const old=t.preferredPlays||t.playStyle||t.preferredPlay||'';
+    const text=Array.isArray(old)?old.join(' '):String(old);
+    const tactics=Number(t.tactics),switching=Number(t.switching);
+    const learned=/상태이상|견제|적극.*교체/.test(text)?'control':
+      /회복|장기전|에이스 보존/.test(text)?'endurance':
+      /속공|선공|우선도/.test(text)?'tempo':
+      /공격|강화기/.test(text)?'offense':/균형/.test(text)?'balanced':
+      Number.isFinite(tactics)&&Number.isFinite(switching)&&switching-tactics>=4?'control':
+      Number.isFinite(tactics)&&Number.isFinite(switching)&&tactics-switching>=4?'offense':
+      keys[hash(ident(t,c,i)+':play')%keys.length];
+    p.preferredPlay=learned;return learned;
+  }
+  function judgement(t,c,i,offer,trust){
+    const p=training.profile(t,c,i),own=play(t,c,i);
+    if(!offer)return {result:'자율',focus:own,reason:'감독의 특별한 권고 없이 본인의 선플을 따름'};
+    const same=own===offer.focus,related=own==='balanced'||offer.focus==='balanced';
+    const score=p.openness*1.6+trust*.20+tech(t)*.25-p.conviction+(same?20:related?6:-8);
+    if(score>=34)return {result:'수용',focus:offer.focus,reason:same?'자신의 선플과 감독 방침이 일치':'감독 신뢰와 기술 지도 방향을 긍정적으로 평가'};
+    if(score>=22)return {result:'절충',focus:own,reason:'감독 의견을 참고하지만 개인 선플을 우선',alternative:offer.focus};
+    return {result:'거부',focus:own,reason:'감독 제안보다 개인 전술 철학을 중시'};
+  }
+  function recommend(t,c,i,focus){
+    if(!plays[focus])return {ok:false,message:'기술 운영 방향을 선택해 주세요.'};
+    const s=state(),id=ident(t,c,i),now=week();
+    if(s.moveIssued[id]===now)return {ok:false,message:'이번 주 권고는 이미 전달했습니다.'};
+    s.moveIssued[id]=now;s.moveAdvice[id]={focus,issuedAt:now};
+    return {ok:true,message:'전달 완료. 다음 주 기술 연구에서 AI가 수용·절충·거부를 결정합니다.'};
+  }
+  function roster(){
+    const mine=club();if(!mine)return [];
+    const s=state(),clubs=Array.isArray(game.clubs)?game.clubs:Object.values(game.clubs||{});
+    return clubs.flatMap((c,ci)=>{
+      if(!c)return [];
+      const cid=String(c.id??ci),isMine=cid===String(mine.id);
+      return (c.trainers||[]).concat(c.reserveTrainers||[]).flatMap((t,i)=>{
+        if(!t)return [];
+        const id=ident(t,cid,i),offer=isMine&&s.moveAdvice[id]?.issuedAt===s.movePriorWeek?s.moveAdvice[id]:null;
+        const trust=s.trust[id]??50,choice=judgement(t,cid,i,offer,trust);
+        const pokemon=(t.pokemon||[]).slice(0,6).map(mon=>({name:mon.name||mon.species,species:mon.species,
+          moves:Array.isArray(mon.moves)?[...mon.moves]:undefined}));
+        return [{input:{key:cid+':'+id,focus:choice.focus,skill:tech(t),pokemon},
+          context:{trainer:t,club:cid,index:i,id,mine:isMine,choice,offer,trust,
+            snapshots:(t.pokemon||[]).slice(0,6).map(mon=>({obj:mon,name:mon.name||mon.species,moves:JSON.stringify(mon.moves??null)}))}}];
+      });
+    }).slice(0,240);
+  }
+  function integrate(payload,rows,current){
+    if(payload.period!==current||week()!==current)return false;
+    const s=state(),contexts=new Map(rows.map(x=>[x.input.key,x.context]));
+    const report={week:current,initialised:0,learned:0,accepted:0,compromised:0,refused:0,trainers:[]};
+    for(const entry of payload.results||[]){
+      const ctx=contexts.get(entry.key);if(!ctx)continue;
+      const validSlots=new Set();
+      for(const item of entry.updates||[]){
+        const slot=Number(item.slot),snapshot=ctx.snapshots[slot],mon=ctx.trainer.pokemon?.[slot];
+        if(!snapshot||!mon||mon!==snapshot.obj||(mon.name||mon.species)!==snapshot.name||
+           JSON.stringify(mon.moves??null)!==snapshot.moves)continue;
+        if(!Array.isArray(item.moves)||!item.moves.length||item.moves.length>4||
+          !item.moves.every(m=>typeof m==='string'&&/^[a-z0-9]+$/.test(m)))continue;
+        mon.moves=[...item.moves];validSlots.add(slot);
+        if(item.kind==='initial')report.initialised++;
+      }
+      const changes=(entry.changes||[]).filter(c=>validSlots.has(c.slot));
+      report.learned+=changes.length;
+      if(!ctx.mine)continue;
+      report.trainers.push({id:ctx.id,name:ctx.trainer.name,decision:ctx.choice.result,
+        focus:ctx.choice.focus,reason:ctx.choice.reason,offer:ctx.offer?.focus||null,
+        preferred:play(ctx.trainer,ctx.club,ctx.index),changes});
+      if(ctx.offer){
+        const delta=ctx.choice.result==='수용'?3:ctx.choice.result==='절충'?1:-2;
+        s.trust[ctx.id]=clamp(ctx.trust+delta,15,85);
+        report[ctx.choice.result==='수용'?'accepted':ctx.choice.result==='절충'?'compromised':'refused']++;
+        s.moveTrustLog.unshift({week:current,name:ctx.trainer.name,decision:ctx.choice.result,reason:ctx.choice.reason,trust:s.trust[ctx.id]});
+        delete s.moveAdvice[ctx.id];
+      }
+    }
+    s.moveTrustLog.length=Math.min(30,s.moveTrustLog.length);
+    s.moveReports.unshift(report);s.moveReports.length=Math.min(s.moveReports.length,10);
+    s.movesProcessedWeek=current;s.moveError=null;
+    if(typeof persist==='function')persist();
+    return true;
+  }
+  function queue(){
+    if(!game||!club())return;
+    const s=state(),current=week();
+    if(s.movesProcessedWeek===current||pending?.week===current||(s.moveAttempts[current]||0)>=2)return;
+    const data=roster();
+    if(!data.length)return;
+    s.moveAttempts[current]=(s.moveAttempts[current]||0)+1;
+    const target=game;pending={week:current};
+    fetch('/api/trainer-moves',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({period:current,trainers:data.map(x=>x.input)})})
+      .then(async r=>{
+        const result=await r.json();
+        if(!r.ok)throw Error(result.error||'기술 연구 요청 실패');
+        if(game!==target||week()!==current||pending?.week!==current)return;
+        if(integrate(result,data,current)){
+          if(typeof renderOffice==='function')renderOffice();
+          if(visible)openDialog();
+        }
+      })
+      .catch(err=>{if(game!==target)return;s.moveError=String(err.message||err);if(visible)openDialog();})
+      .finally(()=>{if(pending?.week===current)pending=null;});
+  }
+  function reportView(r){
+    if(!r)return '<p class="am-small">기술 연구를 정산하면 결과가 표시됩니다.</p>';
+    return '<p class="am-small">주차 '+safe(r.week)+' · 기술 편성 '+r.initialised+
+      '마리 · 새 기술 '+r.learned+'건 · 권고 수용 '+r.accepted+' / 절충 '+r.compromised+' / 거부 '+r.refused+'</p>'+
+      '<div class="am-results">'+r.trainers.map(t=>'<div class="am-result"><b>'+safe(t.name)+'</b> · '+safe(t.decision)+
+      ' · '+safe(plays[t.focus]||t.focus)+'<p class="am-small">'+safe(t.reason)+'</p>'+
+      (t.changes.length?t.changes.map(x=>'<p class="am-changed">'+safe(x.name)+' : '+
+         safe(x.forgotten||'새 슬롯')+' → '+safe(x.learned)+' <small>('+safe(x.reason)+')</small></p>').join(''):
+         '<p class="am-small">이번 주 기술 변경 없음</p>')+'</div>').join('')+'</div>';
+  }
+  function openDialog(){
+    const c=club();if(!c)return;
+    let root=document.getElementById('am-root');
+    if(!root){root=document.createElement('section');root.id='am-root';root.className='am-shade';document.body.append(root);}
+    const s=state(),trainers=(c.trainers||[]).concat(c.reserveTrainers||[]);
+    const list=trainers.map((t,i)=>{
+      if(!t)return '';
+      const traits=training.profile(t,c.id,i),p=play(t,c.id,i),id=ident(t,c.id,i);
+      const sent=s.moveIssued[id]===week();
+      return '<article class="am-card"><h3>'+safe(t.name||'트레이너')+'</h3>'+
+        '<p class="am-small">선플: '+safe(plays[p])+' · 기술 지도 '+tech(t)+'/20 · 개방성 '+traits.openness+
+          '/20 · 소신 '+traits.conviction+'/20 · 감독 신뢰 '+(s.trust[id]??50)+'/100</p>'+
+        '<div class="am-actions"><select data-move-adv="'+i+'" aria-label="'+safe(t.name)+' 기술 권고" '+(sent?'disabled':'')+'>'+
+          keys.map(k=>'<option value="'+k+'">'+safe(plays[k])+'</option>').join('')+'</select>'+
+          '<button type="button" data-move-send="'+i+'" '+(sent?'disabled':'')+'>'+(sent?'전달 완료':'권고 전달')+'</button></div>'+
+        (sent?'<p class="am-small">전달 방침: '+safe(plays[s.moveAdvice[id]?.focus]||'처리 대기')+'</p>':'')+
+        '</article>';
+    }).join('');
+    root.innerHTML='<div class="am-dialog" role="dialog" aria-modal="true" aria-labelledby="am-title">'+
+      '<button type="button" class="am-close">닫기</button><h2 id="am-title">트레이너 선플 · 기술 연구</h2>'+
+      '<p class="am-small">트레이너가 본인의 전술 철학과 감독 신뢰를 고려해 기술 권고 수용 여부와 실제 학습 기술을 결정합니다.</p>'+
+      (feedback?'<p role="status" class="am-msg">'+safe(feedback)+'</p>':'')+
+      (s.moveError?'<p class="am-error">정산 지연: '+safe(s.moveError)+'</p>':'')+
+      (pending?.week===week()?'<p class="am-small">기술 연구 정산 중…</p>':'')+
+      '<div class="am-report"><h3>주간 기술 연구 보고</h3>'+reportView(s.moveReports[0])+'</div>'+
+      '<div class="am-cards">'+list+'</div></div>';
+    root.querySelector('.am-close').onclick=()=>{visible=false;root.remove();};
+    root.onclick=e=>{if(e.target===root){visible=false;root.remove();}};
+    root.querySelectorAll('[data-move-send]').forEach(btn=>btn.onclick=()=>{
+      const i=Number(btn.dataset.moveSend),t=trainers[i];
+      const focus=root.querySelector('[data-move-adv="'+i+'"]')?.value;
+      const result=recommend(t,c.id,i,focus);
+      feedback=result.message;
+      if(result.ok&&typeof persist==='function')persist();
+      openDialog();
+    });
+  }
+  window.TrainerMoveAI={plays,tech,play,judgement,recommend,state,integrate,queue};
+  if(typeof document==='undefined')return;
+  const css=document.createElement('style');
+  css.textContent=[
+    '.am-open{margin-left:8px;background:#1e6b76!important}',
+    '.am-shade{position:fixed;inset:0;z-index:2750;background:#06101bdd;display:grid;place-items:center;padding:12px;color:#eaf3f8;font:14px "Malgun Gothic",sans-serif}',
+    '.am-dialog{position:relative;width:min(960px,100%);max-height:94vh;overflow:auto;background:#13283b;border:1px solid #55778d;border-radius:10px;padding:24px}',
+    '.am-dialog h2{font-size:21px;margin:0 0 9px}.am-dialog h3{font-size:15px;margin:0 0 8px}.am-small{color:#b4c8d6;font-size:12px;line-height:1.7;margin:5px 0}',
+    '.am-close{position:absolute;right:12px;top:12px}.am-dialog button,.am-dialog select{padding:9px 12px;border:1px solid #62879e;border-radius:5px;background:#24485f;color:white;font:inherit}',
+    '.am-dialog button{cursor:pointer}.am-cards,.am-results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}',
+    '.am-card,.am-report{border:1px solid #3f6077;border-radius:8px;background:#1a344a;padding:13px}.am-report{margin:15px 0;background:#102335}',
+    '.am-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}.am-actions select{flex:1;min-width:130px}',
+    '.am-result{border-top:1px solid #426078;padding:8px 0}.am-changed,.am-msg{color:#a2e4bc;font-size:12px}.am-error{color:#ffb8a0;font-size:12px}',
+    '@media(max-width:650px){.am-dialog{padding:16px}.am-cards,.am-results{grid-template-columns:1fr}.am-open{margin-left:0;margin-top:8px}}'
+  ].join('');
+  document.head.append(css);
+  const previousRender=renderOffice;
+  renderOffice=function(){
+    previousRender();
+    if(!game||!club())return;
+    try{
+      const s=state(),now=week();
+      if(s.moveObservedWeek!==now){s.movePriorWeek=s.moveObservedWeek??null;s.moveObservedWeek=now;}
+      queue();
+      const panel=document.querySelector('#dashpanel .at-panel');
+      if(panel&&!panel.querySelector('.am-open')){
+        const button=document.createElement('button');button.type='button';button.className='am-open';
+        button.textContent='선플 · 기술 연구 · 감독 신뢰';
+        button.onclick=()=>{visible=true;openDialog();};
+        panel.querySelector('.at-head')?.append(button);
+        const last=s.moveReports[0],note=document.createElement('p');note.className='at-note';
+        note.textContent=last?'기술 연구 '+last.week+' · 기술 편성 '+last.initialised+'마리 · 변경 '+last.learned+'건':
+          '주간 기술 연구는 AI가 직접 처리하며, 감독은 방향만 권고할 수 있습니다.';
+        panel.append(note);
+      }
+      if(visible&&document.getElementById('am-root'))openDialog();
+    }catch(err){console.warn('트레이너 자율 기술 연구:',err);}
+  };
+  window.TrainerMoveAI.openDialog=()=>{visible=true;openDialog();};
+})();
