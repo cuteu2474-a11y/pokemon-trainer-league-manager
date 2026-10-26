@@ -1,3 +1,4 @@
+import {TRAITS} from './trait-decision.js';
 /** Trainer identity and manager guidance. Decisions are stable for one match. */
 export const BATTLE_STYLES=Object.freeze({
   balanced:'균형',offense:'공세',control:'견제',endurance:'유지력',tempo:'속공',
@@ -17,12 +18,12 @@ export function trainerPersonality(trainer={}){
   if(!valid(preferred))preferred=valid(trainer.battlePlan)?trainer.battlePlan:null;
   if(!valid(preferred))preferred=(trainer.switching??10)>(trainer.tactics??10)+3?'control':
     (trainer.tactics??10)>(trainer.switching??10)+3?'offense':'balanced';
-  const traits=Array.isArray(ai.playTraits)?ai.playTraits.filter(x=>['적극적인 교체','에이스 보존','전황 분석가'].includes(x)):[];
-  const habitScores=Object.fromEntries(['switch','preserve','analysis'].map(key=>[
+  const traits=Array.isArray(ai.playTraits)?ai.playTraits.filter(x=>Object.values(TRAITS).some(t=>t.name===x)):[];
+  const habitScores=Object.fromEntries(Object.keys(TRAITS).map(key=>[
     key,clamp(Number(ai.habitScores?.[key])||0,0,100)
   ]));
   const advised=String(trainer.directorBehaviorAdvice||'');
-  const behaviorAdvice=['switch','preserve','analysis'].includes(advised)?advised:null;
+  const behaviorAdvice=Object.hasOwn(TRAITS,advised)?advised:null;
   return {preferred,traits,habitScores,behaviorAdvice,openness:skill(ai.openness),conviction:skill(ai.conviction),
     moveSkill:skill(trainer.moveJudgment??trainer.movesSkill??trainer.tactics),
     switchSkill:skill(trainer.switchJudgment??trainer.switching),
@@ -35,9 +36,12 @@ export function resolveBehaviorAdvice(personality,trust=50){
   const target=personality.behaviorAdvice;
   if(!target)return {behaviorAdvice:null,behaviorResponse:'자율',behaviorWeight:0,
     behaviorReason:'감독의 특정 행동 권고 없음'};
-  const affinity=target==='switch'?['control','tempo'].includes(personality.preferred):
-    target==='preserve'?['endurance','balanced'].includes(personality.preferred):
-    ['control','balanced'].includes(personality.preferred);
+  const related={
+    kill:['offense','tempo'],switch:['control','tempo'],matchup:['control','balanced'],
+    preserve:['endurance','balanced'],pp:['endurance','balanced'],
+    status:['control','endurance'],analysis:['control','balanced']
+  };
+  const affinity=(related[target]||[]).includes(personality.preferred);
   const confidence=personality.openness*1.5+trust*.2-
     personality.conviction*.95+personality.analysis*.3+(affinity?9:-5);
   if(confidence>=27)return {behaviorAdvice:target,behaviorResponse:'수용',behaviorWeight:1,
