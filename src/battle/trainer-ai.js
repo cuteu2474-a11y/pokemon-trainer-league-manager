@@ -95,6 +95,10 @@ export class TrainerAI extends RandomPlayerAI{
     // Earned play traits influence decision tendencies, not legal actions or stats.
     if(this.profile.traits?.includes('적극적인 교체'))chance+=.075;
     if(this.profile.traits?.includes('에이스 보존')&&this.remaining>1&&health<.75)chance+=.06;
+    const development=this.profile.development;
+    // Training requests only increase consideration of a *plausibly beneficial* option.
+    if(development?.target==='switch'&&mismatch)chance+=.075*development.weight;
+    if(development?.target==='preserve'&&this.remaining>1&&health<.45&&danger>=2)chance+=.06*development.weight;
     return 1-limit(chance,0,.48);
   }
   preference(move,battle){
@@ -109,7 +113,8 @@ export class TrainerAI extends RandomPlayerAI{
     if(!own)return 0;
     const hp=own.hp/Math.max(1,own.maxhp);
     const conservation=Math.max(0,(this.profile.preservation-10)*.8+(this.remaining-1)*2+
-      (this.profile.traits?.includes('에이스 보존')?5:0));
+      (this.profile.traits?.includes('에이스 보존')?5:0)+
+      (this.profile.development?.target==='preserve'?3*this.profile.development.weight:0));
     if(move.heal&&hp<.65)return conservation+6;
     if(move.drain&&hp<.60)return conservation;
     if(move.selfdestruct||move.id==='explosion'||move.id==='selfdestruct')return -conservation*3;
@@ -128,7 +133,8 @@ export class TrainerAI extends RandomPlayerAI{
     const battle=this.battleProvider?.();
     const {ownTypes,foeTypes}=this.matchup();
     const context={foeTypes,ownTypes,ownAbility:this.ownActive?.ability,ownItem:this.ownActive?.item};
-    const insight=this.profile.traits?.includes('전황 분석가')?2:0;
+    const insight=(this.profile.traits?.includes('전황 분석가')?2:0)+
+      (this.profile.development?.target==='analysis'?this.profile.development.weight*1.5:0);
     const clarity=limit((this.profile.analysis+insight)/20,0,1),understands=this.prng.random()<this.skill.tactics/20;
     if(!understands){
       const choice=super.chooseMove(active,moves);
@@ -151,8 +157,18 @@ export class TrainerAI extends RandomPlayerAI{
         ranked.sort((a,b)=>b.score-a.score||a.choice.localeCompare(b.choice));
         if(ranked[0]?.runs>0&&Number.isFinite(ranked[0].score)){
           this.decisions.rollouts++;
-          this.record('move',ranked[0].choice,this.profile.preservation>=14&&this.remaining>1?'전황 분석·연승 전력 관리':'전황 분석·실전 시뮬레이션',{plan:this.plan,
-            advantage:Number(ranked[0].score.toFixed(1))});
+          const gap=ranked[1]?.runs>0?ranked[0].score-ranked[1].score:0;
+          const own=battle[this.side].active[0],slot=Number(ranked[0].choice.split(' ')[1])-1;
+          const chosen=Dex.moves.get(own.moveSlots?.[slot]?.id);
+          const restore=(chosen.heal||chosen.drain)&&own.maxhp>0&&own.hp/own.maxhp<.66;
+          const preserveCandidate=this.remaining>1&&Boolean(restore);
+          this.record('move',ranked[0].choice,
+            this.profile.preservation>=14&&this.remaining>1?'전황 분석·연승 전력 관리':'전황 분석·실전 시뮬레이션',
+            {plan:this.plan,advantage:Number(ranked[0].score.toFixed(1)),
+             quality:{analysis:ranked[0].runs>=2&&ranked[1]?.runs>=2&&gap>=8,
+               analysisGap:Number(gap.toFixed(1)),preserve:preserveCandidate,
+               preserveMove:preserveCandidate?chosen.id:null}});
+          
           return ranked[0].choice;
         }
         this.decisions.rolloutFallbacks++;
@@ -172,7 +188,12 @@ export class TrainerAI extends RandomPlayerAI{
     }).sort((a,b)=>b.value-a.value||a.i-b.i);
     if(rankings[0]?.value>0){
       const choice=rankings[0].entry.choice;
-      this.record('move',choice,'선플·상성·전술 우선순위',{plan:this.plan});
+      const chosen=rankings[0].entry.move;
+      const move=Dex.moves.get(chosen?.id||chosen?.move||chosen||'');
+      const own=battle?.[this.side]?.active?.[0];
+      const preserve=this.remaining>1&&own?.maxhp>0&&own.hp/own.maxhp<.66&&Boolean(move.heal||move.drain);
+      this.record('move',choice,'선플·상성·전술 우선순위',
+        {plan:this.plan,quality:{analysis:false,preserve,preserveMove:preserve?move.id:null}});
       return choice;
     }
     const choice=selectTacticalMove(moves,context,this.skill.tactics,()=>this.prng.random());
@@ -202,8 +223,26 @@ export class TrainerAI extends RandomPlayerAI{
     const uncertainty=(20-this.profile.switchSkill)/20;
     const index=scored.length>1&&this.prng.random()<uncertainty*.35?1:0;
     const best=scored[index]?.entry||switches[0];
+    const activePokemon=this.battleProvider?.()?.[this.side]?.active?.[0];
+    const ownTypes=activePokemon?.getTypes?.()||this.matchup().ownTypes;
+    const currentThreat=foeTypes.length&&ownTypes.length?
+      Math.max(...foeTypes.map(t=>typeMultiplier(t,ownTypes))):1;
+    const candidateSpecies=Dex.species.get(best.pokemon.details?.split(',')[0]||
+      best.pokemon.ident?.split(': ')[1]||'');
+    const nextThreat=foeTypes.length&&candidateSpecies.exists?
+      Math.max(...foeTypes.map(t=>typeMultiplier(t,candidateSpecies.types))):1;
+    const n=Number.parseInt(best.pokemon.condition||'',10);
+    const d=Number.parseInt((best.pokemon.condition||'').split('/')[1]||'',10);
+    const nextHP=Number.isFinite(n)&&Number.isFinite(d)&&d>0?n/d:1;
+    const validQuality=active!==undefined&&foeTypes.length>0&&ownTypes.length>0&&
+      currentThreat>=2&&nextThreat<currentThreat&&nextHP>.25;
+    const endangered=activePokemon?.maxhp>0&&activePokemon.hp/activePokemon.maxhp<.45;
     this.record('switch',String(best.slot),active===undefined?'기절 교체 · 잔존 전력 평가':
-      '불리한 상성·HP 위험에 따른 자율 교체',{plan:this.plan});
+      '불리한 상성·HP 위험에 따른 자율 교체',
+      {plan:this.plan,quality:{switch:validQuality,
+        preserve:validQuality&&this.remaining>1&&endangered,
+        currentThreat,nextThreat}});
+    
     return best.slot;
   }
 }
