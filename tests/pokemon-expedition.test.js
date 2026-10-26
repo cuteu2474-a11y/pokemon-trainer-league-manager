@@ -27,7 +27,7 @@ function setup(){
     querySelectorAll(){return []},getElementById(){return null}};
   let confirmation=true;
   const globals={window:{},document:doc,game:g,
-    renderOffice(){renders++},nextWeek(){this.game.week++},
+    tab:'home',renderOffice(){renders++},nextWeek(){this.game.week++},
     myClub(){return this.game.clubs[0]},worldClubRegion(){return '관동'},
     wonReadable(n){return '₩'+n},persist(){writes++},alert(){},
     confirm(){return confirmation},CSS:{escape:value=>value}};
