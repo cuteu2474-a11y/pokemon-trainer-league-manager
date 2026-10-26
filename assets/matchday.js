@@ -1378,7 +1378,13 @@
     const trace=Array.isArray(ai.trace)?ai.trace:[];
     // Judge observed action quality, not a raw "switch 10 times" counter.
     const qualifiedSwitch=trace.filter(x=>x.kind==='switch'&&x.quality?.switch===true).length;
-    const qualifiedAnalysis=trace.filter(x=>x.kind==='move'&&x.quality?.analysis===true).length;
+    // A trainer can make multiple informed choices and win without a large
+    // numerical gap between ranked moves. Reward observed useful analysis, not
+    // an arbitrary score-gap threshold or simulations on a lost duel.
+    const compared=trace.filter(x=>x.kind==='move'&&
+      String(x.reason||'').includes('전황 분석')&&
+      (x.quality?.analysis===true||Number(x.advantage)>0)).length;
+    const qualifiedAnalysis=Math.floor(compared/2);
     const preservedByMove=trace.filter(x=>x.kind==='move'&&x.quality?.preserve===true).length;
     const heals=String(round.log||'').split('\n').filter(line=>line.startsWith('|-heal|'+sideId)).length;
     const final=round.final?.[sideId]||[];
