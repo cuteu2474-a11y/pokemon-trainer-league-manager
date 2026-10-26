@@ -1,5 +1,6 @@
 import {readFileSync} from 'node:fs';
 import {battlePlan, planMoves} from '../battle/battle-plans.js';
+import {resolveBattleAutonomy} from '../battle/battle-autonomy.js';
 import {buildBattleReport} from '../battle/replay-report.js';
 import {Dex} from '@pkmn/sim';
 import {simulateClubMatch} from '../battle/club-match.js';
@@ -34,11 +35,17 @@ export function prepareClub(club, order) {
   if (!club || !Array.isArray(club.trainers) || club.trainers.length !== 5 || club.trainers.some(t => !t || !Array.isArray(t.pokemon) || t.pokemon.length !== 6)) throw new RangeError('트레이너 5명과 각 포켓몬 6마리가 필요합니다.');
   if (!Array.isArray(order) || order.length !== 5 || new Set(order).size !== 5 || order.some(i => !Number.isInteger(i) || i < 0 || i > 4)) throw new RangeError('출전 순서 오류');
   return order.map(i => {
-    const trainer=club.trainers[i], plan=battlePlan(trainer);
+    const trainer=club.trainers[i];
+    const aiProfile=resolveBattleAutonomy(trainer,trainer.directorTrust??50);
+    const plan=aiProfile.plan;
     const team=trainer.pokemon.map(p=>battlePokemon(p,plan));
     const counts=team.reduce((map,mon)=>(map[mon.name]=(map[mon.name]||0)+1,map),{});
     team.forEach((mon,slot)=>{mon.displayName=mon.name;if(counts[mon.name]>1)mon.name=mon.name+'·'+(slot+1);});
-    return {name:trainer.name,tactics:trainer.tactics,switching:trainer.switching,battlePlan:plan,team};
+    return {name:trainer.name,tactics:trainer.tactics,switching:trainer.switching,
+      battleAnalysis:trainer.battleAnalysis??trainer.analysis,
+      resourceManagement:trainer.resourceManagement??trainer.management,
+      moveJudgment:trainer.moveJudgment,switchJudgment:trainer.switchJudgment,
+      battlePlan:plan,aiProfile,team};
   });
 }
 export async function runMatch(body) {
@@ -65,6 +72,8 @@ export async function runMatch(body) {
       if (move.exists) moveVisuals[part[3]] = moveInfo(move);
     }
   }
-  return {engine:'showdown', visuals, moveVisuals, report:buildBattleReport(result.rounds,home,away), typeChart, home:body.home.id, away:body.away.id, aScore:result.trainersDefeated.B, bScore:result.trainersDefeated.A,
-    teams:{home,away}, rounds:result.rounds.map(r => ({trainerA:r.trainerA, trainerB:r.trainerB, winner:r.winner, initial:Object.fromEntries(['p1','p2'].map(side=>[side,r.result.initialStats[side].map((state,i)=>({name:r.pokemonOrder[side][i],hp:state.hp,maxhp:state.maxhp,status:state.status,pp:state.pp,maxpp:state.maxpp}))])), log:r.result.log}))};
+  return {engine:'showdown', visuals, moveVisuals, report:buildBattleReport(result.rounds,home,away), typeChart,
+    coaching:Object.fromEntries([['home',home],['away',away]].map(([side,group])=>[side,group.map(t=>({name:t.name,
+      ...t.aiProfile,plan:t.battlePlan}))])), home:body.home.id, away:body.away.id, aScore:result.trainersDefeated.B, bScore:result.trainersDefeated.A,
+    teams:{home,away}, rounds:result.rounds.map(r => ({trainerA:r.trainerA, trainerB:r.trainerB, winner:r.winner,aiDecisions:r.result.aiDecisions, initial:Object.fromEntries(['p1','p2'].map(side=>[side,r.result.initialStats[side].map((state,i)=>({name:r.pokemonOrder[side][i],hp:state.hp,maxhp:state.maxhp,status:state.status,pp:state.pp,maxpp:state.maxpp}))])), log:r.result.log}))};
 }
