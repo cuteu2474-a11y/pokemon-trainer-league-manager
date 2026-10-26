@@ -1341,15 +1341,11 @@
   const trainerId=(trainer,clubId,index)=>
     String(trainer.id??(String(clubId)+':'+index+':'+trainer.name));
   const threshold=skill=>20+skill*5;
-  const GOALS=Object.freeze({
-    switch:{label:'적극적인 교체',description:'불리한 대면에서 실제 유리한 교체 시도',points:7,matches:3},
-    preserve:{label:'에이스 보존',description:'실제 회복·위험 회피로 연승 전력 보존',points:5,matches:3},
-    analysis:{label:'전황 분석가',description:'여러 전술 후보를 검토해 우수한 선택',points:10,matches:4}
+  const HABITS=Object.freeze({
+    switch:{label:'적극적인 교체',description:'유리한 교체로 실제 대결을 이긴 경험',threshold:26,matches:3},
+    preserve:{label:'에이스 보존',description:'HP·PP 보존으로 연승전에 기여한 경험',threshold:26,matches:3},
+    analysis:{label:'전황 분석가',description:'후보 기술을 분석해 승리한 경험',threshold:30,matches:4}
   });
-  const INTENSITY=Object.freeze({
-    suggest:'권고',focus:'집중 요청',demand:'강한 요구'
-  });
-  const epoch=g=>(Math.max(1,Number(g?.season)||1)-1)*64+Math.max(1,Number(g?.week)||1);
   function skill(trainer,field){
     return val(trainer?.[field],val(trainer?.[FIELDS[field]?.fallback]));
   }
@@ -1362,7 +1358,6 @@
     existing.careerApplied ||= {};
     existing.careerReports ||= [];
     existing.careerFeedback ||= [];
-    existing.developmentReviews ||= [];
     return existing;
   }
   function getCareer(trainer){
@@ -1370,7 +1365,7 @@
     const career={version:1,matches:0,duels:0,wins:0,losses:0,
       experience:Object.fromEntries(Object.keys(FIELDS).map(field=>[field,0])),
       observed:{switches:0,voluntary:0,analyses:0,preservation:0},
-      quality:Object.fromEntries(Object.keys(GOALS).map(k=>[k,{points:0,matches:0}])),
+      quality:Object.fromEntries(Object.keys(HABITS).map(k=>[k,{points:0,matches:0}])),
       events:[]};
     trainer.aiCareer=career;
     return career;
@@ -1389,10 +1384,12 @@
     const final=round.final?.[sideId]||[];
     const survived=Array.isArray(final)&&final.some(mon=>Number(mon.hp)>0);
     const avoidedThreat=survived?trace.filter(x=>x.kind==='switch'&&x.quality?.preserve===true).length:0;
+    // A good action is only reinforced when that trainer also won this duel.
+    // Executing a recommendation repeatedly without success cannot build a trait.
     const goalQuality={
-      switch:Math.min(2,qualifiedSwitch),
-      preserve:Math.min(2,Math.min(preservedByMove,heals)+Math.min(1,avoidedThreat)),
-      analysis:Math.min(3,qualifiedAnalysis)
+      switch:won?Math.min(2,qualifiedSwitch):0,
+      preserve:won?Math.min(2,Math.min(preservedByMove,heals)+Math.min(1,avoidedThreat)):0,
+      analysis:won?Math.min(3,qualifiedAnalysis):0
     };
     return {duels:1,wins:Number(won),losses:Number(lost),
       moves:Math.min(300,Math.max(0,Number(ai.moves)||0)),
@@ -1402,7 +1399,7 @@
       preservation:trace.filter(item=>String(item.reason||'').includes('연승 전력 관리')).length,
       goalSwitch:goalQuality.switch,goalPreserve:goalQuality.preserve,goalAnalysis:goalQuality.analysis};
   }
-  function applyEvidence(trainer,evidence,key,side,slot){
+  function applyEvidence(trainer,evidence,key,side,slot,coaching){
     const career=getCareer(trainer);
     // No direct stat gifts: growth comes from repeated, actually recorded decisions.
     const earned={
@@ -1435,47 +1432,43 @@
     const ai=trainer.autonomyAI ||= {};
     const traits=ai.playTraits ||= [];
     const learned=[];
+    const behaviorScores=ai.habitScores ||= {switch:0,preserve:0,analysis:0};
+    const successfulMatches=ai.habitSuccessfulMatches ||= {switch:0,preserve:0,analysis:0};
     career.quality ||= {};
-    const currentGoal=trainer.aiDevelopment;
+    const advice=coaching?.behaviorAdvice||null;
+    const response=coaching?.behaviorResponse||'자율';
     const qualified={switch:evidence.goalSwitch||0,preserve:evidence.goalPreserve||0,
       analysis:evidence.goalAnalysis||0};
     const progress={};
-    for(const [kind,config] of Object.entries(GOALS)){
+    for(const [kind,config] of Object.entries(HABITS)){
       const quality=career.quality[kind] ||= {points:0,matches:0};
-      const points=Math.min(6,Math.max(0,qualified[kind]||0));
-      const matching=currentGoal?.status==='active'&&currentGoal.target===kind;
-      const directed=matching&&currentGoal.response==='수용'?1.4:
-        matching&&currentGoal.response==='절충'?1.15:1;
-      const credited=points*directed;
-      quality.points=Number((quality.points+credited).toFixed(2));
-      if(points>0)quality.matches++;
-      if(matching){
-        currentGoal.progress=Number((currentGoal.progress+credited).toFixed(2));
-        currentGoal.evidenceMatches+=(points>0?1:0);
-        currentGoal.observedMatches++;
-        currentGoal.recentExamples ||= [];
-        if(points>0){
-          currentGoal.recentExamples.unshift({
-            key,detail:kind==='switch'?'불리한 대면에서 유리한 교체':
-              kind==='preserve'?'실제 회복 또는 HP 위험 회피':'복수 후보 비교 후 우수한 선택',
-            quality:points
-          });
-          currentGoal.recentExamples.length=Math.min(currentGoal.recentExamples.length,8);
-        }
+      const points=Math.min(5,Math.max(0,qualified[kind]));
+      const coached=advice===kind&&['수용','절충'].includes(response);
+      const strength=coached?(response==='수용'?1.65:1.25):1;
+      // Real positive results make the trainer more likely to choose the same
+      // behavior *without* future instructions. Advice is only a multiplier.
+      const reinforced=points>0?Math.min(16,Math.round(points*5*strength)):0;
+      const before=clamp(Number(behaviorScores[kind])||0,0,100);
+      const after=clamp(before+reinforced,0,100);
+      behaviorScores[kind]=after;
+      if(points>0){
+        quality.points=Number((quality.points+points).toFixed(2));
+        quality.matches++;
+        successfulMatches[kind]=(Number(successfulMatches[kind])||0)+1;
       }
-      progress[kind]={points:quality.points,matches:quality.matches};
+      progress[kind]={before,after,gained:reinforced,successfulMatches:successfulMatches[kind]||0,
+        positiveActions:points,coached};
       if(!traits.includes(config.label)&&traits.length<3&&
-         quality.points>=config.points&&quality.matches>=config.matches){
+         after>=config.threshold&&successfulMatches[kind]>=config.matches){
         traits.push(config.label);
         learned.push(config.label);
-        if(matching){currentGoal.status='mastered';currentGoal.completedAt=key;}
       }
     }
-    // Existing learned traits are retained; old saves do not lose their achievements.
     const event={key,side,slot,name:trainer.name||'트레이너',
       duels:evidence.duels,wins:evidence.wins,losses:evidence.losses,
       moves:evidence.moves,voluntary:evidence.voluntary,analyses:evidence.analyses,
-      qualified,progress,levels,learned,trainerId:String(trainer.id??'')};
+      qualified,progress,advice:advice?{target:advice,response}:null,
+      levels,learned,trainerId:String(trainer.id??'')};
     career.events.unshift(event);
     career.events.length=Math.min(career.events.length,18);
     return event;
@@ -1513,7 +1506,8 @@
         for(const k of Object.keys(evidence))total[k]+=evidence[k];
       }
       for(const total of collected.values()){
-        const event=applyEvidence(total.trainer,total,key,side,total.slot);
+        const snapshot=p.result.coaching?.[side]?.[total.slot];
+        const event=applyEvidence(total.trainer,total,key,side,total.slot,snapshot);
         const entry={...event,clubId:String(clubId),index:total.index,
           id:trainerId(total.trainer,clubId,total.index),
           player:String(clubId)===String(playerClubId),feedback:null};
@@ -1582,95 +1576,8 @@
     return {ok:true,message:trainer.name+' · '+reason,feedback};
   }
 
-  function assessRequest(trainer,target,intensity,trust){
-    const ai=trainer.autonomyAI||{};
-    const openness=val(ai.openness),conviction=val(ai.conviction);
-    const relevantSkill=target==='switch'?skill(trainer,'switchJudgment'):
-      target==='preserve'?skill(trainer,'resourceManagement'):skill(trainer,'battleAnalysis');
-    const preferred=ai.preferredPlay||trainer.preferredPlay||'';
-    const aligned=target==='switch'&&(['control','tempo'].includes(preferred))||
-      target==='preserve'&&(['endurance','balanced'].includes(preferred))||
-      target==='analysis'&&(['balanced','control'].includes(preferred));
-    const confidence=openness*1.6+clamp(trust,15,85)*.2-conviction*.95+
-      relevantSkill*.35+(aligned?9:-5)+(intensity==='suggest'?6:intensity==='focus'?0:-10);
-    if(confidence>=28)return {response:'수용',
-      reason:'감독의 개발 제안을 자신의 성장 방향과 양립 가능하다고 판단'};
-    if(confidence>=14)return {response:'절충',
-      reason:'개발 필요성은 인정하되 개인 전술 철학에 맞는 상황에서만 연습'};
-    return {response:'거부',
-      reason:'현 시점에는 자신의 전술 철학과 맞지 않아 개인 개발 권고를 따르지 않음'};
-  }
-  function reviewDevelopment(game,clubId){
-    const g=game;if(!g)return [];
-    const s=state(g),now=epoch(g),club=g.clubs?.[clubId];if(!club)return [];
-    const reviews=[];
-    const trainers=(club.trainers||[]).concat(club.reserveTrainers||[]);
-    for(let index=0;index<trainers.length;index++){
-      const trainer=trainers[index],goal=trainer?.aiDevelopment;
-      if(goal?.version!==1||goal.status!=='active')continue;
-      const key=trainerId(trainer,clubId,index);
-      // Review every four in-game weeks; unplayed weeks never generate evidence.
-      while(now>=goal.nextReviewEpoch&&goal.status==='active'){
-        const since=Number((goal.progress-(goal.lastReviewProgress||0)).toFixed(2));
-        const opportunities=goal.observedMatches-(goal.lastReviewMatches||0);
-        const result=goal.response==='거부'?'트레이너가 개발 방향을 받아들이지 않음':
-          opportunities===0?'실전 출전 기회 부족':
-          since>=2?'유의미한 실전 발전':since>0?'개발 진행 중':'실전 경험은 있으나 유효 행동 부족';
-        let change=0;
-        if(goal.response==='수용'&&since>=2)change=1;
-        else if(goal.intensity==='demand'&&goal.response==='거부'&&opportunities>=2)change=-1;
-        const current=s.trust[key]??50;
-        if(change)s.trust[key]=clamp(current+change,15,85);
-        const review={target:goal.target,trainer:trainer.name||'트레이너',id:key,
-          due:goal.nextReviewEpoch,period:4,result,progress:goal.progress,
-          gained:since,opportunities,response:goal.response,
-          trustBefore:current,trustAfter:s.trust[key]??current};
-        goal.reviews ||= [];goal.reviews.unshift(review);goal.reviews.length=Math.min(goal.reviews.length,10);
-        s.developmentReviews.unshift(review);s.developmentReviews.length=Math.min(s.developmentReviews.length,40);
-        reviews.push(review);
-        goal.lastReviewProgress=goal.progress;goal.lastReviewMatches=goal.observedMatches;
-        goal.lastReviewEpoch=goal.nextReviewEpoch;
-        goal.nextReviewEpoch+=4;
-      }
-    }
-    return reviews;
-  }
-  function setDevelopmentGoal(game,clubId,index,target,intensity){
-    if(!Object.hasOwn(GOALS,target)||!Object.hasOwn(INTENSITY,intensity))
-      return {ok:false,message:'개발 선플 또는 전달 방식을 확인해 주세요.'};
-    const club=game.clubs?.[clubId];
-    const group=(club?.trainers||[]).concat(club?.reserveTrainers||[]);
-    if(!Number.isInteger(index)||index<0||index>=group.length||!group[index])
-      return {ok:false,message:'소속 트레이너를 확인할 수 없습니다.'};
-    reviewDevelopment(game,clubId);
-    const trainer=group[index],old=trainer.aiDevelopment;
-    const now=epoch(game);
-    if(old?.status==='active'&&now<(old.lastReviewEpoch??old.startedAt+4))
-      return {ok:false,message:'기존 개인 개발 목표의 첫 4주 중간 평가 전에는 변경할 수 없습니다.'};
-    if(old?.status==='active'&&now<old.nextReviewEpoch&&
-      !Array.isArray(old.reviews)&&!old.reviews?.length)
-      return {ok:false,message:'개발 중간 평가 이후에 다른 목표를 선택할 수 있습니다.'};
-    if((trainer.autonomyAI?.playTraits||[]).includes(GOALS[target].label))
-      return {ok:false,message:'이미 해당 선플을 습득한 트레이너입니다.'};
-    if((trainer.autonomyAI?.playTraits||[]).length>=3)
-      return {ok:false,message:'현재 선플 3개를 보유하여 더 이상 습득할 수 없습니다.'};
-    const ai=state(game),id=trainerId(trainer,clubId,index),trust=ai.trust[id]??50;
-    const evaluation=assessRequest(trainer,target,intensity,trust);
-    const previous=old?.status==='active'?old:null;
-    if(previous){previous.status='redirected';(trainer.aiDevelopmentHistory ||= []).unshift(previous);}
-    const goal={version:1,target,intensity,response:evaluation.response,reason:evaluation.reason,
-      status:'active',startedAt:now,nextReviewEpoch:now+4,progress:0,
-      evidenceMatches:0,observedMatches:0,lastReviewMatches:0,lastReviewProgress:0,
-      recentExamples:[],reviews:[]};
-    trainer.aiDevelopment=goal;
-    // Strong pressure on an outspoken trainer can damage trust immediately.
-    if(intensity==='demand'&&evaluation.response==='거부')
-      ai.trust[id]=clamp(trust-2,15,85);
-    return {ok:true,goal,message:trainer.name+' · '+GOALS[target].label+' 개발 '+
-      INTENSITY[intensity]+'에 대한 반응: '+evaluation.response+' — '+evaluation.reason};
-  }
-  window.TrainerCareer={FIELDS,FEEDBACK,GOALS,INTENSITY,skill,threshold,state,getCareer,applyMatch,
-    offerFeedback,roundEvidence,trainerId,assessRequest,reviewDevelopment,setDevelopmentGoal};
+  window.TrainerCareer={FIELDS,FEEDBACK,HABITS,skill,threshold,state,getCareer,applyMatch,
+    offerFeedback,roundEvidence,trainerId};
   if(typeof document==='undefined')return;
   let visible=false,notice='';
   const getClub=()=>{try{return typeof myClub==='function'?myClub():null;}catch{return null;}};
@@ -1695,41 +1602,22 @@
           '<div class="tc-meter"><i style="width:'+Math.min(100,Math.round(progress/threshold(current)*100))+'%"></i></div></div>';
       }).join('');
       const feedback=last?.feedback;
-      const goal=trainer.aiDevelopment,settings=goal&&GOALS[goal.target];
-      const progress=goal?.status==='mastered'?100:
-        settings?Math.min(100,Math.floor((goal.progress||0)/settings.points*100)):0;
-      const review=goal?.reviews?.[0];
-      const weeksLeft=goal?.status==='active'?
-        Math.max(0,(goal.nextReviewEpoch||0)-epoch(game)):0;
-      const changeAllowed=!goal||goal.status!=='active'||Boolean(review);
-      const development=goal?'<div class="tc-development"><strong>현재 개인 개발: '+
-        esc(settings?.label||'미지정')+'</strong><span class="tc-response">'+
-        esc(goal.status==='mastered'?'선플 습득 완료':
-          goal.status==='active'?'AI 반응 '+goal.response:'목표 종료')+'</span>'+
-        '<p class="tc-muted">'+esc(goal.reason||'')+'</p>'+
-        '<div class="tc-meter"><i style="width:'+progress+'%"></i></div>'+
-        '<p class="tc-muted">증명된 성장 '+Number(goal.progress||0).toFixed(1)+' / '+
-        (settings?.points||'?')+'점 · 실제 행동을 입증한 경기 '+(goal.evidenceMatches||0)+
-        '회 · 습득 기준 '+(settings?.matches||'?')+'경기'+
-        (goal.status==='active'?' · 다음 평가까지 '+weeksLeft+'주':'')+'</p>'+
-        (review?'<p class="tc-muted">최근 4주 평가: '+esc(review.result)+
-          ' · 기간 중 성장 '+Number(review.gained).toFixed(1)+'점</p>':'')+
-        (goal.recentExamples?.length?'<p class="tc-muted">근거: '+
-          esc(goal.recentExamples[0].detail)+' ('+esc(goal.recentExamples[0].key)+')</p>':'')+
-        '</div>':'';
-      const goalsMenu='<div class="tc-goals"><h4>감독의 선플 개발 요청</h4>'+
-        '<div class="tc-goal-actions"><select data-tc-target="'+index+'" aria-label="'+esc(trainer.name)+' 개발 선플" '+(!changeAllowed?'disabled':'')+'>'+
-        Object.entries(GOALS).map(([key,config])=>'<option value="'+key+'" '+
-          (goal?.target===key?'selected':'')+'>'+esc(config.label)+'</option>').join('')+
-        '</select><select data-tc-intensity="'+index+'" aria-label="권고 강도" '+
-          (!changeAllowed?'disabled':'')+'>'+
-        Object.entries(INTENSITY).map(([key,label])=>'<option value="'+key+'" '+
-          (goal?.intensity===key?'selected':'')+'>'+esc(label)+'</option>').join('')+
-        '</select><button type="button" data-tc-goal="'+index+'" '+
-          (!changeAllowed?'disabled':'')+'>'+(goal?.status==='active'?'개발 목표 변경':'개발 요청')+
-        '</button></div>'+
-        (!changeAllowed?'<p class="tc-muted">첫 4주 중간 평가 전에는 다른 목표로 변경할 수 없습니다.</p>':'')+
-        '</div>';
+      const habits=trainer.autonomyAI?.habitScores||{};
+      const victories=trainer.autonomyAI?.habitSuccessfulMatches||{};
+      const latestBehavior=last?.advice,learning=last?.progress;
+      const habitCards='<div class="tc-development"><strong>경기 결과로 형성되는 플레이 성향</strong>'+
+        '<p class="tc-muted">경기 전 감독 권고는 행동 시도에 영향을 주지만, 실제 성공한 플레이만 누적 학습됩니다.</p>'+
+        Object.entries(HABITS).map(([kind,config])=>{
+          const score=Math.min(100,Math.max(0,Number(habits[kind])||0));
+          const acquired=traits.includes(config.label),recent=learning?.[kind];
+          const highlight=latestBehavior?.target===kind;
+          return '<div class="tc-habit-row"><div><b>'+esc(config.label)+'</b>'+
+            '<small>'+(acquired?'선플 습득 완료': '성향 '+score+'/100 · 성공한 경기 '+(victories[kind]||0)+'회')+
+            (highlight?' · 직전 미팅 '+esc(latestBehavior.response):'')+'</small></div>'+
+            '<div class="tc-meter"><i style="width:'+score+'%"></i></div>'+
+            (recent?.gained?'<small class="tc-gain">직전 경기 성공 경험 +'+recent.gained+'</small>':'')+
+            '</div>';
+        }).join('')+'</div>';
       const actions=last?feedback?
         '<p class="tc-response">면담 '+esc(feedback.label)+' · '+esc(feedback.response)+'<br>'+esc(feedback.reason)+'</p>':
         '<div class="tc-choices">'+Object.entries(FEEDBACK).map(([kind,label])=>
@@ -1745,11 +1633,11 @@
           '회 · 자율 교체 '+last.voluntary+'회</p>'+
           (last.levels.length?'<p class="tc-gain">능력 성장: '+last.levels.map(x=>esc(x.label)+' '+x.from+'→'+x.to).join(', ')+'</p>':'')+
           (last.learned.length?'<p class="tc-gain">새 선플: '+last.learned.map(esc).join(', ')+'</p>':''):'')+
-        development+goalsMenu+actions+'</article>';
+        habitCards+actions+'</article>';
     }).join('');
     overlay.innerHTML='<section class="tc-dialog" role="dialog" aria-modal="true" aria-labelledby="tc-title">'+
       '<button type="button" class="tc-close">닫기</button>'+
-      '<h2 id="tc-title">트레이너 커리어 · 감독 면담</h2>'+
+      '<h2 id="tc-title">트레이너 플레이 성향 · 감독 면담</h2>'+
       '<p class="tc-muted">경기에 실제로 출전한 트레이너만 경험을 얻습니다. 기술·교체·전황 분석·연승 전력 관리 경험이 다음 경기의 실력에 반영됩니다.</p>'+
       (notice?'<p class="tc-gain" role="status">'+esc(notice)+'</p>':'')+
       '<div class="tc-summary">'+(latest?('최근 '+esc(latest.season)+'시즌 '+esc(latest.round)+
@@ -1761,15 +1649,6 @@
     overlay.onclick=event=>{
       if(event.target===overlay){visible=false;overlay.remove();}
     };
-    overlay.querySelectorAll('[data-tc-goal]').forEach(button=>button.onclick=()=>{
-      const index=Number(button.dataset.tcGoal);
-      const target=overlay.querySelector('[data-tc-target="'+index+'"]')?.value;
-      const intensity=overlay.querySelector('[data-tc-intensity="'+index+'"]')?.value;
-      const answer=setDevelopmentGoal(game,club.id,index,target,intensity);
-      notice=answer.message;
-      if(answer.ok&&typeof persist==='function')persist();
-      show();
-    });
     overlay.querySelectorAll('[data-tc-feedback]').forEach(button=>button.onclick=()=>{
       const index=Number(button.dataset.tcFeedback);
       const answer=offerFeedback(game,club.id,latest?.key,index,button.dataset.tcKind);
@@ -1797,11 +1676,9 @@
     '.tc-meter i{display:block;background:#71c6ac;height:100%}',
     '.tc-summary{margin:12px 0 16px;background:#102135;border:1px solid #3d6178;padding:12px;border-radius:7px;font-size:13px}',
     '.tc-development{margin:12px 0;background:#102c3b;border:1px solid #3d6c73;padding:12px;border-radius:7px}',
-    '.tc-development strong{font-size:13px;display:block;margin-bottom:5px}.tc-development .tc-meter{margin:9px 0;height:8px}',
-    '.tc-goals{border-top:1px solid #3c6277;padding-top:11px;margin-top:12px}',
-    '.tc-goals h4{font-size:13px;margin:0 0 8px;color:#bde0dc}.tc-goal-actions{display:flex;gap:7px;flex-wrap:wrap}',
-    '.tc-goal-actions select{min-width:105px;flex:1;background:#213d54;border:1px solid #5b7e94;border-radius:6px;color:#f4fbff;padding:8px;font:inherit}',
-    '.tc-dialog button:disabled,.tc-dialog select:disabled{opacity:.5;cursor:default}',
+    '.tc-development strong{font-size:13px;display:block;margin-bottom:7px}',
+    '.tc-habit-row{margin:8px 0 12px}.tc-habit-row>div:first-child{display:flex;justify-content:space-between;gap:8px}',
+    '.tc-habit-row small{font-size:11px;color:#adc8d2}.tc-habit-row .tc-meter{margin-top:6px;height:7px}',
     '.tc-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}',
     '.tc-gain{font-size:12px;color:#8fe0b9;line-height:1.6}.tc-response{color:#8fe0b9;font-size:12px;line-height:1.7}',
     '@media(max-width:680px){.tc-grid{grid-template-columns:1fr}.tc-dialog{padding:16px}.tc-dialog h2{font-size:19px}}'
@@ -1809,11 +1686,6 @@
   document.head.append(style);
   const previousRender=renderOffice;
   renderOffice=function(){
-    const beforeClub=getClub();
-    if(beforeClub){
-      const reviews=reviewDevelopment(game,beforeClub.id);
-      if(reviews.length&&typeof persist==='function')persist();
-    }
     previousRender();
     const c=getClub(),panel=document.querySelector('#dashpanel .at-panel');
     if(!c||!panel||panel.querySelector('.tc-open'))return;
