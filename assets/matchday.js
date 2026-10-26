@@ -691,11 +691,11 @@
     const facts='<div class="pki-grid">'+field('레벨',mon?.level)+field('특성',mon?.ability)+field('지닌 도구',mon?.item||'없음')+
       field('성격',mon?.nature)+field('활동 시즌',mon?.careerSeasons)+field('폼',mon?.form||mon?.forme||'기본')+
       (meta?field('종족 신장',meta.height+'m')+field('종족 체중',meta.weight+'kg'):'')+'</div>';
-    const gp=mon?.gp,stats=mon?.stats??mon?.battleStats;
-    const hasStats=stats&&Object.keys(labels).some(k=>num(stats[k])!==null);
+    const gp=mon?.gp,savedStats=mon?.stats??mon?.battleStats;
+    const hasStats=savedStats&&Object.keys(labels).some(k=>num(savedStats[k])!==null);
     const hasGP=gp&&Object.keys(labels).some(k=>num(gp[k])!==null);
     const hasBase=meta?.base&&Object.keys(labels).some(k=>num(meta.base[k])!==null);
-    const statsHTML=(hasStats?section('저장된 전투 능력치',statsHTMLSafe(stats,600)):'')+
+    const statsHTML=(hasStats?section('저장된 전투 능력치',stats(savedStats,600)):'')+
       (hasGP?section('성장 포인트 (GP)',stats(gp,100)+'<p class="pki-note">GP는 성장 데이터이며 전투 능력치와 다릅니다.</p>'):'')+
       (hasBase?section('종족값 · 도감 참고 정보',stats(meta.base,255)+'<p class="pki-note">외부 도감의 종족값이며 개체의 전투 능력치가 아닙니다.</p>'):'')+
       (!hasStats&&!hasGP&&!hasBase?'<p class="pki-note">능력치 데이터는 아직 기록되지 않았습니다.</p>':'');
@@ -709,7 +709,6 @@
     root.querySelector('.pki-close').onclick=close;
     root.querySelector('.pki-panel').focus({preventScroll:true});
   }
-  function statsHTMLSafe(value,max){return stats(value,max);}
   function close(){
     document.getElementById('pki-overlay')?.remove();active=null;serial++;
     if(focusBefore?.isConnected)focusBefore.focus({preventScroll:true});
