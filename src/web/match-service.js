@@ -3,6 +3,7 @@ import {Dex} from '@pkmn/sim';
 import {simulateClubMatch} from '../battle/club-match.js';
 import {gpBudget, STATS, validateGP} from '../core/stats.js';
 const korean = JSON.parse(readFileSync(new URL('./species-ko.json', import.meta.url), 'utf8'));
+const spriteNumbers = JSON.parse(readFileSync(new URL('./species-sprites.json', import.meta.url), 'utf8'));
 const byNumber = new Map(Dex.species.all().filter(s => !s.forme).map(s => [s.num, s.name]));
 const int = (v, min, max, label) => {
   if (!Number.isInteger(v) || v < min || v > max) throw new RangeError(label);
@@ -40,6 +41,19 @@ export async function runMatch(body) {
   if (!Array.isArray(seed) || seed.length !== 4 || seed.some(n => !Number.isInteger(n) || n < 0 || n > 0xffffffff)) throw new RangeError('경기 시드 오류');
   const home = prepareClub(body.home, body.homeOrder), away = prepareClub(body.away, body.awayOrder);
   const result = await simulateClubMatch(home, away, {seed});
-  return {engine:'showdown', home:body.home.id, away:body.away.id, aScore:result.trainersDefeated.B, bScore:result.trainersDefeated.A,
+  const visuals = {}, moveVisuals = {};
+  for (const round of result.rounds) for (const line of round.result.log.split('\n')) {
+    const part = line.split('|');
+    const name = ['switch','drag','detailschange'].includes(part[1]) ? part[3]?.split(',')[0] : part[1] === '-formechange' ? part[3] : null;
+    if (name) {
+      const species = Dex.species.get(name);
+      if (species.exists) visuals[name] = {id:species.spriteid, num:spriteNumbers[species.id] || species.num, types:species.types};
+    }
+    if (part[1] === 'move') {
+      const move = Dex.moves.get(part[3]);
+      if (move.exists) moveVisuals[part[3]] = {type:move.type, category:move.category};
+    }
+  }
+  return {engine:'showdown', visuals, moveVisuals, home:body.home.id, away:body.away.id, aScore:result.trainersDefeated.B, bScore:result.trainersDefeated.A,
     teams:{home,away}, rounds:result.rounds.map(r => ({trainerA:r.trainerA, trainerB:r.trainerB, winner:r.winner, log:r.result.log}))};
 }

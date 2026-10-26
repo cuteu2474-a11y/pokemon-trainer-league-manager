@@ -25,6 +25,8 @@ test('web service returns actual relay battle logs and score', {timeout:120000},
  const result=await runMatch({home:a,away:b,homeOrder:[4,3,2,1,0],awayOrder:[0,1,2,3,4],seed:[1,2,3,4]});
  assert.equal(result.engine,'showdown');assert.equal(result.aScore,5);assert.equal(result.bScore,0);assert.equal(result.rounds.length,5);
  assert.equal(result.teams.home[0].name,'트레이너 4');assert.match(result.rounds[0].log,/\|move\|/);
+ assert.equal(result.visuals.Mewtwo.id,'mewtwo');assert.equal(result.visuals.Mewtwo.num,150);
+ assert.deepEqual(result.moveVisuals.Psychic,{type:'Psychic',category:'Special'});
 });
 test('API rejects invalid methods and invalid rosters with no result',async()=>{
  const response=()=>({statusCode:0,headers:{},setHeader(k,v){this.headers[k]=v;},end(body){this.body=JSON.parse(body);}});
