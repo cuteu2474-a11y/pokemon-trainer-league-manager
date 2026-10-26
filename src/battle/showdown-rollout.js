@@ -1,4 +1,5 @@
 import {Battle} from '@pkmn/sim';
+import {installLevelFreeDamage} from './level-free-damage.js';
 
 /** Evaluates legal actions using actual cloned Showdown turns. No mutation of live battle. */
 export function evaluateBattle(battle, sideId = 'p1') {
@@ -25,7 +26,7 @@ export function rolloutActions(battle, {sideId='p1', choices, opponentChoices, d
     for (let i=0;i<samples;i++) {
       // Showdown serialization retains the original log array by reference.
       // Each search branch must own its log, including separate samples.
-      const clone = Battle.fromJSON(structuredClone(baseline));
+      const clone=installLevelFreeDamage(Battle.fromJSON(structuredClone(baseline)));
       const enemy = opponentChoices?.[i % opponentChoices.length] ||
         legalRolloutMoves(clone,foeId)[i % Math.max(1,legalRolloutMoves(clone,foeId).length)]?.choice;
       if (!enemy) continue;
