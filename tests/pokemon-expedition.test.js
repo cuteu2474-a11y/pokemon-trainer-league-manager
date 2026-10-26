@@ -141,8 +141,8 @@ test('captured Pokémon is compatible with actual Showdown battle adapter',()=>{
   api.recruit('1',0);
   const ready=prepareClub(game.clubs[0],[0,1,2,3,4]);
   assert.equal(ready[0].team.length,6);
-  assert.deepEqual(ready[0].team[0].statCA,candidate.statCA);
-  assert.deepEqual(ready[0].team[0].statPA,candidate.statPA);
+  assert.deepEqual({...ready[0].team[0].statCA},{...candidate.statCA});
+  assert.deepEqual({...ready[0].team[0].statPA},{...candidate.statPA});
   assert.equal(Object.hasOwn(candidate,'level'),false);
 });
 test('trainer-specific captured candidates cannot be claimed by another trainer',()=>{
