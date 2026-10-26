@@ -1766,3 +1766,320 @@
   };
   window.TrainerCareer.show=()=>{visible=true;show();};
 })();
+
+
+/* Trainer Market 2.0 — trait-aware scouting, bids and AI club recruitment. */
+(function trainerMarketV2(){
+  if(window.TrainerMarketV2)return;
+  const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
+  const value=(n,fallback=0)=>Number.isFinite(Number(n))?Number(n):fallback;
+  const STYLE={
+    balanced:{label:'균형 운영',keys:['analysis','matchup','kill']},
+    attacking:{label:'공격 중심',keys:['kill','status','analysis']},
+    defensive:{label:'안정적인 운영',keys:['preserve','matchup','switch']},
+    relay:{label:'연승전 전력 관리',keys:['pp','preserve','analysis']},
+    adaptive:{label:'상성·교체 중심',keys:['switch','matchup','status']}
+  };
+  const TRAITS={
+    kill:'킬각 포착',switch:'적극적인 교체',matchup:'상성 교체 전문가',
+    preserve:'에이스 보존',pp:'PP 관리자',status:'상태이상 전문가',
+    analysis:'전황 분석가'
+  };
+  const score=trainer=>{
+    if(!trainer)return {strength:0,potential:0,habits:0,learned:0,ability:0,pokemon:0};
+    const mons=Array.isArray(trainer.pokemon)?trainer.pokemon:[];
+    const power=mons.length?mons.reduce((sum,mon)=>
+      sum+clamp(value(mon.ca, value(mon.power,50)),1,200),0)/mons.length:50;
+    const growth=mons.length?mons.reduce((sum,mon)=>
+      sum+clamp(value(mon.pa, value(mon.ca,value(mon.power,50)))-
+        value(mon.ca,value(mon.power,50)),0,150),0)/mons.length:0;
+    const ca=value(trainer.profile?.ca,Math.round((value(trainer.tactics,10)+value(trainer.switching,10))*4.6));
+    const pa=value(trainer.profile?.pa,ca);
+    const learned=(trainer.autonomyAI?.playTraits||[]).filter(x=>Object.values(TRAITS).includes(x)).length;
+    const habits=trainer.autonomyAI?.habitScores||{};
+    const habit=Math.max(0,Math.min(100,Math.round(
+      Object.keys(TRAITS).reduce((sum,key)=>sum+clamp(value(habits[key]),0,100),0)/7)));
+    const tactical=(value(trainer.moveJudgment,value(trainer.tactics,10))+
+      value(trainer.switchJudgment,value(trainer.switching,10))+
+      value(trainer.battleAnalysis,value(trainer.tactics,10))+
+      value(trainer.resourceManagement,value(trainer.switching,10)))/4;
+    const potential=clamp(Math.round((growth/100*.65+Math.max(0,pa-ca)/200*.35)*100),0,100);
+    const strength=clamp(Math.round(tactical*3.25+power*.23+
+      learned*3+Math.min(12,habit*.1)),0,100);
+    return {strength,potential,habits:habit,learned,ability:Math.round(tactical),pokemon:Math.round(power)};
+  };
+  const compatible=(t,style='balanced')=>{
+    const preference=STYLE[style]||STYLE.balanced;
+    const ai=t?.autonomyAI||{},traits=ai.playTraits||[],habits=ai.habitScores||{};
+    const favored=preference.keys.reduce((sum,key)=>sum+
+      (traits.includes(TRAITS[key])?24:0)+clamp(value(habits[key]),0,100)*.15,0);
+    const receptive=clamp((value(ai.openness,10)-value(ai.conviction,10))*1.2,-15,15);
+    // Competent independent trainers remain competitive despite low obedience.
+    return clamp(Math.round(40+favored/2+receptive),10,100);
+  };
+  function aiStyle(club){
+    const label=String(club?.aiManager?.style||'');
+    if(label.includes('공격')||label.includes('압박'))return 'attacking';
+    if(label.includes('수비')||label.includes('안정'))return 'defensive';
+    if(label.includes('역습'))return 'adaptive';
+    if(label.includes('연승')||label.includes('유지'))return 'relay';
+    return 'balanced';
+  }
+  const suggestion=(trainer,club,budget=Infinity,style='balanced')=>{
+    const ability=score(trainer),fit=compatible(trainer,style);
+    const fee=typeof transferValuation==='function'?transferValuation(trainer,club):0;
+    const affordability=fee<=budget;
+    return {...ability,fit,fee,affordability,
+      overall:Math.round(ability.strength*.55+ability.potential*.18+
+        fit*.22+ability.learned*1.5)};
+  };
+  const candidateKey=t=>t?.uid!=null?'trainer:'+t.uid:
+    'trainer-legacy:'+String(t?.id??'unknown')+':'+String(t?.name||'');
+  function migrate(game){
+    if(!game||game.marketV2Migrated)return false;
+    if(typeof aiInit==='function')aiInit();
+    const c=myClub(),trust=game.trainerAI?.trust;
+    if(trust){
+      for(let index=0;index<c.trainers.length;index++){
+        const trainer=c.trainers[index];if(!trainer)continue;
+        const legacy=String(trainer.id??index),stable=candidateKey(trainer);
+        for(const field of ['trust','advice','issued','moveAdvice','moveIssued']){
+          const map=game.trainerAI[field];
+          if(map&&map[stable]===undefined&&map[legacy]!==undefined)
+            map[stable]=map[legacy];
+        }
+      }
+    }
+    game.marketV2Migrated=true;
+    return true;
+  }
+  function candidates(game,style='balanced',sort='recommended'){
+    const me=game.clubs.find(c=>c.name===game.club);
+    if(!me)return [];
+    const rows=game.clubs.filter(c=>c.id!==me.id).flatMap(c=>
+      c.trainers.map((trainer,slot)=>({trainer,slot,kind:'active',club:c}))
+      .concat((c.reserveTrainers||[]).map((trainer,slot)=>({trainer,slot,kind:'reserve',club:c})))
+      .filter(x=>x.trainer));
+    const funds=Number(game.coins)||0;
+    const ranked=rows.map(x=>({...x,report:suggestion(x.trainer,x.club,funds,style)}));
+    const metric=x=>sort==='potential'?x.report.potential*1.6+x.report.strength*.3:
+      sort==='current'?x.report.strength*1.5+x.report.fit*.1:
+      sort==='fit'?x.report.fit*1.5+x.report.strength*.3:
+      x.report.overall+(x.report.affordability?12:-8);
+    ranked.sort((a,b)=>metric(b)-metric(a)||
+      a.report.fee-b.report.fee||String(a.trainer.name).localeCompare(String(b.trainer.name)));
+    return ranked;
+  }
+  function checkTransfer({buyer,seller,trainer,sourceKind,slot,fee,budget}){
+    if(!buyer||!seller||buyer===seller||!trainer)return {ok:false,reason:'잘못된 이적 대상'};
+    if(!Number.isFinite(fee)||fee<0||budget<fee)return {ok:false,reason:'이적 예산 부족'};
+    const source=sourceKind==='active'?seller.trainers:
+      sourceKind==='reserve'?seller.reserveTrainers:null;
+    if(!source||source[slot]!==trainer)return {ok:false,reason:'트레이너 소속이 변경됨'};
+    const reserve=buyer.reserveTrainers||[];
+    if(buyer.trainers.every(Boolean)&&reserve.length>=5)
+      return {ok:false,reason:'출전·후보 명단이 가득 참'};
+    if(!Array.isArray(trainer.pokemon)||trainer.pokemon.length!==6)
+      return {ok:false,reason:'포켓몬 여섯 마리의 소속 정보가 필요함'};
+    if(sourceKind==='active'&&!((seller.reserveTrainers||[]).length||
+      (seller.trainerAcademy||[]).length))
+      return {ok:false,reason:'원 소속 구단에 대체 선수가 없어 이적을 승인할 수 없음'};
+    return {ok:true,placement:buyer.trainers.findIndex(t=>!t)};
+  }
+  /** All guards must pass before moving the original trainer object. */
+  function executeTransfer({buyer,seller,trainer,sourceKind,slot,fee,budget}){
+    const checked=checkTransfer({buyer,seller,trainer,sourceKind,slot,fee,budget});
+    if(!checked.ok)return checked;
+    if(sourceKind==='active')seller.trainers[slot]=null;
+    else seller.reserveTrainers.splice(slot,1);
+    buyer.reserveTrainers ||= [];
+    if(checked.placement>=0)buyer.trainers[checked.placement]=trainer;
+    else buyer.reserveTrainers.push(trainer);
+    return {ok:true,trainer,placement:checked.placement};
+  }
+  const state=()=>game.marketV2 ||= {style:'balanced',sort:'recommended',premium:1.15,intel:{},attempts:{}};
+  function scoutSelected(){
+    if(!game)return {ok:false,message:'게임을 시작해 주세요.'};
+    const x=marketTarget?.();if(!x)return {ok:false,message:'트레이너를 선택해 주세요.'};
+    const key=candidateKey(x.t),s=state(),existing=s.intel[key];
+    if(existing?.season===game.season)return {ok:false,message:'이번 시즌의 스카우트 보고서가 있습니다.'};
+    const cost=200000;
+    if(game.coins<cost)return {ok:false,message:'스카우트 비용이 부족합니다.'};
+    game.coins-=cost;
+    s.intel[key]={season:game.season,week:game.week??0,source:x.c.id};
+    game.log.unshift(x.t.name+' 스카우트 조사 완료 · 비용 '+wonReadable(cost));
+    persist();renderOffice();
+    return {ok:true};
+  }
+  function bidSelected(){
+    if(!game)return;
+    if(typeof aiInit==='function')aiInit();
+    const x=marketTarget?.(),own=myClub();
+    if(!x)return;
+    const s=state(),key=candidateKey(x.t),token=game.season+':'+game.week;
+    if(!transferOpen()){alert('이적시장이 열려 있지 않습니다.');return;}
+    if(s.attempts[key]===token){alert('이 트레이너와는 이번 주 이미 협상했습니다. 다음 주 다시 제안할 수 있습니다.');return;}
+    const base=transferValuation(x.t,x.c);
+    const fee=Math.max(10000,Math.round(base*clamp(value(s.premium,1.15),1,1.4)/10000)*10000);
+    const checked=checkTransfer({buyer:own,seller:x.c,trainer:x.t,
+      sourceKind:x.kind,slot:x.slot,fee,budget:game.coins});
+    if(!checked.ok){alert(checked.reason);return;}
+    const assessment=transferAcceptance(x.t,x.c,own,base,fee);
+    const fit=compatible(x.t,s.style);
+    const clubChance=clamp(value(assessment.clubChance,.2),.05,.95);
+    const trainerChance=clamp(value(assessment.trainerChance,.4)+(fit-50)/350,.03,.97);
+    const combined=clubChance*trainerChance;
+    if(!confirm(x.t.name+' 및 보유 포켓몬 6마리 영입\n'+
+      '제안 금액: '+wonReadable(fee)+'\n'+
+      '구단 수락 약 '+Math.round(clubChance*100)+'% · 트레이너 동의 약 '+
+      Math.round(trainerChance*100)+'% · 종합 약 '+Math.round(combined*100)+
+      '%\n협상을 진행하시겠습니까?'))return;
+    s.attempts[key]=token;
+    const accepted=rng(game)<clubChance&&rng(game)<trainerChance;
+    game.transferHistory ||= [];
+    if(!accepted){
+      game.transferHistory.unshift({season:game.season,week:game.week,type:'협상 결렬',
+        name:x.t.name,from:x.c.name,to:own.name,fee});
+      game.log.unshift(x.t.name+' 영입 협상 결렬 · 이적료 차감 없음');
+      persist();renderOffice();alert('이적 협상이 결렬됐습니다. 비용은 차감되지 않았습니다.');return;
+    }
+    const transferred=executeTransfer({buyer:own,seller:x.c,trainer:x.t,
+      sourceKind:x.kind,slot:x.slot,fee,budget:game.coins});
+    if(!transferred.ok){alert(transferred.reason);return;}
+    game.coins-=fee;
+    // AI seller receives the real fee; a reserve or academy replacement fills the vacancy.
+    const sellerBudget=clubIdentity(x.c);
+    sellerBudget.budget=Math.min(1000000000,sellerBudget.budget+fee);
+    if(typeof aiMaintainSquad==='function')aiMaintainSquad(x.c);
+    game.transferHistory.unshift({season:game.season,week:game.week,type:'영입',
+      name:x.t.name,from:x.c.name,to:own.name,fee});
+    game.log.unshift(x.t.name+' 영입 완료 · 6마리 포켓몬, 습득 선플, 경력 동반 · '+wonReadable(fee));
+    transferSelected=null;persist();renderOffice();
+  }
+  function esc(v){return typeof escapeHTML==='function'?escapeHTML(String(v??'')):
+    String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');}
+  function renderMarket(previous){
+    if(!game)return previous;
+    const s=state(),style=s.style||'balanced',sort=s.sort||'recommended',
+      list=candidates(game,style,sort);
+    const eligible=list.filter(x=>x.report.affordability);
+    const shown=(eligible.length?eligible:list).slice(0,5);
+    const money=x=>wonReadable(Math.max(0,Math.round(x)||0));
+    const options=(choices,active)=>Object.entries(choices).map(([key,label])=>
+      '<option value="'+esc(key)+'" '+(key===active?'selected':'')+'>'+esc(label)+'</option>').join('');
+    const top='<section class="tm2-market"><div class="tm2-head"><div><h2>트레이너 스카우팅 · 영입 우선순위</h2>'+
+      '<p>현재 능력, 미래 잠재력, 선플, 감독 전술과의 궁합을 함께 평가합니다. 트레이너는 포켓몬 6마리를 동반합니다.</p>'+
+      '</div><span>확인 가능한 후보 '+list.length+'명</span></div>'+
+      '<div class="tm2-filters"><label>감독 전술 방향 <select onchange="TrainerMarketV2.setStyle(this.value)">'+
+      options(Object.fromEntries(Object.entries(STYLE).map(([k,v])=>[k,v.label])),style)+'</select></label>'+
+      '<label>비교 기준 <select onchange="TrainerMarketV2.setSort(this.value)">'+
+      options({recommended:'종합 추천',current:'현재 전력',potential:'성장 가능성',fit:'전술 궁합'},sort)+'</select></label></div>'+
+      '<div class="tm2-list">'+shown.map((x,i)=>'<div class="tm2-row"><div><b>'+esc(x.trainer.name)+'</b>'+
+      '<small>'+esc(x.club.name)+' · '+(x.kind==='active'?'주전':'후보')+' · 선플 '+
+      (x.trainer.autonomyAI?.playTraits||[]).length+'종</small></div>'+
+      '<div class="tm2-metrics"><span>전력 '+x.report.strength+'</span><span>궁합 '+x.report.fit+'</span>'+
+      '<span>'+money(x.report.fee)+'</span></div>'+
+      '<button type="button" class="row-btn" onclick="marketSelect('+x.club.id+',\''+x.kind+'\','+x.slot+')">비교</button></div>').join('')+'</div></section>';
+    const x=marketTarget?.();
+    let detail='';
+    if(x){
+      const r=suggestion(x.t,x.c,game.coins,style),
+        me=myClub(),team=me.trainers.filter(Boolean);
+      const weakest=team.length?team.reduce((best,t)=>
+        score(t).strength<score(best).strength?t:best,team[0]):null;
+      const info=s.intel[candidateKey(x.t)];
+      const researched=info?.season===game.season;
+      const personality=x.t.autonomyAI||{};
+      const traitNames=(personality.playTraits||[]).filter(Boolean);
+      const p=transferProfile(x.t,x.c);
+      const full=researched?
+        '<div class="tm2-scouted">스카우트 완료 · 트레이너 성장 잠재력 '+esc(p.pa)+
+        ' / 200 · 개방성 '+esc(personality.openness??'미측정')+
+        ' · 소신 '+esc(personality.conviction??'미측정')+
+        ' · 포켓몬 잠재력 '+x.t.pokemon.map(m=>esc(m.name)+' '+esc(m.pa??'미확인')).join(', ')+
+        '</div>':
+        '<div class="tm2-scouted">잠재력 및 성격은 추정치입니다. 유료 스카우트 후 세부 정보를 확인할 수 있습니다.'+
+        '<button type="button" class="row-btn" onclick="TrainerMarketV2.scout()">정밀 조사 '+money(200000)+'</button></div>';
+      const multiple=clamp(value(s.premium,1.15),1,1.4);
+      const base=r.fee,offered=Math.round(base*multiple/10000)*10000,
+        acceptance=transferAcceptance(x.t,x.c,me,base,offered);
+      const sellerChance=clamp(value(acceptance.clubChance,.2),.05,.95);
+      const coachChance=clamp(value(acceptance.trainerChance,.4)+(r.fit-50)/350,.03,.97);
+      detail='<section class="tm2-detail"><h3>'+esc(x.t.name)+' · 영입 분석</h3>'+
+        '<div class="tm2-stats"><div>현재 전력 <b>'+r.strength+'</b></div>'+
+        '<div>성장 가능성 <b>'+(researched?r.potential+' / 100':'조사 필요')+'</b></div>'+
+        '<div>전술 궁합 <b>'+r.fit+' / 100</b></div>'+
+        '<div>보유 선플 <b>'+traitNames.length+'종</b></div></div>'+
+        '<p>대표 선플: '+(traitNames.length?traitNames.map(esc).join(', '):'아직 없음')+
+        ' · 감독 권고에 대한 수용 정도는 트레이너가 결정합니다.</p>'+
+        (weakest?'<p>우리 구단 최저 전력 '+esc(weakest.name)+'('+score(weakest).strength+
+          ') 대비 후보 전력 '+r.strength+'</p>':'')+full+
+        '<div class="tm2-offer"><label>제안 프리미엄 <select onchange="TrainerMarketV2.setPremium(this.value)">'+
+        options({'1':'기준가 100%','1.15':'기준가 115%','1.3':'기준가 130%','1.4':'기준가 140%'},String(multiple))+
+        '</select></label><div>제안액 <b>'+money(offered)+'</b><small>예상 성사 확률 '+
+        Math.round(sellerChance*coachChance*100)+'% · 금액은 성사 시에만 차감</small></div></div>'+
+        '</section>';
+    }
+    return top+previous.replace('<h2>우리 구단 계약 관리</h2>',
+      detail+'<h2>우리 구단 계약 관리</h2>');
+  }
+  const previousMarket=transferMarketHTML;
+  transferMarketHTML=function(){return renderMarket(previousMarket());};
+  // Respect the old transfer/league systems; improve candidate valuation and AI choices.
+  const previousValuation=transferValuation;
+  transferValuation=function(trainer,club){
+    const base=previousValuation(trainer,club),r=score(trainer);
+    const multiplier=1+Math.min(.38,r.learned*.045+r.habits*.0015+r.potential*.001);
+    return Math.max(10000,Math.round(base*multiplier/10000)*10000);
+  };
+  const previousAIScore=aiUnitScore;
+  aiUnitScore=function(trainer){
+    if(!trainer)return previousAIScore(trainer);
+    const r=score(trainer);
+    return previousAIScore(trainer)+Math.round(r.strength*.12+r.potential*.045+r.learned*1.5);
+  };
+  const previousShortlist=aiTransferCandidates;
+  aiTransferCandidates=function(buyer){
+    const style=aiStyle(buyer);
+    return previousShortlist(buyer).map(entry=>{
+      const fit=compatible(entry.e.t,style),r=score(entry.e.t);
+      return {...entry,score:entry.score+(fit-50)*.24+r.potential*.075+
+        r.learned*1.2};
+    }).sort((a,b)=>b.score-a.score||a.fee-b.fee);
+  };
+  marketOffer=bidSelected;
+  const previousOffice=renderOffice;
+  renderOffice=function(){
+    if(game&&typeof aiInit==='function'&&migrate(game))persist();
+    previousOffice();
+  };
+  const style=document.createElement('style');
+  style.textContent=[
+    '.tm2-market,.tm2-detail{background:#172c3f;border:1px solid #35546b;border-radius:9px;padding:16px;margin:12px 0 20px}',
+    '.tm2-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}',
+    '.tm2-head h2{font-size:18px;margin:0}.tm2-head p{color:#a8c2cf;font-size:12px;line-height:1.6}',
+    '.tm2-head span{font-size:12px;color:#8bceb9}.tm2-filters{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}',
+    '.tm2-filters label,.tm2-offer label{font-size:12px;color:#b5cbd8}',
+    '.tm2-filters select,.tm2-offer select{display:block;margin-top:5px;padding:8px;background:#1b4056;color:#f2f8fc;border:1px solid #648398;border-radius:6px;min-width:140px}',
+    '.tm2-list{display:grid;gap:7px}.tm2-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#203a50;border-radius:6px;padding:10px}',
+    '.tm2-row small{display:block;color:#b6cbd9;font-size:11px;margin-top:4px}.tm2-metrics{display:flex;gap:10px;flex-wrap:wrap;font-size:12px}',
+    '.tm2-detail h3{font-size:18px;margin:0 0 10px}.tm2-detail p{font-size:12px;line-height:1.65;color:#b8cfdd}',
+    '.tm2-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}',
+    '.tm2-stats>div{background:#234158;padding:11px;border-radius:6px;font-size:12px}.tm2-stats b{display:block;font-size:17px;margin-top:5px}',
+    '.tm2-scouted{padding:12px;background:#1c3947;border:1px solid #376268;border-radius:7px;font-size:12px;line-height:1.6}',
+    '.tm2-scouted button{margin-left:12px}.tm2-offer{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px}',
+    '.tm2-offer small{display:block;color:#a8c6d5;margin-top:4px;font-size:11px}',
+    '@media(max-width:680px){.tm2-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.tm2-row{align-items:flex-start;flex-wrap:wrap}.tm2-offer{align-items:start}}'
+  ].join('');
+  document.head.append(style);
+  window.TrainerMarketV2={
+    STYLE,TRAITS,score,compatible,aiStyle,suggestion,candidates,checkTransfer,
+    executeTransfer,migrate,renderMarket,
+    scout:()=>scoutSelected(),bid:()=>bidSelected(),
+    setStyle:style=>{if(!STYLE[style])return;state().style=style;persist();renderOffice();},
+    setSort:sort=>{if(!['recommended','current','potential','fit'].includes(sort))return;
+      state().sort=sort;persist();renderOffice();},
+    setPremium:n=>{if(![1,1.15,1.3,1.4].includes(Number(n)))return;
+      state().premium=Number(n);persist();renderOffice();}
+  };
+})();
