@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createPokemonLeague} from '../src/league/pokemon-clubs.js';
 import {SIGNATURES} from '../src/league/pokemon-rosters.js';
+import {meanStatCA} from '../src/core/stat-potential.js';
 import {packGPTeam} from '../src/battle/gp-battle-stream.js';
-test('all 1200 Pokemon are populated with valid Showdown and GP data',()=>{
+test('all 1200 Pokemon have 6-stat CA/PA and Showdown-compatible teams',()=>{
   const league=createPokemonLeague();
   const clubs=league.divisions.flat();
   assert.equal(clubs.length,40);
@@ -22,6 +23,6 @@ test('icon trainers receive signature partners and big clubs have higher average
     const captain=club.trainers[0];
     if(SIGNATURES[captain.name])assert.equal(captain.team[0].species,SIGNATURES[captain.name]);
   }
-  const average=clubs=>clubs.flatMap(c=>c.trainers.flatMap(t=>t.team)).reduce((s,p)=>s+p.ca,0)/(clubs.length*30);
+  const average=clubs=>clubs.flatMap(c=>c.trainers.flatMap(t=>t.team)).reduce((s,p)=>s+meanStatCA(p),0)/(clubs.length*30);
   assert.ok(average(clubs.slice(0,10))>average(clubs.slice(30)));
 });
