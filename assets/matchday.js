@@ -532,6 +532,7 @@
         game.trainerAI.coachMatchReports.unshift({season:p.season,round:p.round,won,entries});
         game.trainerAI.coachMatchReports.length=Math.min(10,game.trainerAI.coachMatchReports.length);
       }
+      if(window.TrainerCareer?.applyMatch){window.TrainerCareer.applyMatch(game,p,myClub().id);}
       game.lastMatch.engine='showdown';game.lastMatch.replay=p.result;
       delete game.pendingMatch;persist();clearTimeout(timer);document.getElementById('matchday')?.remove();for(const id of ['mainmenu','clubselect','clubtrainers']){const node=document.getElementById(id);if(node)node.hidden=true;}document.getElementById('dashboard').hidden=false;tab='fixtures';renderOffice();
     } catch(error){game=before;persist();alert(error.message);}finally{active=null;}
@@ -1308,4 +1309,323 @@
     }catch(err){console.warn('트레이너 자율 기술 연구:',err);}
   };
   window.TrainerMoveAI.openDialog=()=>{visible=true;openDialog();};
+})();
+
+
+/* Trainer career and relationship — persistent experience from played matches. */
+(function trainerCareerAndCoachRelations(){
+  if(window.TrainerCareer)return;
+  const FIELDS={
+    moveJudgment:{label:'기술 판단',fallback:'tactics'},
+    switchJudgment:{label:'교체 판단',fallback:'switching'},
+    battleAnalysis:{label:'전황 분석',fallback:'tactics'},
+    resourceManagement:{label:'전력 관리',fallback:'switching'}
+  };
+  const FEEDBACK={
+    praise:'경기 내용 칭찬',analysis:'전술 분석 제안',
+    autonomy:'자율 운영 존중',challenge:'개선 요구'
+  };
+  const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
+  const val=(value,fallback=10)=>{
+    const n=Number(value);return Number.isFinite(n)&&value!==null&&value!==''?
+      clamp(Math.round(n),1,20):fallback;
+  };
+  const esc=value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  const trainerId=(trainer,clubId,index)=>
+    String(trainer.id??(String(clubId)+':'+index+':'+trainer.name));
+  const threshold=skill=>20+skill*5;
+  function skill(trainer,field){
+    return val(trainer?.[field],val(trainer?.[FIELDS[field]?.fallback]));
+  }
+  function state(game){
+    const existing=game.trainerAI||(game.trainerAI={
+      version:1,lastClock:String(game.season??1)+':'+String(game.week??0),
+      advice:{},issued:{},trust:{},reports:[]
+    });
+    existing.trust ||= {};
+    existing.careerApplied ||= {};
+    existing.careerReports ||= [];
+    existing.careerFeedback ||= [];
+    return existing;
+  }
+  function getCareer(trainer){
+    if(trainer.aiCareer?.version===1)return trainer.aiCareer;
+    const career={version:1,matches:0,duels:0,wins:0,losses:0,
+      experience:Object.fromEntries(Object.keys(FIELDS).map(field=>[field,0])),
+      observed:{switches:0,voluntary:0,analyses:0,preservation:0},
+      events:[]};
+    trainer.aiCareer=career;
+    return career;
+  }
+  function roundEvidence(round,side){
+    const ai=round.aiDecisions?.[side==='home'?'p1':'p2']||{};
+    const won=(side==='home'&&round.winner==='A')||
+      (side==='away'&&round.winner==='B');
+    const lost=(side==='home'&&round.winner==='B')||
+      (side==='away'&&round.winner==='A');
+    const trace=Array.isArray(ai.trace)?ai.trace:[];
+    return {duels:1,wins:Number(won),losses:Number(lost),
+      moves:Math.min(300,Math.max(0,Number(ai.moves)||0)),
+      switches:Math.min(100,Math.max(0,Number(ai.switches)||0)),
+      voluntary:Math.min(100,Math.max(0,Number(ai.voluntarySwitches)||0)),
+      analyses:Math.min(300,Math.max(0,Number(ai.rollouts)||0)),
+      preservation:trace.filter(item=>String(item.reason||'').includes('연승 전력 관리')).length};
+  }
+  function applyEvidence(trainer,evidence,key,side,slot){
+    const career=getCareer(trainer);
+    // No direct stat gifts: growth comes from repeated, actually recorded decisions.
+    const earned={
+      moveJudgment:Math.min(9,Math.ceil(evidence.moves/3))+evidence.wins,
+      switchJudgment:Math.min(9,Math.ceil(evidence.switches*1.4))+Math.min(4,evidence.voluntary),
+      battleAnalysis:Math.min(10,Math.ceil(evidence.analyses/3))+Math.min(3,evidence.duels),
+      resourceManagement:Math.min(9,evidence.wins*2+Math.ceil(evidence.preservation/3))
+    };
+    career.matches++;
+    career.duels+=evidence.duels;
+    career.wins+=evidence.wins;
+    career.losses+=evidence.losses;
+    career.observed.switches+=evidence.switches;
+    career.observed.voluntary+=evidence.voluntary;
+    career.observed.analyses+=evidence.analyses;
+    career.observed.preservation+=evidence.preservation;
+    const levels=[];
+    for(const field of Object.keys(FIELDS)){
+      // Initialise previously missing specialist attributes from existing overall ability.
+      if(!Number.isFinite(Number(trainer[field])))trainer[field]=skill(trainer,field);
+      let score=skill(trainer,field),xp=Math.max(0,Number(career.experience[field])||0)+earned[field];
+      while(score<20&&xp>=threshold(score)){
+        xp-=threshold(score);
+        levels.push({field,label:FIELDS[field].label,from:score,to:score+1});
+        score++;
+      }
+      trainer[field]=score;
+      career.experience[field]=score===20?Math.min(xp,threshold(20)):xp;
+    }
+    const ai=trainer.autonomyAI ||= {};
+    const traits=ai.playTraits ||= [];
+    const learned=[];
+    const add=(trait,ready)=>{
+      if(ready&&!traits.includes(trait)&&traits.length<3){
+        traits.push(trait);learned.push(trait);
+      }
+    };
+    // Traits reflect repeatedly observed play, not merely manager wishes.
+    add('적극적인 교체',career.matches>=3&&career.observed.voluntary>=8);
+    add('에이스 보존',career.matches>=4&&career.observed.preservation>=9&&career.wins>=4);
+    add('전황 분석가',career.matches>=5&&career.observed.analyses>=35);
+    const event={key,side,slot,name:trainer.name||'트레이너',
+      duels:evidence.duels,wins:evidence.wins,losses:evidence.losses,
+      moves:evidence.moves,voluntary:evidence.voluntary,analyses:evidence.analyses,
+      levels,learned,trainerId:String(trainer.id??'')};
+    career.events.unshift(event);
+    career.events.length=Math.min(career.events.length,18);
+    return event;
+  }
+  function matchKey(p){
+    return [p.season,p.round,p.home,p.away].map(String).join(':');
+  }
+  function applyMatch(game,p,playerClubId){
+    if(!p?.result?.rounds?.length||!Array.isArray(p.order)||p.order.length!==5)return null;
+    if(Number(game?.round)!==Number(p.round))throw new RangeError('경기 확정 이전에는 경험을 적용할 수 없습니다.');
+    const s=state(game),key=matchKey(p);
+    if(s.careerApplied[key])return null;
+    const report={key,season:p.season,round:p.round,home:p.home,away:p.away,
+      participants:[],levelUps:0,traits:0,feedbackCount:0};
+    const sides=[
+      {side:'home',clubId:p.home},
+      {side:'away',clubId:p.away}
+    ];
+    for(const {side,clubId} of sides){
+      const club=game.clubs?.[clubId];if(!club?.trainers)continue;
+      const order=String(clubId)===String(playerClubId)?p.order:[0,1,2,3,4];
+      const collected=new Map();
+      for(const round of p.result.rounds){
+        const slot=side==='home'?round.trainerA:round.trainerB;
+        const index=order[slot],trainer=club.trainers[index];
+        if(!Number.isInteger(index)||!trainer)continue;
+        const evidence=roundEvidence(round,side);
+        let total=collected.get(index);
+        if(!total){
+          total={slot,index,trainer,duels:0,wins:0,losses:0,moves:0,
+            switches:0,voluntary:0,analyses:0,preservation:0};
+          collected.set(index,total);
+        }
+        for(const k of Object.keys(evidence))total[k]+=evidence[k];
+      }
+      for(const total of collected.values()){
+        const event=applyEvidence(total.trainer,total,key,side,total.slot);
+        const entry={...event,clubId:String(clubId),index:total.index,
+          id:trainerId(total.trainer,clubId,total.index),
+          player:String(clubId)===String(playerClubId),feedback:null};
+        report.participants.push(entry);
+        report.levelUps+=event.levels.length;
+        report.traits+=event.learned.length;
+      }
+    }
+    // Keep a bounded idempotency ledger across saves/restarts.
+    s.careerApplied[key]=true;
+    const ledger=Object.keys(s.careerApplied);
+    while(ledger.length>50)delete s.careerApplied[ledger.shift()];
+    s.careerReports.unshift(report);
+    s.careerReports.length=Math.min(s.careerReports.length,20);
+    return report;
+  }
+  function offerFeedback(game,playerId,key,index,kind){
+    if(!FEEDBACK[kind])return {ok:false,message:'면담 유형을 확인해 주세요.'};
+    const s=state(game);
+    const report=s.careerReports.find(entry=>entry.key===key);
+    if(!report)return {ok:false,message:'해당 경기의 보고서를 찾을 수 없습니다.'};
+    const entry=report.participants.find(row=>row.player&&String(row.clubId)===String(playerId)&&row.index===index);
+    if(!entry)return {ok:false,message:'출전한 소속 트레이너만 면담할 수 있습니다.'};
+    if(entry.feedback)return {ok:false,message:'이번 경기의 면담은 이미 마쳤습니다.'};
+    const club=game.clubs?.[playerId],trainer=club?.trainers?.[index];
+    if(!trainer||trainerId(trainer,playerId,index)!==entry.id)return {ok:false,message:'트레이너 소속이 변경되었습니다.'};
+    const ai=trainer.autonomyAI||{};
+    const openness=val(ai.openness),conviction=val(ai.conviction);
+    const trust=Number(s.trust[entry.id]??50);
+    const success=entry.wins>entry.losses;
+    let response,delta,xp=0,reason;
+    if(kind==='praise'){
+      if(success||entry.duels>=2){
+        response='긍정적';delta=openness>=15?2:1;
+        reason='경기 기여를 인정받아 감독에 대한 신뢰가 높아짐';
+      }else if(conviction>=16&&trust<45){
+        response='회의적';delta=-1;reason='경기 내용이 좋지 않아 형식적인 칭찬으로 받아들임';
+      }else{response='중립';delta=1;reason='결과와 별개로 격려의 취지를 받아들임';}
+    }else if(kind==='analysis'){
+      if(openness+trust/10-conviction/2>=13){
+        response='수용';delta=2;xp=5;
+        reason='감독의 분석을 참고해 다음 전술 판단에 활용하기로 결정';
+      }else if(trust>=45){response='절충';delta=0;xp=2;reason='자신의 방식은 유지하되 일부 분석은 참고';}
+      else{response='거부';delta=-2;reason='전술적 판단에 대한 이견으로 면담을 받아들이지 않음';}
+    }else if(kind==='autonomy'){
+      response=conviction>=12?'긍정적':'중립';delta=conviction>=12?2:1;
+      reason='감독이 자신의 전술적 자율성을 존중한다고 인식';
+    }else{
+      if(success&&conviction>=12){response='반발';delta=-3;reason='경기에서 성과를 냈는데 부당한 질책이라고 판단';}
+      else if(!success&&openness>=12&&trust>=45){
+        response='수용';delta=1;xp=4;reason='실패 원인을 인정하고 기술 판단 개선을 약속';
+      }else{response='반발';delta=-2;reason='일방적인 개선 요구에 동의하지 않음';}
+    }
+    const next=clamp(trust+delta,15,85);
+    s.trust[entry.id]=next;
+    const career=getCareer(trainer);
+    if(xp)career.experience.battleAnalysis=Math.min(
+      threshold(skill(trainer,'battleAnalysis'))*2,
+      (career.experience.battleAnalysis||0)+xp
+    );
+    const feedback={kind,label:FEEDBACK[kind],response,reason,before:trust,after:next,xp};
+    entry.feedback=feedback;
+    report.feedbackCount++;
+    s.careerFeedback.unshift({key,trainer:trainer.name,trainerId:entry.id,...feedback});
+    s.careerFeedback.length=Math.min(s.careerFeedback.length,35);
+    return {ok:true,message:trainer.name+' · '+reason,feedback};
+  }
+  window.TrainerCareer={FIELDS,FEEDBACK,skill,threshold,state,getCareer,applyMatch,
+    offerFeedback,roundEvidence,trainerId};
+  if(typeof document==='undefined')return;
+  let visible=false,notice='';
+  const getClub=()=>{try{return typeof myClub==='function'?myClub():null;}catch{return null;}};
+  function show(){
+    if(!game||!getClub())return;
+    const club=getClub(),ai=state(game),latest=ai.careerReports[0];
+    let overlay=document.getElementById('trainer-career-dialog');
+    if(!overlay){
+      overlay=document.createElement('div');
+      overlay.id='trainer-career-dialog';overlay.className='tc-overlay';
+      document.body.append(overlay);
+    }
+    const rows=(club.trainers||[]).concat(club.reserveTrainers||[]).map((trainer,index)=>{
+      if(!trainer)return '';
+      const id=trainerId(trainer,club.id,index);
+      const career=trainer.aiCareer,traits=trainer.autonomyAI?.playTraits||[];
+      const last=latest?.participants.find(e=>e.player&&String(e.clubId)===String(club.id)&&e.id===id);
+      const numbers=Object.entries(FIELDS).map(([field,meta])=>{
+        const current=skill(trainer,field);
+        const progress=Number(career?.experience?.[field])||0;
+        return '<div class="tc-stat"><span>'+esc(meta.label)+'</span><b>'+current+'/20</b>'+
+          '<div class="tc-meter"><i style="width:'+Math.min(100,Math.round(progress/threshold(current)*100))+'%"></i></div></div>';
+      }).join('');
+      const feedback=last?.feedback;
+      const actions=last?feedback?
+        '<p class="tc-response">면담 '+esc(feedback.label)+' · '+esc(feedback.response)+'<br>'+esc(feedback.reason)+'</p>':
+        '<div class="tc-choices">'+Object.entries(FEEDBACK).map(([kind,label])=>
+          '<button type="button" data-tc-feedback="'+index+'" data-tc-kind="'+kind+'">'+esc(label)+'</button>').join('')+'</div>':
+        '<p class="tc-muted">최근 경기 출전 기록이 없어 면담 대상이 아닙니다.</p>';
+      return '<article class="tc-trainer"><div class="tc-heading"><strong>'+esc(trainer.name||'트레이너')+'</strong>'+
+        '<span>감독 신뢰 '+(ai.trust[id]??50)+'/100</span></div>'+
+        '<p class="tc-muted">커리어 '+(career?.matches||0)+'경기 · '+(career?.duels||0)+'대결 · '+
+          (career?.wins||0)+'승 / '+(career?.losses||0)+'패'+
+          (traits.length?' · 습득 선플: '+traits.map(esc).join(', '):'')+'</p>'+
+        '<div class="tc-stats">'+numbers+'</div>'+
+        (last?'<p class="tc-muted">이번 경기 '+last.duels+'대결 · '+last.wins+'승 · 전황 분석 '+last.analyses+
+          '회 · 자율 교체 '+last.voluntary+'회</p>'+
+          (last.levels.length?'<p class="tc-gain">능력 성장: '+last.levels.map(x=>esc(x.label)+' '+x.from+'→'+x.to).join(', ')+'</p>':'')+
+          (last.learned.length?'<p class="tc-gain">새 선플: '+last.learned.map(esc).join(', ')+'</p>':''):'')+
+        actions+'</article>';
+    }).join('');
+    overlay.innerHTML='<section class="tc-dialog" role="dialog" aria-modal="true" aria-labelledby="tc-title">'+
+      '<button type="button" class="tc-close">닫기</button>'+
+      '<h2 id="tc-title">트레이너 커리어 · 감독 면담</h2>'+
+      '<p class="tc-muted">경기에 실제로 출전한 트레이너만 경험을 얻습니다. 기술·교체·전황 분석·연승 전력 관리 경험이 다음 경기의 실력에 반영됩니다.</p>'+
+      (notice?'<p class="tc-gain" role="status">'+esc(notice)+'</p>':'')+
+      '<div class="tc-summary">'+(latest?('최근 '+esc(latest.season)+'시즌 '+esc(latest.round)+
+        '라운드 · 능력 상승 '+latest.levelUps+'건 · 선플 습득 '+latest.traits+'건'):'경기 후 커리어 보고서가 생성됩니다.')+'</div>'+
+      '<div class="tc-grid">'+rows+'</div></section>';
+    overlay.querySelector('.tc-close').onclick=()=>{
+      visible=false;overlay.remove();
+    };
+    overlay.onclick=event=>{
+      if(event.target===overlay){visible=false;overlay.remove();}
+    };
+    overlay.querySelectorAll('[data-tc-feedback]').forEach(button=>button.onclick=()=>{
+      const index=Number(button.dataset.tcFeedback);
+      const answer=offerFeedback(game,club.id,latest?.key,index,button.dataset.tcKind);
+      notice=answer.message;
+      if(answer.ok&&typeof persist==='function')persist();
+      show();
+    });
+    overlay.querySelector('.tc-close').focus({preventScroll:true});
+  }
+  const style=document.createElement('style');
+  style.textContent=[
+    '.tc-open{margin-left:8px;background:#29516a!important}',
+    '.tc-overlay{position:fixed;inset:0;z-index:2900;background:#07111ce8;display:grid;place-items:center;padding:12px;color:#e9f1f8;font:14px "Malgun Gothic",sans-serif}',
+    '.tc-dialog{position:relative;width:min(1020px,100%);max-height:94vh;overflow:auto;background:#13273b;border:1px solid #55758a;border-radius:12px;padding:24px}',
+    '.tc-dialog h2{font-size:21px;margin:0 0 8px}.tc-close{position:absolute;right:12px;top:12px}',
+    '.tc-dialog button{border:1px solid #5b7e94;border-radius:6px;padding:8px 11px;background:#274a63;color:#eef5fa;font:inherit;cursor:pointer}',
+    '.tc-dialog button:focus-visible{outline:2px solid #75c8b8;outline-offset:2px}',
+    '.tc-muted{font-size:12px;color:#aac0d0;line-height:1.7;margin:7px 0}',
+    '.tc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}',
+    '.tc-trainer{background:#193349;border:1px solid #3c5970;border-radius:9px;padding:15px}',
+    '.tc-heading{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}.tc-heading span{color:#9ccfc1;font-size:12px}',
+    '.tc-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}',
+    '.tc-stat{display:grid;grid-template-columns:1fr auto;gap:4px;font-size:12px}.tc-stat b{font-size:12px}',
+    '.tc-meter{grid-column:1/-1;height:5px;background:#334f62;border-radius:5px;overflow:hidden}',
+    '.tc-meter i{display:block;background:#71c6ac;height:100%}',
+    '.tc-summary{margin:12px 0 16px;background:#102135;border:1px solid #3d6178;padding:12px;border-radius:7px;font-size:13px}',
+    '.tc-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}',
+    '.tc-gain{font-size:12px;color:#8fe0b9;line-height:1.6}.tc-response{color:#8fe0b9;font-size:12px;line-height:1.7}',
+    '@media(max-width:680px){.tc-grid{grid-template-columns:1fr}.tc-dialog{padding:16px}.tc-dialog h2{font-size:19px}}'
+  ].join('');
+  document.head.append(style);
+  const previousRender=renderOffice;
+  renderOffice=function(){
+    previousRender();
+    const c=getClub(),panel=document.querySelector('#dashpanel .at-panel');
+    if(!c||!panel||panel.querySelector('.tc-open'))return;
+    const button=document.createElement('button');
+    button.type='button';button.className='tc-open';
+    button.textContent='트레이너 성장 · 경기 후 면담';
+    button.onclick=()=>{visible=true;show();};
+    panel.querySelector('.at-head')?.append(button);
+    const recent=state(game).careerReports[0],p=document.createElement('p');
+    p.className='at-note';
+    p.textContent=recent?'최근 '+recent.season+'시즌 '+recent.round+'라운드 · 능력 상승 '+
+      recent.levelUps+'건 · 선플 습득 '+recent.traits+'건':
+      '경기 후 실전 경험에 따른 트레이너 성장 기록을 확인할 수 있습니다.';
+    panel.append(p);
+  };
+  window.TrainerCareer.show=()=>{visible=true;show();};
 })();
