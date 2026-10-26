@@ -17,7 +17,10 @@ const assets = new Set(html.match(/assets\/ui\/[A-Za-z0-9_.-]+/g));
 for (const asset of assets) {
   if (!existsSync(new URL(asset, root))) throw new Error(`이미지 파일 누락: ${asset}`);
 }
-for (const path of ['src/battle/showdown.js', 'src/battle/club-match.js', 'src/league/season.js']) {
+for (const path of ['src/battle/showdown.js', 'src/battle/club-match.js', 'src/league/season.js',
+  'src/scouting/opponent-report.js', 'api/opponent-scout.js', 'assets/opponent-scout-ui.js']) {
   if (!existsSync(new URL(path, root))) throw new Error(`엔진 파일 누락: ${path}`);
+  if (path==='assets/opponent-scout-ui.js')
+    new Script(readFileSync(new URL(path,root),'utf8'),{filename:path});
 }
 console.log(`웹 기준 버전 검사 통과: 스크립트 ${scripts}개, 이미지 파일 ${assets.size}개, 전투/리그 코드 보존`);
