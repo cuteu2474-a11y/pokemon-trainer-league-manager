@@ -1771,6 +1771,8 @@
 /* Trainer Market 2.0 — trait-aware scouting, bids and AI club recruitment. */
 (function trainerMarketV2(){
   if(window.TrainerMarketV2)return;
+  // Headless career tests load only this file's career IIFE, not the market page.
+  if(typeof document==='undefined'||typeof transferMarketHTML!=='function')return;
   const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
   const value=(n,fallback=0)=>Number.isFinite(Number(n))?Number(n):fallback;
   const STYLE={
