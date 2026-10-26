@@ -1839,8 +1839,26 @@
     'trainer-legacy:'+String(t?.id??'unknown')+':'+String(t?.name||'');
   function migrate(game){
     if(!game||game.marketV2Migrated)return false;
+    const c=myClub();
+    // A fresh 40-club league starts with exactly five starters each. Supply one
+    // deterministic academy prospect per AI club before opening the market,
+    // otherwise no club can release a starter without breaking scheduled 5v5s.
+    // Use a local RNG state so the user's future fixture seed is not changed.
+    if(!game.marketV2AcademySeeded){
+      for(const club of game.clubs){
+        if(club.id===c.id)continue;
+        club.reserveTrainers ||= [];club.trainerAcademy ||= [];
+        if(!club.reserveTrainers.length&&!club.trainerAcademy.length&&typeof mkTrainer==='function'){
+          const localSeed={seed:(Math.imul(Number(club.id)+1,2654435761)^0x9e3779b9)>>>0};
+          const youth=mkTrainer(localSeed,club,5);
+          youth.name=club.name+' 아카데미 유망주';
+          club.trainerAcademy.push(youth);
+        }
+      }
+      game.marketV2AcademySeeded=true;
+    }
     if(typeof aiInit==='function')aiInit();
-    const c=myClub(),trust=game.trainerAI?.trust;
+    const trust=game.trainerAI?.trust;
     if(trust){
       for(let index=0;index<c.trainers.length;index++){
         const trainer=c.trainers[index];if(!trainer)continue;
@@ -2043,7 +2061,11 @@
   const previousShortlist=aiTransferCandidates;
   aiTransferCandidates=function(buyer){
     const style=aiStyle(buyer);
-    return previousShortlist(buyer).map(entry=>{
+    // AI managers must not leave the player's only active five incomplete.
+    return previousShortlist(buyer).filter(entry=>
+      entry.seller.id!==myClub().id||entry.e.kind!=='active'||
+      (entry.seller.reserveTrainers||[]).length>0||
+      (entry.seller.trainerAcademy||[]).length>0).map(entry=>{
       const fit=compatible(entry.e.t,style),r=score(entry.e.t);
       return {...entry,score:entry.score+(fit-50)*.24+r.potential*.075+
         r.learned*1.2};
