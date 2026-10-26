@@ -21,7 +21,7 @@ export function rolloutActions(battle, {sideId='p1', choices, opponentChoices, d
   const foeId = sideId === 'p1' ? 'p2' : 'p1';
   const results = [];
   for (const choice of choices) {
-    let score = 0, runs = 0;
+    let score = 0, runs = 0, kos = 0, damage = 0;
     for (let i=0;i<samples;i++) {
       // Showdown serialization retains the original log array by reference.
       // Each search branch must own its log, including separate samples.
@@ -30,8 +30,19 @@ export function rolloutActions(battle, {sideId='p1', choices, opponentChoices, d
         legalRolloutMoves(clone,foeId)[i % Math.max(1,legalRolloutMoves(clone,foeId).length)]?.choice;
       if (!enemy) continue;
       try {
+        const foeBefore=clone[foeId].active?.[0];
+        const foeHpBefore=foeBefore?.hp||0;
+        const foeMaxHp=foeBefore?.maxhp||1;
         if (sideId === 'p1') clone.makeChoices(choice,enemy);
         else clone.makeChoices(enemy,choice);
+        const foeAfter=clone[foeId].active?.[0];
+        // Record only first-turn effects; later turns must not inflate a KO forecast.
+        // If the opponent switched, this is not a direct KO on the original target.
+        if(foeBefore===foeAfter&&foeHpBefore>0){
+          const dealt=Math.max(0,foeHpBefore-foeAfter.hp);
+          damage+=dealt/Math.max(1,foeMaxHp);
+          if(foeAfter.hp<=0)kos++;
+        }
         for (let turn=1;turn<depth && !clone.ended;turn++) {
           if (clone.requestState !== 'move') break;
           clone.makeChoices();
@@ -42,7 +53,8 @@ export function rolloutActions(battle, {sideId='p1', choices, opponentChoices, d
         // Invalid branches are excluded rather than contaminating the live battle.
       }
     }
-    results.push({choice,score:runs ? score/runs : -Infinity,runs});
+    results.push({choice,score:runs ? score/runs : -Infinity,runs,
+      koRate:runs?kos/runs:0,damageFraction:runs?damage/runs:0});
   }
   return results.sort((a,b)=>b.score-a.score);
 }
