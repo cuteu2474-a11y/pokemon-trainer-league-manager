@@ -71,6 +71,7 @@
     for(const select of root.querySelectorAll('[data-behavior]'))select.onchange=()=>{p.behaviors[Number(select.dataset.behavior)]=select.value||null;persist();};
     root.querySelector('#md-cancel').onclick=()=>{delete game.pendingMatch;persist();root.remove();};
     root.querySelector('#md-confirm').onclick=run;
+    window.OpponentScoutUI?.attach?.(root,p,c,opponent);
   }
   async function run() {
     const p=pending();if (!p || p.phase==='running') return;
@@ -563,6 +564,7 @@
   }
   const priorReportRender=renderOffice;
   renderOffice=function(){priorReportRender();const panel=document.getElementById('dashpanel');if(panel&&game?.lastMatch?.replay?.report&&['home','fixtures'].includes(tab)){const button=document.createElement('button');button.className='g-btn alt';button.textContent='지난 경기 활약 보고서';button.onclick=()=>{const root=screen();root.innerHTML='<h1>지난 경기 활약 보고서</h1>'+reportHTML(game.lastMatch.replay)+'<button id="md-report-back">구단 화면으로</button>';root.querySelector('#md-report-back').onclick=()=>root.remove();};panel.append(button);}};
+  window.MatchdayPreparation={render,pending};
   if(game?.pendingMatch){if(game.pendingMatch.phase==='running')game.pendingMatch.phase='prepare';render();}
 })();
 
