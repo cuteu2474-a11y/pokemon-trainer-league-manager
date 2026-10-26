@@ -1575,8 +1575,96 @@
     s.careerFeedback.length=Math.min(s.careerFeedback.length,35);
     return {ok:true,message:trainer.name+' · '+reason,feedback};
   }
-  window.TrainerCareer={FIELDS,FEEDBACK,skill,threshold,state,getCareer,applyMatch,
-    offerFeedback,roundEvidence,trainerId};
+
+  function assessRequest(trainer,target,intensity,trust){
+    const ai=trainer.autonomyAI||{};
+    const openness=val(ai.openness),conviction=val(ai.conviction);
+    const relevantSkill=target==='switch'?skill(trainer,'switchJudgment'):
+      target==='preserve'?skill(trainer,'resourceManagement'):skill(trainer,'battleAnalysis');
+    const preferred=ai.preferredPlay||trainer.preferredPlay||'';
+    const aligned=target==='switch'&&(['control','tempo'].includes(preferred))||
+      target==='preserve'&&(['endurance','balanced'].includes(preferred))||
+      target==='analysis'&&(['balanced','control'].includes(preferred));
+    const confidence=openness*1.6+clamp(trust,15,85)*.2-conviction*.95+
+      relevantSkill*.35+(aligned?9:-5)+(intensity==='suggest'?6:intensity==='focus'?0:-10);
+    if(confidence>=28)return {response:'수용',
+      reason:'감독의 개발 제안을 자신의 성장 방향과 양립 가능하다고 판단'};
+    if(confidence>=14)return {response:'절충',
+      reason:'개발 필요성은 인정하되 개인 전술 철학에 맞는 상황에서만 연습'};
+    return {response:'거부',
+      reason:'현 시점에는 자신의 전술 철학과 맞지 않아 개인 개발 권고를 따르지 않음'};
+  }
+  function reviewDevelopment(game,clubId){
+    const g=game;if(!g)return [];
+    const s=state(g),now=epoch(g),club=g.clubs?.[clubId];if(!club)return [];
+    const reviews=[];
+    const trainers=(club.trainers||[]).concat(club.reserveTrainers||[]);
+    for(let index=0;index<trainers.length;index++){
+      const trainer=trainers[index],goal=trainer?.aiDevelopment;
+      if(goal?.version!==1||goal.status!=='active')continue;
+      const key=trainerId(trainer,clubId,index);
+      // Review every four in-game weeks; unplayed weeks never generate evidence.
+      while(now>=goal.nextReviewEpoch&&goal.status==='active'){
+        const since=Number((goal.progress-(goal.lastReviewProgress||0)).toFixed(2));
+        const opportunities=goal.observedMatches-(goal.lastReviewMatches||0);
+        const result=goal.response==='거부'?'트레이너가 개발 방향을 받아들이지 않음':
+          opportunities===0?'실전 출전 기회 부족':
+          since>=2?'유의미한 실전 발전':since>0?'개발 진행 중':'실전 경험은 있으나 유효 행동 부족';
+        let change=0;
+        if(goal.response==='수용'&&since>=2)change=1;
+        else if(goal.intensity==='demand'&&goal.response==='거부'&&opportunities>=2)change=-1;
+        const current=s.trust[key]??50;
+        if(change)s.trust[key]=clamp(current+change,15,85);
+        const review={target:goal.target,trainer:trainer.name||'트레이너',id:key,
+          due:goal.nextReviewEpoch,period:4,result,progress:goal.progress,
+          gained:since,opportunities,response:goal.response,
+          trustBefore:current,trustAfter:s.trust[key]??current};
+        goal.reviews ||= [];goal.reviews.unshift(review);goal.reviews.length=Math.min(goal.reviews.length,10);
+        s.developmentReviews.unshift(review);s.developmentReviews.length=Math.min(s.developmentReviews.length,40);
+        reviews.push(review);
+        goal.lastReviewProgress=goal.progress;goal.lastReviewMatches=goal.observedMatches;
+        goal.lastReviewEpoch=goal.nextReviewEpoch;
+        goal.nextReviewEpoch+=4;
+      }
+    }
+    return reviews;
+  }
+  function setDevelopmentGoal(game,clubId,index,target,intensity){
+    if(!Object.hasOwn(GOALS,target)||!Object.hasOwn(INTENSITY,intensity))
+      return {ok:false,message:'개발 선플 또는 전달 방식을 확인해 주세요.'};
+    const club=game.clubs?.[clubId];
+    const group=(club?.trainers||[]).concat(club?.reserveTrainers||[]);
+    if(!Number.isInteger(index)||index<0||index>=group.length||!group[index])
+      return {ok:false,message:'소속 트레이너를 확인할 수 없습니다.'};
+    reviewDevelopment(game,clubId);
+    const trainer=group[index],old=trainer.aiDevelopment;
+    const now=epoch(game);
+    if(old?.status==='active'&&now<(old.lastReviewEpoch??old.startedAt+4))
+      return {ok:false,message:'기존 개인 개발 목표의 첫 4주 중간 평가 전에는 변경할 수 없습니다.'};
+    if(old?.status==='active'&&now<old.nextReviewEpoch&&
+      !Array.isArray(old.reviews)&&!old.reviews?.length)
+      return {ok:false,message:'개발 중간 평가 이후에 다른 목표를 선택할 수 있습니다.'};
+    if((trainer.autonomyAI?.playTraits||[]).includes(GOALS[target].label))
+      return {ok:false,message:'이미 해당 선플을 습득한 트레이너입니다.'};
+    if((trainer.autonomyAI?.playTraits||[]).length>=3)
+      return {ok:false,message:'현재 선플 3개를 보유하여 더 이상 습득할 수 없습니다.'};
+    const ai=state(game),id=trainerId(trainer,clubId,index),trust=ai.trust[id]??50;
+    const evaluation=assessRequest(trainer,target,intensity,trust);
+    const previous=old?.status==='active'?old:null;
+    if(previous){previous.status='redirected';(trainer.aiDevelopmentHistory ||= []).unshift(previous);}
+    const goal={version:1,target,intensity,response:evaluation.response,reason:evaluation.reason,
+      status:'active',startedAt:now,nextReviewEpoch:now+4,progress:0,
+      evidenceMatches:0,observedMatches:0,lastReviewMatches:0,lastReviewProgress:0,
+      recentExamples:[],reviews:[]};
+    trainer.aiDevelopment=goal;
+    // Strong pressure on an outspoken trainer can damage trust immediately.
+    if(intensity==='demand'&&evaluation.response==='거부')
+      ai.trust[id]=clamp(trust-2,15,85);
+    return {ok:true,goal,message:trainer.name+' · '+GOALS[target].label+' 개발 '+
+      INTENSITY[intensity]+'에 대한 반응: '+evaluation.response+' — '+evaluation.reason};
+  }
+  window.TrainerCareer={FIELDS,FEEDBACK,GOALS,INTENSITY,skill,threshold,state,getCareer,applyMatch,
+    offerFeedback,roundEvidence,trainerId,assessRequest,reviewDevelopment,setDevelopmentGoal};
   if(typeof document==='undefined')return;
   let visible=false,notice='';
   const getClub=()=>{try{return typeof myClub==='function'?myClub():null;}catch{return null;}};
