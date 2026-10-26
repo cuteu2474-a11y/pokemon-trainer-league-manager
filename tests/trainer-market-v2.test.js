@@ -38,7 +38,8 @@ function setup(config={}){
     transferValuation:()=>50000000,transferProfile:trainer=>trainer.profile||{
       ca:100,pa:150,contract:3
     },aiUnitScore:()=>100,
-    aiTransferCandidates:()=>[],aiInit(){},
+    aiTransferCandidates:config.aiTransferCandidates||(()=>[]),aiInit:config.aiInit||(()=>{}),
+    mkTrainer:config.mkTrainer,
     transferAcceptance:()=>({clubChance:.6,trainerChance:.7}),
     aiMaintainSquad(){},clubIdentity:()=>({budget:1000000}),
     transferOpen:()=>true,wonReadable:n=>'₩'+n.toLocaleString(),
@@ -150,4 +151,33 @@ test('AI club shortlist prioritizes stronger skill, learned traits and plan comp
   assert.ok(api.compatible(a,'attacking')>api.compatible(b,'attacking'));
   assert.equal(typeof sandbox.aiTransferCandidates,'function');
   assert.equal(sandbox.transferMarketHTML().includes('트레이너 스카우팅'),true);
+});
+
+
+test('fresh season prepares replacement academy prospects without consuming match RNG',()=>{
+  const g=makeGame();g.clubs[1].reserveTrainers=[];
+  const originalSeed=g.seed=123456789, generated=[];
+  const {api}=setup({game:g,mkTrainer:(local,club,index)=>{
+    generated.push({seed:local.seed,club:club.id,index});
+    return makeTrainer(400+club.id);
+  }});
+  assert.equal(api.migrate(g),true);
+  assert.equal(g.clubs[1].trainerAcademy.length,1);
+  assert.equal(g.clubs[1].trainerAcademy[0].pokemon.length,6);
+  assert.equal(g.seed,originalSeed);
+  assert.equal(api.migrate(g),false);
+  assert.equal(g.clubs[1].trainerAcademy.length,1);
+  assert.equal(generated.length,1);
+});
+test('AI buyers prefer compatible learned traits at equal cost and initial score',()=>{
+  const g=makeGame(),strong=g.clubs[1].reserveTrainers[0],plain=makeTrainer(199);
+  const buyer=g.clubs[0];buyer.aiManager={style:'압박 공격'};
+  const items=[
+    {seller:g.clubs[1],e:{t:plain,kind:'reserve',slot:1},fee:100000000,score:100},
+    {seller:g.clubs[1],e:{t:strong,kind:'reserve',slot:0},fee:100000000,score:100}
+  ];
+  const {sandbox}=setup({game:g,aiTransferCandidates:()=>items});
+  const sorted=sandbox.aiTransferCandidates(buyer);
+  assert.equal(sorted[0].e.t,strong);
+  assert.ok(sorted[0].score>sorted[1].score);
 });
