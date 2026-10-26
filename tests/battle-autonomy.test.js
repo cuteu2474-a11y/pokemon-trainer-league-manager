@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {resolveBattleAutonomy,relationshipAfterMatch,trainerPersonality} from '../src/battle/battle-autonomy.js';
 import {prepareClub} from '../src/web/match-service.js';
 import {simulateSixVsSix} from '../src/battle/showdown.js';
+import {TrainerAI} from '../src/battle/trainer-ai.js';
 
 const species='Mewtwo';
 const gp={hp:94,atk:0,def:31,spa:94,spd:0,spe:94};
@@ -51,6 +52,21 @@ test('confirmed trainer order carries autonomy and a legal unchanged Pokémon mo
   assert.deepEqual(prepared[0].team[0].moves,['psychic','thunderbolt','icebeam','shadowball']);
   assert.equal(prepared[1].aiProfile.response,'자율');
   assert.equal(prepared[1].battlePlan,'offense');
+});
+test('trainer styles produce different legal moves in the same public matchup',()=>{
+  const make=style=>{
+    const trainer={tactics:20,switching:12,battlePlan:style,
+      autonomyAI:{preferredPlay:style,openness:10,conviction:12}};
+    const ai=new TrainerAI({}, {...trainer,aiProfile:resolveBattleAutonomy(trainer,50)},
+      {seed:[1,2,3,4],team:[{species:'Pikachu',ability:'Static'}]});
+    ai.foeSpecies='Blastoise';
+    ai.ownActive={species:'Pikachu',ability:'Static'};
+    return ai;
+  };
+  const options=[{choice:'move 1',move:{id:'thunderwave'}},
+    {choice:'move 2',move:{id:'quickattack'}}];
+  assert.equal(make('control').chooseMove({},options),'move 1');
+  assert.equal(make('offense').chooseMove({},options),'move 2');
 });
 test('actual Showdown turn policy records analysis and choice reasons without changing battle laws',
   {timeout:45000},async()=>{
