@@ -68,6 +68,26 @@ test('trainer styles produce different legal moves in the same public matchup',(
   assert.equal(make('control').chooseMove({},options),'move 1');
   assert.equal(make('offense').chooseMove({},options),'move 2');
 });
+test('reinforced battle analysis changes voluntary reasoning probability without renewed advice',()=>{
+  const make=habit=>{
+    const trainer={tactics:10,switching:12,
+      autonomyAI:{preferredPlay:'balanced',openness:12,conviction:10,
+        habitScores:{switch:0,preserve:0,analysis:habit}}};
+    const ai=new TrainerAI({}, {...trainer,aiProfile:resolveBattleAutonomy(trainer,50)},
+      {seed:[1,2,3,4],team:[{species:'Pikachu',ability:'Static'}]});
+    ai.foeSpecies='Blastoise';ai.ownActive={species:'Pikachu',ability:'Static'};
+    ai.prng.random=()=>.58;
+    return ai;
+  };
+  const moves=[{choice:'move 1',move:{id:'thunderwave'}},
+    {choice:'move 2',move:{id:'quickattack'}}];
+  const baseline=make(0),experienced=make(70);
+  assert.equal(experienced.profile.behaviorAdvice,null);
+  baseline.chooseMove({},moves);
+  experienced.chooseMove({},moves);
+  assert.ok(baseline.decisions.reasons['판단 실패 · 안전한 합법적 선택']>0);
+  assert.equal(experienced.decisions.reasons['판단 실패 · 안전한 합법적 선택']||0,0);
+});
 test('actual Showdown turn policy records analysis and choice reasons without changing battle laws',
   {timeout:45000},async()=>{
     const trainerA={tactics:20,switching:19,moveJudgment:20,resourceManagement:20,
