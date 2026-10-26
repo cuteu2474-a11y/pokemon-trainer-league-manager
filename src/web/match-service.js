@@ -1,5 +1,6 @@
 import {readFileSync} from 'node:fs';
 import {battlePlan, planMoves} from '../battle/battle-plans.js';
+import {buildBattleReport} from '../battle/replay-report.js';
 import {Dex} from '@pkmn/sim';
 import {simulateClubMatch} from '../battle/club-match.js';
 import {gpBudget, STATS, validateGP} from '../core/stats.js';
@@ -32,7 +33,13 @@ export function battlePokemon(p, plan='balanced') {
 export function prepareClub(club, order) {
   if (!club || !Array.isArray(club.trainers) || club.trainers.length !== 5 || club.trainers.some(t => !t || !Array.isArray(t.pokemon) || t.pokemon.length !== 6)) throw new RangeError('트레이너 5명과 각 포켓몬 6마리가 필요합니다.');
   if (!Array.isArray(order) || order.length !== 5 || new Set(order).size !== 5 || order.some(i => !Number.isInteger(i) || i < 0 || i > 4)) throw new RangeError('출전 순서 오류');
-  return order.map(i => ({name:club.trainers[i].name, tactics:club.trainers[i].tactics, switching:club.trainers[i].switching, battlePlan:battlePlan(club.trainers[i]), team:club.trainers[i].pokemon.map(p=>battlePokemon(p,battlePlan(club.trainers[i])))}));
+  return order.map(i => {
+    const trainer=club.trainers[i], plan=battlePlan(trainer);
+    const team=trainer.pokemon.map(p=>battlePokemon(p,plan));
+    const counts=team.reduce((map,mon)=>(map[mon.name]=(map[mon.name]||0)+1,map),{});
+    team.forEach((mon,slot)=>{mon.displayName=mon.name;if(counts[mon.name]>1)mon.name=mon.name+'·'+(slot+1);});
+    return {name:trainer.name,tactics:trainer.tactics,switching:trainer.switching,battlePlan:plan,team};
+  });
 }
 export async function runMatch(body) {
   if (!body || body.home?.id === body.away?.id) throw new RangeError('경기 상대 오류');
@@ -41,6 +48,7 @@ export async function runMatch(body) {
   const home = prepareClub(body.home, body.homeOrder), away = prepareClub(body.away, body.awayOrder);
   const result = await simulateClubMatch(home, away, {seed});
   const visuals = {}, moveVisuals = {};
+  for(const trainer of [...home,...away])for(const mon of trainer.team){const species=Dex.species.get(mon.species);visuals[species.name]={id:species.spriteid,num:spriteNumbers[species.id]||species.num,types:species.types};}
   for (const round of result.rounds) for (const line of round.result.log.split('\n')) {
     const part = line.split('|');
     const name = ['switch','drag','detailschange'].includes(part[1]) ? part[3]?.split(',')[0] : part[1] === '-formechange' ? part[3] : null;
@@ -53,6 +61,6 @@ export async function runMatch(body) {
       if (move.exists) moveVisuals[part[3]] = {type:move.type, category:move.category, label:koreanMoves[move.id]||move.name};
     }
   }
-  return {engine:'showdown', visuals, moveVisuals, home:body.home.id, away:body.away.id, aScore:result.trainersDefeated.B, bScore:result.trainersDefeated.A,
-    teams:{home,away}, rounds:result.rounds.map(r => ({trainerA:r.trainerA, trainerB:r.trainerB, winner:r.winner, log:r.result.log}))};
+  return {engine:'showdown', visuals, moveVisuals, report:buildBattleReport(result.rounds,home,away), home:body.home.id, away:body.away.id, aScore:result.trainersDefeated.B, bScore:result.trainersDefeated.A,
+    teams:{home,away}, rounds:result.rounds.map(r => ({trainerA:r.trainerA, trainerB:r.trainerB, winner:r.winner, initial:Object.fromEntries(['p1','p2'].map(side=>[side,r.result.initialStats[side].map((state,i)=>({name:r.pokemonOrder[side][i],hp:state.hp,maxhp:state.maxhp,status:state.status}))])), log:r.result.log}))};
 }

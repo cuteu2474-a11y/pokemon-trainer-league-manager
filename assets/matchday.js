@@ -84,7 +84,7 @@
   // Presentation follows authoritative Showdown events; it never resolves a hit or changes HP.
   let visualState = {}, skipping = false;
   function resetVisuals(){visualState={p1:{trainer:-1,remaining:6,hp:null,maxhp:100},p2:{trainer:-1,remaining:6,hp:null,maxhp:100}};skipping=false;}
-  function arenaHTML(){return `<div class="md-field" aria-label="포켓몬 전투 전장"><div class="md-stands"></div><div class="md-pitch"></div><div class="md-center-mark"></div><div class="md-platform md-platform-home"></div><div class="md-platform md-platform-away"></div><div class="md-weather" id="md-weather"></div>${['p1','p2'].map(side=>`<div class="md-hud ${side}"><div class="md-hud-head"><span id="${side}-name">출전 준비</span><span class="md-status" id="${side}-status"></span><span class="md-level" id="${side}-level"></span></div><div class="md-hp-row"><b>HP</b><progress id="${side}-hp" value="0" max="100"></progress></div><div class="md-hud-foot"><span class="md-balls" id="${side}-balls" aria-label="남은 포켓몬"></span><span id="${side}-state"></span></div></div><div class="md-combatant ${side}" id="${side}-combatant"><div class="md-shadow"></div><div class="md-sprite-wrap"><img class="md-sprite" id="${side}-sprite" alt="출전 대기" hidden><div class="md-sprite-fallback" id="${side}-fallback" hidden>?</div></div><div class="md-popups" id="${side}-popups"></div></div>`).join('')}<div class="md-relay"><span id="p1-relay"></span><span id="p2-relay"></span></div><div class="md-announcement" id="md-announcement" aria-live="polite">포켓몬 출전 준비</div></div>`;}
+  function arenaHTML(){return `<div class="md-field" aria-label="포켓몬 전투 전장"><div class="md-stands"></div><div class="md-pitch"></div><div class="md-center-mark"></div><div class="md-platform md-platform-home"></div><div class="md-platform md-platform-away"></div><div class="md-weather" id="md-weather"></div>${['p1','p2'].map(side=>`<div class="md-hud ${side}"><div class="md-hud-head"><span id="${side}-name">출전 준비</span><span class="md-status" id="${side}-status"></span><span class="md-level" id="${side}-level"></span></div><div class="md-hp-row"><b>HP</b><progress id="${side}-hp" value="0" max="100"></progress></div><div class="md-hud-foot"><span class="md-balls" id="${side}-balls" aria-label="남은 포켓몬"></span><span id="${side}-state"></span></div></div><div class="md-combatant ${side}" id="${side}-combatant"><div class="md-shadow"></div><div class="md-sprite-wrap"><img class="md-sprite" id="${side}-sprite" alt="출전 대기" hidden><div class="md-sprite-fallback" id="${side}-fallback" hidden>?</div></div><div class="md-popups" id="${side}-popups"></div></div>`).join('')}<div class="md-relay"><span id="p1-relay"></span><span id="p2-relay"></span></div><div class="md-keymoment" id="md-keymoment" hidden></div><div class="md-announcement" id="md-announcement" aria-live="polite">포켓몬 출전 준비</div></div>`;}
   const typeColors={Normal:'#d8d5c8',Fire:'#ff784a',Water:'#54bcff',Electric:'#ffe769',Grass:'#82e18b',Ice:'#a8f7ff',Fighting:'#fba677',Poison:'#d68ae8',Ground:'#dfbb7c',Flying:'#c4dcff',Psychic:'#ff91c2',Bug:'#c7df65',Rock:'#c5ba96',Ghost:'#ad9fff',Dragon:'#b69aff',Dark:'#a6a2b9',Steel:'#c6e4ea',Fairy:'#ffc6ed'};
   const statusNames={par:'마비',brn:'화상',slp:'잠듦',tox:'맹독',psn:'독',frz:'얼음'};
   const visualStyles=document.createElement('style');visualStyles.textContent=`
@@ -128,7 +128,7 @@
   function showSprite(side,details,name){
     const species=details.split(',')[0],state=visualState[side],result=pending().result;
     const team=result.teams[side==='p1'?'home':'away'][state.trainer]?.team||[];
-    const mon=team.find(p=>p.species===species)||team.find(p=>p.name===name);
+    const mon=team.find(p=>p.name===rawName(state.actor))||team.find(p=>p.species===species)||team.find(p=>p.name===name);
     const info=result.visuals?.[species]||{id:species.toLowerCase().replace(/[^a-z0-9-]/g,''),num:null};
     // Only validated identifiers are interpolated into third-party sprite URLs.
     const id=/^[a-z0-9-]+$/.test(info.id)?info.id:'substitute';
@@ -162,13 +162,13 @@
     if(animation)animation.finished.catch(()=>{}).finally(()=>effect.remove());else effect.remove();
   }
   function visualEvent(part){
-    const type=part[1],actor=part[2]||'',side=actor.startsWith('p1')?'p1':'p2',name=actor.split(': ').slice(1).join(': '),state=visualState[side];
+    const type=part[1],actor=part[2]||'',side=actor.startsWith('p1')?'p1':'p2',name=actorName(actor),state=visualState[side];
     const holder=document.getElementById(side+'-combatant');
     if(type==='switch'||type==='drag'){showSprite(side,part[3]||'',name);state.hp=null;announce(name+' 출전!');}
     if(type==='-formechange'||type==='detailschange'){showSprite(side,part[3]||'',name);announce(name+'의 모습이 변했습니다.');}
     if(type==='-transform'){const target=part[3]?.startsWith('p1')?'p1':'p2';showSprite(side,visualState[target].species||'',name);announce(name+' 변신!');}
     if(type==='move'){attack(side,part[3],part[4]);announce(name+'의 '+koreanMove(part[3])+'!');}
-    if(['switch','drag','-damage','-heal'].includes(type)){
+    if(['switch','drag'].includes(type)||(['-damage','-heal'].includes(type)&&actor===visualState[side].actor)){
       const raw=(type==='switch'||type==='drag'?part[4]:part[3])||'',match=raw.match(/^(\d+)(?:\/(\d+))?/);
       if(match){const hp=Number(match[1]),maxhp=Number(match[2]||state.maxhp);const difference=state.hp===null?0:hp-state.hp;
         state.hp=hp;state.maxhp=maxhp;document.getElementById(side+'-hp').style.setProperty('--hp-color',hp/maxhp>.5?'#77d6a8':hp/maxhp>.2?'#e7c76a':'#e78678');
@@ -180,7 +180,7 @@
         if(type==='-heal'){if(difference>0)floating(side,'+'+difference,true);animate(holder,[{filter:'drop-shadow(0 0 0 #6f8)'},{filter:'drop-shadow(0 0 18px #9fc)'},{filter:'none'}],500);}
       }
     }
-    if(type==='faint'){holder.classList.add('fainted');state.remaining=Math.max(0,state.remaining-1);updateBalls(side);announce(name+' 쓰러졌습니다!');}
+    if(type==='faint'&&actor===state.actor){holder.classList.add('fainted');if(!state.party)state.remaining=Math.max(0,state.remaining-1);updateBalls(side);announce(name+' 쓰러졌습니다!');}
     if(type==='-status'){document.getElementById(side+'-status').textContent=statusNames[part[3]]||part[3];announce(name+' · '+(statusNames[part[3]]||part[3]));}
     if(type==='-curestatus')document.getElementById(side+'-status').textContent='';
     if(type==='-supereffective')floating(side,'효과 굉장!');
@@ -207,10 +207,11 @@
       }
     });flush(list.length);return flags;
   }
-  function storyIntro(battle){
+  function storyIntro(battle,previous){
     const r=pending().result,a=r.teams.home[battle.trainerA],b=r.teams.away[battle.trainerB];
     const label=(team,index)=>`${index===4?'마지막 주자':index===0?'선봉':(index+1)+'번 주자'} ${team.name} · ${planLabels[team.battlePlan]||'균형'}`;
-    document.getElementById('md-storyline').textContent=label(a,battle.trainerA)+'  vs  '+label(b,battle.trainerB);
+    const survivor=previous?.winner==='A'&&previous.trainerA===battle.trainerA?a:previous?.winner==='B'&&previous.trainerB===battle.trainerB?b:null;
+    document.getElementById('md-storyline').textContent=label(a,battle.trainerA)+'  vs  '+label(b,battle.trainerB)+(survivor?' · '+survivor.name+' 이어 출전 / 생존 포켓몬 최대 HP 10% 회복':'');
   }
   function renderContributions(){
     if(!contributions)return;const result=pending().result;
@@ -230,7 +231,10 @@
     contributions[key][index].wins++;
     const t=pending().result.teams[key][index],stats=contributions[key][index];
     const text=t.name+' · '+(stats.wins>1?stats.wins+'연승!':'트레이너 대결 승리')+' · 상대 포켓몬 '+stats.knockouts+'마리 격파';
-    document.getElementById('md-storyline').textContent=text;announce(text);renderContributions();
+    document.getElementById('md-storyline').textContent=text;announce(text);const own=battle.winner==='A'?0:1,before=score[own]-score[1-own];if(before<0)leadHistory[key]=true;
+    if(before+1===0)spotlight('동점!',t.name+'의 승리로 승부가 원점입니다.');
+    else if(before+1>0&&leadHistory[key]){spotlight('역전!',t.name+'이 구단에 리드를 가져옵니다.');leadHistory[key]=false;}
+    else if(stats.wins>1)spotlight(stats.wins+'연승!',t.name+'이 계속 출전합니다.');renderContributions();
   }
   function contributionSummary(){
     const r=pending().result;
@@ -243,10 +247,103 @@
     @media(max-width:650px){#matchday .md-contributions{grid-template-columns:1fr}#matchday [data-plan]{padding:7px;font-size:12px}}
   `;document.head.append(watchStyles);
 
+  let lastAction=null, spotlightSerial=0, leadHistory={home:false,away:false};
+  const rawName=actor=>String(actor||'').split(': ').slice(1).join(': ');
+  function actorName(actor){
+    const side=String(actor).startsWith('p1')?'home':'away',index=currentBattle?.[side==='home'?'trainerA':'trainerB'];
+    return pending()?.result?.teams?.[side]?.[index]?.team.find(mon=>mon.name===rawName(actor))?.displayName||rawName(actor);
+  }
+  function partyHTML(){return `<div class="md-parties">${['p1','p2'].map(side=>`<div><div class="md-party-heading" id="${side}-pressure"></div><div class="md-party-grid" id="${side}-party"></div></div>`).join('')}</div>`;}
+  function initialiseParty(battle){
+    const result=pending().result;lastAction=null;
+    for(const side of ['p1','p2']){
+      const index=battle[side==='p1'?'trainerA':'trainerB'],team=result.teams[side==='p1'?'home':'away'][index].team;
+      const snapshot=new Map((battle.initial?.[side]||[]).map(s=>[s.name,s]));
+      visualState[side].party=team.map(mon=>({name:mon.name,displayName:mon.displayName||mon.name,species:mon.species,...(snapshot.get(mon.name)||{hp:null,maxhp:null,status:''})}));
+      visualState[side].actor=null;
+      document.getElementById(side+'-party').innerHTML=team.map((mon,i)=>{
+        const visual=result.visuals?.[mon.species],n=visual?.num;
+        const backup=Number.isInteger(n)&&n>0?'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'+n+'.png':'';
+        const url=/^[a-z0-9-]+$/.test(visual?.id||'')?'https://play.pokemonshowdown.com/sprites/gen5/'+visual.id+'.png':backup;
+        return `<div class="md-party-mon" id="${side}-party-${i}" title="${esc(mon.displayName||mon.name)} Lv.${mon.level}">${url?`<img src="${url}" data-backup="${backup}" alt="" loading="lazy" onerror="if(!this.dataset.failed&&this.dataset.backup){this.dataset.failed='1';this.src=this.dataset.backup}else this.hidden=true">`:''}<strong>${esc(mon.displayName||mon.name)}</strong><span class="md-party-health"><i></i></span><small></small></div>`;
+      }).join('');refreshParty(side);
+    }
+  }
+  function refreshParty(side){
+    const state=visualState[side],party=state.party;if(!party)return;
+    for(let i=0;i<party.length;i++){
+      const mon=party[i],node=document.getElementById(side+'-party-'+i);if(!node)continue;
+      node.classList.toggle('fainted',mon.hp===0);node.classList.toggle('active',rawName(state.actor)===mon.name);
+      const known=mon.hp!==null&&mon.maxhp>0;
+      node.querySelector('i').style.width=known?Math.max(0,Math.min(100,mon.hp/mon.maxhp*100))+'%':'0%';
+      node.querySelector('small').textContent=mon.hp===0?'기절':statusNames[mon.status]||(known?Math.ceil(mon.hp/mon.maxhp*100)+'%':'미확인');
+    }
+    state.remaining=party.filter(mon=>mon.hp!==0).length;updateBalls(side);
+    const index=currentBattle[side==='p1'?'trainerA':'trainerB'];
+    document.getElementById(side+'-pressure').textContent='트레이너 '+(5-index)+'명 남음 · 현재 주자 '+state.remaining+'마리';
+  }
+  function syncParty(part){
+    const type=part[1],actor=part[2]||'',side=actor.startsWith('p1')?'p1':'p2',state=visualState[side];
+    if(type==='move')lastAction={actor,move:part[3]};
+    if(!state.party)return;
+    const mon=state.party.find(p=>p.name===rawName(actor));
+    if(type==='switch'||type==='drag')state.actor=actor;
+    if(mon){
+      if(['switch','drag','-damage','-heal'].includes(type)){
+        const raw=['switch','drag'].includes(type)?part[4]:part[3],match=raw?.match(/^(\d+)(?:\/(\d+))?/);
+        if(match){mon.hp=Number(match[1]);if(match[2])mon.maxhp=Number(match[2]);mon.status=raw.split(' ')[1]||'';}
+      }
+      if(type==='faint')mon.hp=0;
+      if(type==='-status')mon.status=part[3];if(type==='-curestatus')mon.status='';
+      refreshParty(side);
+    }
+  }
+  function spotlight(title,subtitle=''){
+    if(skipping)return;const node=document.getElementById('md-keymoment');if(!node)return;
+    const serial=++spotlightSerial;node.innerHTML='<strong>'+esc(title)+'</strong><small>'+esc(subtitle)+'</small>';node.hidden=false;
+    const effect=animate(node,[{opacity:0,transform:'scale(.92)'},{opacity:1,transform:'scale(1)',offset:.15},{opacity:1,offset:.8},{opacity:0}],2100);
+    const hide=()=>{if(serial===spotlightSerial)node.hidden=true;};if(effect)effect.finished.catch(()=>{}).finally(hide);else setTimeout(hide,700);
+  }
+  function contextualCommentary(part){
+    const type=part[1],actor=part[2]||'',side=actor.startsWith('p1')?'p1':'p2';
+    const target=visualState[side],nickname=actorName(actor),mon=target.party?.find(p=>p.name===rawName(actor));
+    const hp=mon?.hp??target.hp,maxhp=mon?.maxhp??target.maxhp;
+    if(type==='-damage'){
+      const from=part.slice(4).find(p=>p.startsWith('[from]'));
+      if(from?.includes('psn'))announce(nickname+' · 독 피해가 누적됩니다.');
+      if(from?.includes('brn'))announce(nickname+' · 화상 피해가 누적됩니다.');
+      if(!from&&hp>0&&hp/maxhp<=.25)announce(nickname+'의 HP가 얼마 남지 않았습니다!');
+      if(target.remaining===1&&hp>0&&hp/maxhp<=.25)spotlight('마지막 포켓몬의 위기',nickname+' · HP '+Math.ceil(hp/maxhp*100)+'%');
+    }
+    if(type==='-supereffective'&&lastAction)announce(actorName(lastAction.actor)+'의 '+koreanMove(lastAction.move)+'! 타입 상성을 찌릅니다.');
+    if(type==='-resisted'&&lastAction)announce(koreanMove(lastAction.move)+' · 상대가 이 공격을 잘 버팁니다.');
+    if(type==='-crit')spotlight('급소!',nickname+'에게 급소 공격이 들어갔습니다.');
+    if(type==='-heal')announce(nickname+' · HP를 회복하며 버팁니다.');
+    if(type==='faint'&&target.remaining===0)spotlight('포켓몬 전멸',nickname+'의 트레이너가 다음 주자에게 자리를 넘깁니다.');
+  }
+  function reportHTML(result){
+    const report=result.report;if(!report)return '';
+    return `<div class="md-report-grid">${['home','away'].map((key,k)=>`<section><h2>${esc(game.clubs[k===0?result.home:result.away].name)} 활약</h2>${report[key].slice(0,3).map((mon,i)=>`<div class="md-report-row"><b>${i+1}</b><div><strong>${esc(mon.displayName)}</strong><small>${esc(mon.trainer)} · ${mon.entries}회 투입</small></div><span>직접 격파 ${mon.knockouts}<small>직접 피해 ${mon.damage} HP</small></span></div>`).join('')||'<p>집계된 출전 기록이 없습니다.</p>'}</section>`).join('')}</div><p class="md-muted">실제 공격으로 가한 피해와 격파를 집계합니다. 독·날씨 등 간접 피해는 제외합니다.</p>`;
+  }
+  function nextMoment(){
+    clearTimeout(timer);let target=cursor;
+    while(target<events.length){const e=events[target];if(highlightFlags[target]&&(e.intro!==undefined||e.end||e.line?.startsWith('|turn|')))break;target++;}
+    if(target===cursor)target++;
+    skipping=true;while(cursor<Math.min(target,events.length))step();skipping=false;
+    if(cursor>=events.length){complete();return;}
+    if(paused)step();else tick();
+  }
+  const dramaStyles=document.createElement('style');dramaStyles.textContent=`
+    #matchday .md-field{height:clamp(250px,38vh,420px);min-height:250px}#matchday .md-parties{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0}#matchday .md-party-heading{font-size:10px;color:#a5c9d5;margin:4px 0}#matchday .md-party-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}#matchday .md-party-mon{display:flex;flex-direction:column;align-items:center;position:relative;padding:3px;border:1px solid #2f4c5d;background:#102532;border-radius:4px;min-width:0}#matchday .md-party-mon.active{border-color:#e0cc77;background:#334337}#matchday .md-party-mon.fainted{opacity:.28;filter:grayscale(1)}#matchday .md-party-mon img{width:27px;height:27px;image-rendering:pixelated;object-fit:contain}#matchday .md-party-mon strong{max-width:100%;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#matchday .md-party-mon small{font-size:9px;color:#b9d1da}#matchday .md-party-health{height:3px;width:85%;background:#07151f;margin:3px 0;overflow:hidden;border-radius:3px}#matchday .md-party-health i{display:block;height:100%;background:#7bccac;transition:width .2s}
+    #matchday .md-keymoment{position:absolute;z-index:9;top:29%;left:22%;right:22%;padding:18px;background:#081d2de8;border-top:2px solid #e1cd8e;border-bottom:2px solid #e1cd8e;text-align:center;pointer-events:none;box-shadow:0 10px 40px #0007}#matchday .md-keymoment[hidden]{display:none}#matchday .md-keymoment strong{display:block;font-size:25px;color:#f5e7b8}#matchday .md-keymoment small{display:block;font-size:12px;margin-top:6px;color:#e4eaf0}
+    #matchday .md-report-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}#matchday .md-report-grid h2{font-size:15px}#matchday .md-report-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #31495b;font-size:12px}#matchday .md-report-row>b{color:#e6d58c;font-size:20px}#matchday .md-report-row small{display:block;font-size:10px;color:#9eb6c6;margin-top:4px}#matchday .md-report-row>span{margin-left:auto;text-align:right}#matchday .md-report{border:1px solid #3b5a6b;padding:12px;margin-top:10px;border-radius:5px}#matchday .md-report>summary{cursor:pointer;color:#d6c994;font-size:13px}
+    @media(max-width:650px){#matchday .md-report-grid{grid-template-columns:1fr}#matchday .md-keymoment{left:10%;right:10%}#matchday .md-keymoment strong{font-size:21px}#matchday .md-party-mon strong{font-size:8px}#matchday .md-party-mon img{width:22px;height:22px}}
+  `;document.head.append(dramaStyles);
+
   function startReplay() {
-    clearTimeout(timer);cursor=0;events=[];paused=false;resetVisuals();
+    clearTimeout(timer);cursor=0;events=[];paused=false;leadHistory={home:false,away:false};resetVisuals();
     const p=pending(), r=p.result, root=screen();
-    root.innerHTML=`<div class="md-muted">${p.week}주차 · 리그 ${p.round}라운드 · Showdown 자동 관전</div><div class="md-top"><h1>${esc(game.clubs[p.home].name)} vs ${esc(game.clubs[p.away].name)}</h1><span class="md-score" id="md-score">0 : 0</span></div><div id="md-trainers"></div>${arenaHTML()}<div id="md-storyline" class="md-storyline">첫 선봉이 경기를 시작합니다.</div><div id="md-contributions" class="md-contributions"></div><div class="md-actions"><span id="md-stage" aria-live="polite">실제 전투 기록을 자동 재생합니다.</span><div><select id="md-mode" aria-label="관전 방식"><option value="highlights">주요 장면</option><option value="full">전체 관전</option></select> <button id="md-pause">일시정지</button> <select id="md-speed" aria-label="관전 속도"><option value="1">1배속</option><option value="4" selected>4배속</option><option value="16">16배속</option></select> <button id="md-skip">결과까지 보기</button></div></div><details class="md-commentary"><summary>경기 중계 기록</summary><div id="md-log" role="log"></div></details><div class="md-actions"><span id="md-summary"></span><button id="md-finish" class="primary" disabled>경기 결과 확인 · 일정으로</button></div>`;
+    root.innerHTML=`<div class="md-muted">${p.week}주차 · 리그 ${p.round}라운드 · Showdown 자동 관전</div><div class="md-top"><h1>${esc(game.clubs[p.home].name)} vs ${esc(game.clubs[p.away].name)}</h1><span class="md-score" id="md-score">0 : 0</span></div><div id="md-trainers"></div>${arenaHTML()}${partyHTML()}<div id="md-storyline" class="md-storyline">첫 선봉이 경기를 시작합니다.</div><div id="md-contributions" class="md-contributions"></div><div class="md-actions"><span id="md-stage" aria-live="polite">실제 전투 기록을 자동 재생합니다.</span><div><select id="md-mode" aria-label="관전 방식"><option value="highlights">주요 장면</option><option value="full">전체 관전</option></select> <button id="md-pause">일시정지</button> <select id="md-speed" aria-label="관전 속도"><option value="1">1배속</option><option value="4" selected>4배속</option><option value="16">16배속</option></select> <button id="md-next-moment">다음 주요 장면</button> <button id="md-skip">결과까지 보기</button></div></div><details class="md-report" id="md-report" hidden><summary>경기 활약 보고서</summary><div id="md-report-content"></div></details><details class="md-commentary"><summary>경기 중계 기록</summary><div id="md-log" role="log"></div></details><div class="md-actions"><span id="md-summary"></span><button id="md-finish" class="primary" disabled>경기 결과 확인 · 일정으로</button></div>`;
     r.rounds.forEach((battle,i)=>{
       events.push({intro:i,battle});
       for(const line of battle.log.split('\n')) if (/^\|(turn|move|switch|drag|faint|win|tie|-damage|-heal|-status|-curestatus|-supereffective|-resisted|-crit|-ability|-formechange|detailschange|-transform|-weather|cant)\|/.test(line)) events.push({line});
@@ -258,6 +355,7 @@
     root.querySelector('#md-speed').onchange=e=>{speed=Number(e.target.value);};
     root.querySelector('#md-pause').onclick=e=>{paused=!paused;e.target.textContent=paused?'재생':'일시정지';if(!paused)tick();else clearTimeout(timer);};
     root.querySelector('#md-skip').onclick=()=>{clearTimeout(timer);skipping=true;while(cursor<events.length)step();skipping=false;complete();};
+    root.querySelector('#md-next-moment').onclick=nextMoment;
     root.querySelector('#md-finish').onclick=finish;
     tick();
   }
@@ -268,14 +366,14 @@
     if(event.intro!==undefined){
       if(event.intro===0)score=[0,0];
       const b=event.battle;document.getElementById('md-trainers').textContent=`${event.intro+1}번째 대결 · ${r.teams.home[b.trainerA].name} vs ${r.teams.away[b.trainerB].name}`;
-      currentBattle=b;renderContributions();visualIntro(b);storyIntro(b);append('── 트레이너 대결 '+(event.intro+1)+' ──');return;
+      const previous=currentBattle;currentBattle=b;renderContributions();visualIntro(b);initialiseParty(b);storyIntro(b,previous);append('── 트레이너 대결 '+(event.intro+1)+' ──');return;
     }
     if(event.end){recordBattleWin(event.end);if(event.end.winner==='A')score[0]++;else if(event.end.winner==='B')score[1]++;else {score[0]++;score[1]++;}document.getElementById('md-score').textContent=score.join(' : ');return;}
-    const parts=event.line.split('|'), type=parts[1],actor=parts[2]||'',side=actor.startsWith('p1')?'p1':'p2',name=actor.split(': ').slice(1).join(': ');
-    visualEvent(parts);
+    const parts=event.line.split('|'), type=parts[1],actor=parts[2]||'',side=actor.startsWith('p1')?'p1':'p2',name=actorName(actor);
+    syncParty(parts);visualEvent(parts);contextualCommentary(parts);
     if(type==='turn'){document.getElementById('md-stage').textContent=parts[2]+'턴';return;}
     if(type==='switch'||type==='drag'){document.getElementById(side+'-name').textContent=name;append(name+' 출전');}
-    if(['switch','drag','-damage','-heal'].includes(type)){
+    if(['switch','drag'].includes(type)||(['-damage','-heal'].includes(type)&&actor===visualState[side].actor)){
       const hp=(type==='switch'||type==='drag'?parts[4]:parts[3])||'',match=hp.match(/^(\d+)(?:\/(\d+))?/);
       if(match){const bar=document.getElementById(side+'-hp');bar.max=Number(match[2]||100);bar.value=Number(match[1]);document.getElementById(side+'-state').textContent=hp.replace('fnt','기절').replace('par','마비').replace('brn','화상').replace('slp','잠듦').replace('tox','맹독').replace('psn','독').replace('frz','얼음');}
     }
@@ -301,7 +399,7 @@
     if(watchMode==='highlights'&&(/^\|faint\|/.test(line)||event?.end))base=Math.max(base,3000);
     timer=setTimeout(tick,Math.max(65,base/speed));
   }
-  function complete(){const r=pending().result;announce('경기 종료 · '+r.aScore+' : '+r.bScore);document.getElementById('md-score').textContent=r.aScore+' : '+r.bScore;document.getElementById('md-stage').textContent='경기 종료';document.getElementById('md-summary').textContent=contributionSummary();renderContributions();document.getElementById('md-finish').disabled=false;document.getElementById('md-pause').disabled=true;document.getElementById('md-skip').disabled=true;}
+  function complete(){const r=pending().result;announce('경기 종료 · '+r.aScore+' : '+r.bScore);document.getElementById('md-score').textContent=r.aScore+' : '+r.bScore;document.getElementById('md-stage').textContent='경기 종료';document.getElementById('md-summary').textContent=contributionSummary();renderContributions();document.getElementById('md-finish').disabled=false;document.getElementById('md-next-moment').disabled=true;if(r.report){document.getElementById('md-report-content').innerHTML=reportHTML(r);document.getElementById('md-report').hidden=false;}spotlight('경기 종료',r.aScore+' : '+r.bScore);document.getElementById('md-pause').disabled=true;document.getElementById('md-skip').disabled=true;}
   function finish(){
     const p=pending();if(!p||!p.result||cursor<events.length)return;
     if(game.season!==p.season||game.round!==p.round-1){alert('일정이 변경되어 결과를 적용할 수 없습니다.');return;}
@@ -311,8 +409,10 @@
       if(p.current)priorPlayNext();else priorNextWeek();
       if(game.round!==p.round)throw new Error('경기 결과 반영 실패');
       game.lastMatch.engine='showdown';game.lastMatch.replay=p.result;
-      delete game.pendingMatch;persist();clearTimeout(timer);document.getElementById('matchday')?.remove();tab='fixtures';renderOffice();
+      delete game.pendingMatch;persist();clearTimeout(timer);document.getElementById('matchday')?.remove();for(const id of ['mainmenu','clubselect','clubtrainers']){const node=document.getElementById(id);if(node)node.hidden=true;}document.getElementById('dashboard').hidden=false;tab='fixtures';renderOffice();
     } catch(error){game=before;persist();alert(error.message);}finally{active=null;}
   }
+  const priorReportRender=renderOffice;
+  renderOffice=function(){priorReportRender();const panel=document.getElementById('dashpanel');if(panel&&game?.lastMatch?.replay?.report&&['home','fixtures'].includes(tab)){const button=document.createElement('button');button.className='g-btn alt';button.textContent='지난 경기 활약 보고서';button.onclick=()=>{const root=screen();root.innerHTML='<h1>지난 경기 활약 보고서</h1>'+reportHTML(game.lastMatch.replay)+'<button id="md-report-back">구단 화면으로</button>';root.querySelector('#md-report-back').onclick=()=>root.remove();};panel.append(button);}};
   if(game?.pendingMatch){if(game.pendingMatch.phase==='running')game.pendingMatch.phase='prepare';render();}
 })();

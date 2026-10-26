@@ -24,6 +24,10 @@ test('web service returns actual relay battle logs and score', {timeout:120000},
  for(const t of b.trainers)for(const p of t.pokemon)Object.assign(p,{name:'잉어킹',level:10,power:10,moves:['splash']});
  const result=await runMatch({home:a,away:b,homeOrder:[4,3,2,1,0],awayOrder:[0,1,2,3,4],seed:[1,2,3,4]});
  assert.equal(result.engine,'showdown');assert.equal(result.aScore,5);assert.equal(result.bScore,0);assert.equal(result.rounds.length,5);
+ assert.equal(result.rounds[0].initial.p1.length,6);
+ assert.equal(new Set(result.rounds[0].initial.p1.map(m=>m.name)).size,6);
+ assert.ok(result.rounds[0].initial.p1.every(m=>m.hp>0&&m.hp<=m.maxhp));
+ assert.equal(result.report.home.reduce((n,m)=>n+m.knockouts,0),30);
  assert.equal(result.teams.home[0].name,'트레이너 4');assert.match(result.rounds[0].log,/\|move\|/);
  assert.equal(result.visuals.Mewtwo.id,'mewtwo');assert.equal(result.visuals.Mewtwo.num,150);
  assert.deepEqual(result.moveVisuals.Psychic,{type:'Psychic',category:'Special',label:'사이코키네시스'});

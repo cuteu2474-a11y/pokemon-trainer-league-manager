@@ -18,7 +18,7 @@ export async function simulateClubMatch(clubA, clubB, {seed, maxBattles = 9} = {
       trainerA: clubA[a], trainerB: clubB[b],
     });
     const victor = result.winner === 'Club A' ? 'A' : result.winner === 'Club B' ? 'B' : 'tie';
-    rounds.push({trainerA: a, trainerB: b, winner: victor, result});
+    rounds.push({trainerA: a, trainerB: b, winner: victor, pokemonOrder:{p1:teamA.map(mon=>mon.name),p2:teamB.map(mon=>mon.name)}, result});
     const recover = state => state.map(mon => ({
       ...mon,
       hp: mon.hp > 0 ? Math.min(mon.maxhp, mon.hp + Math.floor(mon.maxhp * 0.1)) : 0,
