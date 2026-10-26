@@ -1923,7 +1923,7 @@
     const x=marketTarget?.();if(!x)return {ok:false,message:'트레이너를 선택해 주세요.'};
     const key=candidateKey(x.t),s=state(),existing=s.intel[key];
     if(existing?.season===game.season)return {ok:false,message:'이번 시즌의 스카우트 보고서가 있습니다.'};
-    const cost=200000;
+    const cost=3000000;
     if(game.coins<cost)return {ok:false,message:'스카우트 비용이 부족합니다.'};
     game.coins-=cost;
     s.intel[key]={season:game.season,week:game.week??0,source:x.c.id};
@@ -1940,7 +1940,8 @@
     if(!transferOpen()){alert('이적시장이 열려 있지 않습니다.');return;}
     if(s.attempts[key]===token){alert('이 트레이너와는 이번 주 이미 협상했습니다. 다음 주 다시 제안할 수 있습니다.');return;}
     const base=transferValuation(x.t,x.c);
-    const fee=Math.max(10000,Math.round(base*clamp(value(s.premium,1.15),1,1.4)/10000)*10000);
+    const fee=Math.min(750000000,Math.max(10000000,
+      Math.round(base*clamp(value(s.premium,1.15),1,1.4)/10000000)*10000000));
     const checked=checkTransfer({buyer:own,seller:x.c,trainer:x.t,
       sourceKind:x.kind,slot:x.slot,fee,budget:game.coins});
     if(!checked.ok){alert(checked.reason);return;}
@@ -2019,9 +2020,10 @@
         ' · 포켓몬 잠재력 '+x.t.pokemon.map(m=>esc(m.name)+' '+esc(m.pa??'미확인')).join(', ')+
         '</div>':
         '<div class="tm2-scouted">잠재력 및 성격은 추정치입니다. 유료 스카우트 후 세부 정보를 확인할 수 있습니다.'+
-        '<button type="button" class="row-btn" onclick="TrainerMarketV2.scout()">정밀 조사 '+money(200000)+'</button></div>';
+        '<button type="button" class="row-btn" onclick="TrainerMarketV2.scout()">정밀 조사 '+money(3000000)+'</button></div>';
       const multiple=clamp(value(s.premium,1.15),1,1.4);
-      const base=r.fee,offered=Math.round(base*multiple/10000)*10000,
+      const base=r.fee,offered=Math.min(750000000,
+        Math.round(base*multiple/10000000)*10000000),
         acceptance=transferAcceptance(x.t,x.c,me,base,offered);
       const sellerChance=clamp(value(acceptance.clubChance,.2),.05,.95);
       const coachChance=clamp(value(acceptance.trainerChance,.4)+(r.fit-50)/350,.03,.97);
@@ -2050,7 +2052,9 @@
   transferValuation=function(trainer,club){
     const base=previousValuation(trainer,club),r=score(trainer);
     const multiplier=1+Math.min(.38,r.learned*.045+r.habits*.0015+r.potential*.001);
-    return Math.max(10000,Math.round(base*multiplier/10000)*10000);
+    // Maintain the established ₩50m..₩600m league price scale and ₩10m increments.
+    return Math.max(50000000,Math.min(600000000,
+      Math.round(base*multiplier/10000000)*10000000));
   };
   const previousAIScore=aiUnitScore;
   aiUnitScore=function(trainer){
