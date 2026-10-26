@@ -1,5 +1,6 @@
 import {readFileSync} from 'node:fs';
 import {Dex} from '@pkmn/sim';
+import {meanStatCA} from '../core/stat-potential.js';
 
 const speciesKo=JSON.parse(readFileSync(new URL('../web/species-ko.json',import.meta.url),'utf8'));
 const dexByNumber=new Map(Dex.species.all().filter(species=>species.num>0&&!species.forme)
@@ -16,10 +17,7 @@ function speciesFor(mon){
   if(candidate.exists)return candidate;
   return dexByNumber.get(speciesKo[id])||null;
 }
-function pokemonPower(mon){
-  const ca=Number(mon?.ca??mon?.power);
-  return Number.isFinite(ca)?clamp(ca,1,200):65;
-}
+function pokemonPower(mon){return meanStatCA(mon);}
 function rawMoves(mon){
   if(!Array.isArray(mon?.moves))return [];
   return mon.moves.slice(0,4).map(move=>Dex.moves.get(move)).filter(move=>move.exists);
@@ -32,7 +30,7 @@ function profile(trainer,index){
     if(!species)throw new RangeError('알 수 없는 포켓몬: '+String(mon.name||mon.species));
     const moves=rawMoves(mon);
     return {name:mon.name||species.name,species:species.name,types:species.types,
-      strength:pokemonPower(mon),level:clamp(Number(mon.level)||50,1,100),
+      strength:pokemonPower(mon),
       knownMoves:moves.filter(move=>move.category!=='Status').map(move=>({
         type:move.type,power:move.basePower,accuracy:move.accuracy})),
       statusMoves:moves.filter(move=>move.category==='Status').map(move=>move.id),
@@ -56,7 +54,7 @@ function profile(trainer,index){
   };
   return {index,name:String(trainer.name||'트레이너 '+(index+1)),skills,team,
     traits,play,types:byType,patterns,averagePower:Math.round(team.reduce((s,m)=>s+m.strength,0)/6),
-    averageLevel:Math.round(team.reduce((s,m)=>s+m.level,0)/6),
+
     knownMoveCount:team.reduce((n,m)=>n+m.knownMoves.length+m.statusMoves.length,0)};
 }
 export function typeEffectiveness(attackType,defenderTypes){
@@ -205,10 +203,10 @@ export function analyzeOpponent({home,away,playerClubId,season=1,round=1}={}){
   return {engine:'showdown-scout',season,round,playerClubId:own.id,
     opponentId:rival.id,opponentName:rival.name,
     opponents:theirs.map(({index,name,skills,traits,play,types,patterns,
-      averagePower,averageLevel,team})=>({index,name,skills,traits,play,types,
-      patterns,averagePower,averageLevel,
+      averagePower,team})=>({index,name,skills,traits,play,types,
+      patterns,averagePower,
       // Existing public rosters are visible, but exact unknown moves are not invented.
-      pokemon:team.map(({name,types,level,movesKnown})=>({name,types,level,movesKnown}))})),
+      pokemon:team.map(({name,types,movesKnown})=>({name,types,movesKnown}))})),
     ownTrainers:ours.map(t=>({index:t.index,name:t.name,traits:t.traits,play:t.play})),
     typeDistribution:types,tendency,matrix,recommendedOrder,matches,
     note:'실제 대전 결과나 확정 승률이 아니라 현재 공개된 포켓몬과 전술 성향에 따른 비교 분석입니다. KOF 연승전에서는 추천된 순서대로 1:1 대결이 일어나는 것은 아닙니다.'};
