@@ -75,10 +75,10 @@ export function assessMoveTraits({move,battle,side='p1',profile={},remaining=1,o
     const ownLow=ownSlot&&ownSlot.maxpp>=5&&ownSlot.pp<=Math.max(2,Math.floor(ownSlot.maxpp*.2));
     if(ownLow&&options.some(m=>m.id!==move.id&&m.category!=='Status'&&
        estimate(m)>=estimate(move)*.82) && chance<.5){
-      bonus-=pp*24;
+      bonus-=pp*32;
     } else if(!ownLow&&scarce.some(m=>estimate(move)>=estimate(m)*.82)&&chance<.5) {
       // Picking a sufficiently strong, non-scarce alternative preserves rare PP.
-      bonus+=pp*8;
+      bonus+=pp*12;
       quality.pp=true;
     }
   }
