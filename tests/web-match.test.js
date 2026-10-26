@@ -1,16 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {battlePokemon, prepareClub, runMatch} from '../src/web/match-service.js';
-import {validateGP} from '../src/core/stats.js';
+import {normalizeStatPairs} from '../src/core/stat-potential.js';
 import handler from '../api/match.js';
 const pokemon=(name='피카츄',power=80)=>({name,level:50,power});
 const club=id=>({id,trainers:Array.from({length:5},(_,i)=>({name:'트레이너 '+i,tactics:10,switching:10,pokemon:Array.from({length:6},()=>pokemon())}))});
 test('legacy Korean roster maps to actual species and valid GP; explicit sets retained',()=>{
- const mon=battlePokemon(pokemon());assert.equal(mon.species,'Pikachu');assert.equal(mon.ca,80);validateGP(mon.gp,80);
+ const mon=battlePokemon(pokemon());assert.equal(mon.species,'Pikachu');
+ assert.deepEqual(mon.statCA,normalizeStatPairs(pokemon()).statCA);
+ assert.equal(Object.hasOwn(mon,'level'),false);
+ assert.equal(Object.hasOwn(mon,'ca'),false);
  const explicit=battlePokemon({...pokemon(),moves:['thunderbolt'],item:'Light Ball',ability:'Lightning Rod'});
  assert.deepEqual(explicit.moves,['thunderbolt']);assert.equal(explicit.item,'Light Ball');
  assert.throws(()=>battlePokemon(pokemon('존재하지 않는 포켓몬')),/전투 데이터/);
- assert.throws(()=>battlePokemon({...pokemon(),level:101}),/레벨/);
+ assert.deepEqual(battlePokemon({...pokemon(),level:101}).statCA,mon.statCA,
+   'old level is ignored after migration');
 });
 test('lineup is an explicit permutation of five original trainers',()=>{
  const c=club(0),order=[4,2,3,0,1];const prepared=prepareClub(c,order);
