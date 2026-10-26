@@ -100,6 +100,36 @@ test('real replay confirms direct knockouts and status applications but not indi
     '|move|p1a: Pikachu|Thunderbolt|p2a: Magikarp\n'+
     '|-damage|p2a: Magikarp|0 fnt|[from] psn\n|faint|p2a: Magikarp','p1')},{kill:0,status:0});
 });
+test('trained status and PP habits actually choose different legal moves at equal battle state',()=>{
+  const make=(kind,score,moves,{ownTypes=['Electric'],foeTypes=['Water']}={})=>{
+    const own={hp:140,maxhp:180,types:ownTypes,getTypes:()=>ownTypes,
+      moveSlots:moves.map(([id,pp,maxpp])=>({id,pp,maxpp}))};
+    const foe={hp:120,maxhp:150,types:foeTypes,getTypes:()=>foeTypes,status:''};
+    const battle={requestState:'idle',p1:{active:[own],sideConditions:{}},
+      p2:{active:[foe],sideConditions:{}}};
+    const trainer={tactics:20,switching:18,
+      autonomyAI:{preferredPlay:'balanced',openness:15,conviction:10,
+        habitScores:{[kind]:score}}};
+    const ai=new TrainerAI({}, {...trainer,aiProfile:resolveBattleAutonomy(trainer,50)},
+      {seed:[1,2,3,4],team:[{species:'Pikachu'}],battleProvider:()=>battle});
+    ai.ownActive={species:'Pikachu'};ai.foeSpecies='Blastoise';ai.prng.random=()=>0;
+    return ai.chooseMove({},moves.map(([id],i)=>({choice:'move '+(i+1),move:{id}})));
+  };
+  const ppMoves=[['thunderbolt',1,15],['discharge',10,15]];
+  assert.equal(make('pp',0,ppMoves),'move 1','untrained AI favors raw attack strength');
+  assert.equal(make('pp',100,ppMoves),'move 2','trained AI saves scarce PP');
+  const statusMoves=[['willowisp',10,10],['tackle',10,10]];
+  assert.equal(make('status',0,statusMoves,{ownTypes:['Ghost']}),'move 2');
+  assert.equal(make('status',100,statusMoves,{ownTypes:['Ghost']}),'move 1');
+});
+test('pre-match meeting UI permits all seven valid advice categories',()=>{
+  const source=readFileSync(new URL('../assets/matchday.js',import.meta.url),'utf8');
+  const before=source.slice(0,source.indexOf('/* Pokemon artwork UI'));
+  for(const k of Object.keys(TRAITS)){
+    assert.match(before,new RegExp(k+":"));
+  }
+  assert.match(before,/trainer\.directorBehaviorAdvice=p\.behaviors/);
+});
 test('battle simulation still uses legal Showdown damage and reports real decisive actions',
   {timeout:45000},async()=>{
     const gp={hp:94,atk:0,def:31,spa:94,spd:0,spe:94};
