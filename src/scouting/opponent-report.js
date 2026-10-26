@@ -116,11 +116,38 @@ function instructions(own,opponent,pair){
   if(pair.score< -15)
     return {plan:'balanced',behavior:'analysis',
       reason:'전력 열세가 예상됩니다. 전황 분석으로 불필요한 소모를 줄이세요.'};
+  if(own.traits.includes('PP 관리자')&&opponent.averagePower<own.averagePower+8)
+    return {plan:'endurance',behavior:'pp',
+      reason:'PP 관리 경험을 살려, 확실한 마무리가 아니라면 강력한 기술을 아껴 사용하세요.'};
+  if(own.team.some(mon=>mon.statusMoves.length>0)&&opponent.patterns.offensive)
+    return {plan:'control',behavior:'status',
+      reason:'보유한 견제 기술로 상대의 공격적인 플레이를 늦출 수 있는지 검토하세요.'};
+  if(own.skills.switching>=own.skills.tactics+2&&pair.vulnerability>=pair.offense-.15)
+    return {plan:'control',behavior:'matchup',
+      reason:'교체 판단 능력이 강점입니다. 적절한 상성 교체로 위험을 줄이세요.'};
+  if(own.skills.tactics>=own.skills.switching+2&&pair.score>=-10)
+    return {plan:'offense',behavior:'kill',
+      reason:'공격적인 전술 판단이 강점입니다. 상대를 처치할 기회를 우선 살펴보세요.'};
+  if(own.averagePower+5<opponent.averagePower)
+    return {plan:'endurance',behavior:'preserve',
+      reason:'포켓몬 평균 전력이 열세입니다. 현재 교전에서 무리한 소모를 피하세요.'};
+  if(own.averagePower>opponent.averagePower+5&&pair.score>=-10)
+    return {plan:'offense',behavior:'kill',
+      reason:'포켓몬 전력 우세가 있습니다. 확정 처치를 놓치지 않는 운영을 권고합니다.'};
   if(opponent.patterns.status)
     return {plan:'control',behavior:'status',
       reason:'견제 위주 대결이 예상됩니다. 상태이상이 실제로 유효한지 검토하세요.'};
+  if(pair.offense>=pair.vulnerability&&pair.score>=-10)
+    return {plan:'offense',behavior:'kill',
+      reason:'맞붙는 상성이 나쁘지 않습니다. 적절한 처치 기회를 탐색해 보세요.'};
+  if(own.skills.switching>=14)
+    return {plan:'control',behavior:'matchup',
+      reason:'교체 판단력이 높은 트레이너입니다. 불리한 대면을 피하는 운영을 권합니다.'};
+  if(own.skills.tactics>=14)
+    return {plan:'offense',behavior:'kill',
+      reason:'전술 능력이 강점인 트레이너입니다. 무리하지 않는 선에서 공격 기회를 활용하세요.'};
   return {plan:'balanced',behavior:'analysis',
-    reason:'크게 유리한 상성이 없어 상대 행동을 관찰하며 판단하는 편이 낫습니다.'};
+    reason:'뚜렷한 상성 우위가 없어 상대의 행동 후보를 비교하는 운영을 권합니다.'};
 }
 function permutations(items){
   if(items.length<=1)return [items];
