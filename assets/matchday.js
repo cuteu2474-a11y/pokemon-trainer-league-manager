@@ -472,3 +472,136 @@
   renderOffice=function(){priorReportRender();const panel=document.getElementById('dashpanel');if(panel&&game?.lastMatch?.replay?.report&&['home','fixtures'].includes(tab)){const button=document.createElement('button');button.className='g-btn alt';button.textContent='지난 경기 활약 보고서';button.onclick=()=>{const root=screen();root.innerHTML='<h1>지난 경기 활약 보고서</h1>'+reportHTML(game.lastMatch.replay)+'<button id="md-report-back">구단 화면으로</button>';root.querySelector('#md-report-back').onclick=()=>root.remove();};panel.append(button);}};
   if(game?.pendingMatch){if(game.pendingMatch.phase==='running')game.pendingMatch.phase='prepare';render();}
 })();
+
+
+/* Pokemon artwork UI: trainer rosters, profiles and transfer scouting. */
+(function pokemonArtworkUI() {
+  if (window.PokemonArtworkUI) return;
+  const artworkRoot = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/';
+  const ball = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="#eef3f7" stroke="#293e52" stroke-width="7"/><path d="M9 50a41 41 0 0 1 82 0H9" fill="#dc5660"/><path d="M9 50h82" stroke="#293e52" stroke-width="8"/><circle cx="50" cy="50" r="12" fill="#f8f8f8" stroke="#293e52" stroke-width="7"/></svg>');
+  let koreanIds = Object.create(null), spriteIds = Object.create(null), baseKeys = Object.create(null), dataReady = false;
+  const safe = value => escapeHTML(String(value ?? ''));
+  const key = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const koreanForms = [['메가X','megax'],['메가Y','megay'],['메가','mega'],['알로라','alola'],['가라르','galar'],['히스이','hisui'],['팔데아','paldea'],['원시','primal'],['영물','therian'],['오리진','origin'],['스카이','sky'],['거다이맥스','gmax']];
+  function resolve(pokemon) {
+    const pokemonName = String(pokemon?.name || pokemon?.species || pokemon || '');
+    const explicit = String(pokemon?.species || pokemon?.formId || '');
+    let english = key(explicit);
+    let id = spriteIds[english] || koreanIds[pokemonName] || 0;
+    let baseId = koreanIds[pokemonName] || id;
+    const withForm = pokemonName.match(/^(.+?)\s*[(［\[](.+?)[)］\]]$/);
+    if (withForm) {
+      baseId = koreanIds[withForm[1].trim()] || baseId;
+      const form = koreanForms.find(([label]) => withForm[2].includes(label));
+      if (form && baseKeys[baseId]) id = spriteIds[baseKeys[baseId] + form[1]] || id || baseId;
+    }
+    if (pokemon?.form || pokemon?.forme) {
+      const form = key(pokemon.form || pokemon.forme);
+      if (baseKeys[baseId]) id = spriteIds[baseKeys[baseId] + form] || id;
+    }
+    if (!id && !english) english = key(pokemonName);
+    if (!id) id = spriteIds[english] || koreanIds[pokemonName] || 0;
+    if (id > 9999 && (!baseId || baseId > 9999)) {
+      const possible = Object.keys(baseKeys).map(Number).filter(n => english.startsWith(baseKeys[n])).sort((a,b) => baseKeys[b].length-baseKeys[a].length);
+      if (possible.length) baseId = possible[0];
+    }
+    return {id: Number(id)||0, baseId: Number(baseId)||0, name: pokemonName};
+  }
+  function image(pokemon, size='large') {
+    const info=resolve(pokemon), number=info.id;
+    const src=number ? artworkRoot+'other/official-artwork/'+number+'.png' : ball;
+    return '<img class="pkm-art pkm-art-'+size+'" src="'+src+'" alt="'+safe(info.name)+' 이미지" loading="lazy" decoding="async" width="96" height="96" data-pkm-step="0" data-pkm-id="'+number+'" data-pkm-base="'+info.baseId+'">';
+  }
+  function miniRoster(pokemon) {
+    return '<div class="pkm-roster-mini" aria-label="보유 포켓몬 이미지">'+(pokemon||[]).map(p=>image(p,'mini')).join('')+'</div>';
+  }
+  function profileCard(p,i) {
+    return '<div class="profile-mon pkm-profile-card">'+image(p)+
+      '<div class="pkm-card-text"><b>'+(i+1)+'. '+safe(p.name||p.species)+'</b><small>Lv.'+safe(p.level??'—')+' · 전투력 '+safe(p.power??'—')+
+      (p.careerSeasons?'<br>활동 '+safe(p.careerSeasons)+' / 8시즌':'')+'</small><div class="g-bar"><i style="width:'+Math.max(0,Math.min(100,Number(p.power)||0))+'%"></i></div></div></div>';
+  }
+  const originalCell=trainerCell;
+  trainerCell=function(entry,column) {
+    const html=originalCell(entry,column);
+    return column==='name' && entry?.trainer?.pokemon?.length
+      ? html.replace('</td>',miniRoster(entry.trainer.pokemon)+'</td>') : html;
+  };
+  const originalProfile=trainerProfileHTML;
+  trainerProfileHTML=function(club) {
+    const html=originalProfile(club);
+    const entries=allTrainers(club), entry=entries.find(e=>e.id===selectedTrainerId)||entries[0];
+    if(!entry?.trainer?.pokemon)return html;
+    const cards='<div class="profile-pokemon pkm-profile-grid">'+entry.trainer.pokemon.map(profileCard).join('')+'</div>';
+    return html.replace(/<div class="profile-pokemon">[\s\S]*?(?=<div class="profile-actions">)/,cards);
+  };
+  const originalClubTrainerDetail=clubTrainerDetailHTML;
+  clubTrainerDetailHTML=function(trainer) {
+    const html=originalClubTrainerDetail(trainer);
+    if(!trainer?.pokemon)return html;
+    return html.replace(/<div class="ct-pokemon-grid">[\s\S]*$/, '<div class="ct-pokemon-grid pkm-choose-grid">'+trainer.pokemon.map((p,i)=>
+      '<div class="ct-pokemon pkm-choose-card">'+image(p)+
+      '<span><strong>'+String(i+1).padStart(2,'0')+' '+safe(p.name||p.species)+'</strong>'+
+      '<small>레벨 '+safe(p.level??'—')+' · 전투력 '+safe(p.power??'—')+'</small>'+
+      '<em>활동 '+safe(p.careerSeasons||1)+' / 8시즌</em></span></div>').join('')+'</div>');
+  };
+  const originalClubTrainers=renderClubTrainers;
+  renderClubTrainers=function() {
+    originalClubTrainers();
+    const club=clubSelectDraft?.clubs?.[clubSelectId];
+    if (!club) return;
+    document.querySelectorAll('#clubtrainers [data-preview-index]').forEach(button=>{
+      const trainer=club.trainers[Number(button.dataset.previewIndex)];
+      const lead=trainer?.pokemon?.slice(0,3);
+      if(lead?.length)button.querySelector('.ct-sub')?.insertAdjacentHTML('afterend',miniRoster(lead));
+    });
+  };
+  const originalOffice=renderOffice;
+  renderOffice=function() {
+    originalOffice();
+    if(tab==='pokemon') {
+      const roster=(myClub()?.trainers||[]).concat(myClub()?.reserveTrainers||[]).filter(Boolean).flatMap(t=>t.pokemon||[]);
+      const nodes=document.querySelectorAll('#dashpanel .g-pokemon > div');
+      nodes.forEach((node,i)=>{if(roster[i]&&!node.classList.contains('pkm-owned-card')){node.classList.add('pkm-owned-card');node.insertAdjacentHTML('afterbegin',image(roster[i]));}});
+    }
+    if(tab==='transfer') {
+      let item=typeof marketTarget==='function' ? marketTarget()?.t : null;
+      if(!item && typeof marketFreeSelected==='number' && marketFreeSelected>=0)item=game?.freeAgents?.[marketFreeSelected]?.trainer;
+      const nodes=document.querySelectorAll('#marketDetail .fm-detail-mon');
+      nodes.forEach((node,i)=>{if(item?.pokemon?.[i]&&!node.querySelector('.pkm-art'))node.insertAdjacentHTML('afterbegin',image(item.pokemon[i]));});
+    }
+  };
+  // Images are decorative UI only; no battle, save, roster or stat mutation.
+  document.addEventListener('error',event=>{
+    const img=event.target;
+    if(!(img instanceof HTMLImageElement)||!img.classList.contains('pkm-art'))return;
+    const id=Number(img.dataset.pkmId), base=Number(img.dataset.pkmBase), step=Number(img.dataset.pkmStep);
+    if(step===0&&id){img.dataset.pkmStep='1';img.src=artworkRoot+id+'.png';}
+    else if(step<=1&&base&&base!==id){img.dataset.pkmStep='2';img.src=artworkRoot+'other/official-artwork/'+base+'.png';}
+    else {img.dataset.pkmStep='3';img.src=ball;}
+  },true);
+  const css=document.createElement('style');
+  css.textContent='.pkm-art{display:block;object-fit:contain;flex:none;filter:drop-shadow(0 3px 6px #0005)}'+
+    '.pkm-art-mini{width:29px;height:29px}.pkm-roster-mini{display:flex;align-items:center;gap:1px;max-width:220px;flex-wrap:wrap;margin-top:5px}'+
+    '.pkm-trainer-line{display:flex;flex-wrap:wrap;gap:6px}.pkm-profile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}'+
+    '.pkm-profile-card{display:flex;align-items:center;gap:9px;min-width:0;min-height:112px;background:linear-gradient(145deg,#162c43,#101d31);border:1px solid #47627b;border-radius:8px;padding:9px}'+
+    '.pkm-profile-card .pkm-art{width:84px;height:90px}.pkm-card-text{flex:1;min-width:0}.pkm-card-text b{overflow-wrap:anywhere}'+
+    '.pkm-choose-card{display:flex;align-items:center;gap:8px;min-width:0}.pkm-choose-card .pkm-art{width:66px;height:75px}.pkm-choose-card span{min-width:0}'+
+    '.pkm-owned-card{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.pkm-owned-card .pkm-art{width:68px;height:70px}'+
+    '#marketDetail .fm-detail-mon{display:flex;align-items:center;gap:8px}#marketDetail .fm-detail-mon .pkm-art{width:56px;height:60px}'+
+    '.ct-trainer-card .pkm-roster-mini{margin-top:4px}.ct-trainer-card .pkm-art-mini{width:25px;height:25px}'+
+    '@media(max-width:780px){.pkm-profile-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pkm-profile-card .pkm-art{width:68px;height:72px}}'+
+    '@media(max-width:460px){.pkm-profile-grid{grid-template-columns:1fr}}';
+  document.head.appendChild(css);
+  window.PokemonArtworkUI={resolve,image};
+  Promise.all([
+    fetch('/src/web/species-ko.json').then(r=>{if(!r.ok)throw Error('Korean species data');return r.json();}),
+    fetch('/src/web/species-sprites.json').then(r=>{if(!r.ok)throw Error('Form and sprite data');return r.json();})
+  ]).then(([ko,sprites])=>{
+    koreanIds=ko;spriteIds=sprites;
+    for(const [name,id] of Object.entries(sprites))if(id<=1025&&!baseKeys[id])baseKeys[id]=name;
+    dataReady=true;
+    if(game&&['team','profile','pokemon','transfer'].includes(tab))renderOffice();
+    if(document.querySelector('#clubtrainers [data-preview-index]'))renderClubTrainers();
+  }).catch(error=>{console.warn('포켓몬 이미지 식별 데이터 로딩 실패:',error.message);});
+})();
