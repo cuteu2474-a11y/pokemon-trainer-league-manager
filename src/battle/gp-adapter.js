@@ -1,14 +1,13 @@
-import {actualStats, validateGP, STATS} from '../core/stats.js';
+import {STATS} from '../core/stats.js';
+import {calculateLevelFreeStats, normalizeStatPairs} from '../core/stat-potential.js';
 
-/** Convert one club-owned Pokemon into authoritative, IV/EV-independent stats. */
+/** Convert individual six-stat CA (never PA or level) into combat stats. */
 export function convertPokemon(pokemon, speciesData) {
   if (!pokemon || !speciesData?.baseStats) throw new TypeError('Pokemon and species baseStats required');
-  const {ca, pa, gp, level, natureModifiers = {}} = pokemon;
-  if (!Number.isInteger(pa) || pa < ca || pa > 200) throw new RangeError('Invalid PA');
-  validateGP(gp, ca);
-  const stats = actualStats(speciesData.baseStats, gp, level, natureModifiers);
-  if (speciesData.id === 'shedinja' || speciesData.name === 'Shedinja') stats.hp = 1;
-  return {id: pokemon.id, species: speciesData.name ?? pokemon.species, level, ca, pa, gp: {...gp}, stats};
+  const {statCA,statPA}=normalizeStatPairs(pokemon);
+  const stats=calculateLevelFreeStats(speciesData.baseStats,statCA,pokemon.natureModifiers||{});
+  if(speciesData.id==='shedinja'||speciesData.name==='Shedinja')stats.hp=1;
+  return {id:pokemon.id,species:speciesData.name??pokemon.species,statCA,statPA,stats};
 }
 
 function applyCalculatedStats(battlePokemon, stats) {
