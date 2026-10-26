@@ -17,7 +17,8 @@ export function trainerPersonality(trainer={}){
   if(!valid(preferred))preferred=valid(trainer.battlePlan)?trainer.battlePlan:null;
   if(!valid(preferred))preferred=(trainer.switching??10)>(trainer.tactics??10)+3?'control':
     (trainer.tactics??10)>(trainer.switching??10)+3?'offense':'balanced';
-  return {preferred,openness:skill(ai.openness),conviction:skill(ai.conviction),
+  const traits=Array.isArray(ai.playTraits)?ai.playTraits.filter(x=>['적극적인 교체','에이스 보존','전황 분석가'].includes(x)):[];
+  return {preferred,traits,openness:skill(ai.openness),conviction:skill(ai.conviction),
     moveSkill:skill(trainer.moveJudgment??trainer.movesSkill??trainer.tactics),
     switchSkill:skill(trainer.switchJudgment??trainer.switching),
     analysis:skill(trainer.battleAnalysis??trainer.analysis??trainer.tactics),
