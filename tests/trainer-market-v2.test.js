@@ -22,7 +22,7 @@ const makeGame=()=>{
   const theirs={id:1,name:'상대 구단',division:0,trainers:Array.from({length:5},(_,i)=>makeTrainer(i+11)),
     reserveTrainers:[makeTrainer(100,{autonomyAI:{version:1,preferredPlay:'offense',openness:16,
       conviction:8,habitScores:{kill:85,analysis:60},playTraits:['킬각 포착']}})]};
-  return {season:1,week:2,club:ours.name,coins:2000000,
+  return {season:1,week:2,club:ours.name,coins:200000000,
     clubs:[ours,theirs],transferHistory:[],log:[],trainerAI:{
       trust:{'1':64,'2':51},advice:{},issued:{},moveAdvice:{},moveIssued:{}
     }};
@@ -35,7 +35,7 @@ function setup(config={}){
     window:{},document:doc,game:g,transferSelected:{},
     marketOffer(){},marketTarget:()=>target,
     transferMarketHTML:()=>'<h2>우리 구단 계약 관리</h2>',
-    transferValuation:()=>500000,transferProfile:trainer=>trainer.profile||{
+    transferValuation:()=>50000000,transferProfile:trainer=>trainer.profile||{
       ca:100,pa:150,contract:3
     },aiUnitScore:()=>100,
     aiTransferCandidates:()=>[],aiInit(){},
@@ -74,9 +74,9 @@ test('scouting is season-scoped, paid only once and keeps squad unchanged',()=>{
   const {api,game}=setup(),original=game.clubs[1].reserveTrainers[0];
   const before=JSON.stringify(original);
   assert.equal(api.scout().ok,true);
-  assert.equal(game.coins,1800000);
+  assert.equal(game.coins,197000000);
   assert.equal(api.scout().ok,false);
-  assert.equal(game.coins,1800000);
+  assert.equal(game.coins,197000000);
   assert.equal(JSON.stringify(original),before);
 });
 test('transfer transaction preserves Pokémon, career, learned habits and unique identity',()=>{
@@ -103,7 +103,7 @@ test('prevent orphaned starting lineups, stale offers and unaffordable transfers
   assert.equal(JSON.stringify(game.clubs),initial);
   seller.reserveTrainers.push(...replacement);
   assert.equal(api.checkTransfer({buyer:ours,seller,trainer:replacement[0],
-    sourceKind:'reserve',slot:0,fee:3000000,budget:game.coins}).ok,false);
+    sourceKind:'reserve',slot:0,fee:3000000000,budget:game.coins}).ok,false);
   assert.equal(api.checkTransfer({buyer:ours,seller,trainer:makeTrainer(999),
     sourceKind:'reserve',slot:0,fee:10000,budget:game.coins}).ok,false);
 });
@@ -115,7 +115,7 @@ test('successful user bid is transactional and cannot duplicate the same week',(
   assert.equal(game.clubs[1].reserveTrainers.length,0);
   assert.equal(game.transferHistory[0].type,'영입');
   assert.equal(game.coins,before-game.transferHistory[0].fee);
-  assert.ok(game.transferHistory[0].fee>=575000);
+  assert.ok(game.transferHistory[0].fee>=50000000);
   assert.equal(original.aiCareer.matches,3);
   api.bid();
   assert.equal(game.transferHistory.length,1);
@@ -125,7 +125,7 @@ test('rejected bid consumes no coins and cannot be spammed until another week',(
   const {api,game,messages}=setup({rng:()=>.99});
   const original=game.clubs[1].reserveTrainers[0];
   api.bid();
-  assert.equal(game.coins,2000000);
+  assert.equal(game.coins,200000000);
   assert.equal(game.transferHistory.length,1);
   assert.equal(game.transferHistory[0].type,'협상 결렬');
   assert.equal(game.clubs[1].reserveTrainers[0],original);
