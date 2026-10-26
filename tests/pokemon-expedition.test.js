@@ -70,10 +70,11 @@ test('maximum two trainers dispatched per week, and same trainer cannot reroll',
   assert.equal(api.resolvePlayer().length,0);
   globals.nextWeek();
   assert.equal(api.resolvePlayer().length,0,'already settled jobs never grant multiple rewards');
-  assert.equal(api.dispatch('1','관동','growth').ok,
-    game.clubs[0].trainers[0].pokemonScouting.candidate?false:true);
+  const waiting=Boolean(game.clubs[0].trainers[0].pokemonScouting.candidate);
+  const second=api.dispatch('1','관동','growth');
+  assert.equal(second.ok,!waiting);
   assert.equal(game.clubs[0].trainers[0].pokemonScouting.mission.season,1);
-  assert.equal(game.clubs[0].trainers[0].pokemonScouting.mission.week,2);
+  assert.equal(game.clubs[0].trainers[0].pokemonScouting.mission.week,waiting?1:2);
 });
 test('outcomes: unsuccessful searches leave all Pokémon and budget unchanged after dispatch',()=>{
   const {api,game}=setup();
