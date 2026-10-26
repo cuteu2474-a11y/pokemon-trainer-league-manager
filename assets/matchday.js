@@ -2113,3 +2113,13 @@
       state().premium=Number(n);persist();renderOffice();}
   };
 })();
+
+
+/* Attach opponent scouting only after all matchday and market modules are installed. */
+(function loadOpponentScout(){
+  if(typeof document==='undefined'||window.OpponentScoutUI)return;
+  const script=document.createElement('script');
+  script.src='assets/opponent-scout-ui.js';
+  script.async=false;
+  document.body.append(script);
+})();
