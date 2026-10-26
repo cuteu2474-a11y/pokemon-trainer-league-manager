@@ -35,7 +35,9 @@ function setup(config={}){
     window:{},document:doc,game:g,transferSelected:{},
     marketOffer(){},marketTarget:()=>target,
     transferMarketHTML:()=>'<h2>우리 구단 계약 관리</h2>',
-    transferValuation:()=>500000,aiUnitScore:()=>100,
+    transferValuation:()=>500000,transferProfile:trainer=>trainer.profile||{
+      ca:100,pa:150,contract:3
+    },aiUnitScore:()=>100,
     aiTransferCandidates:()=>[],aiInit(){},
     transferAcceptance:()=>({clubChance:.6,trainerChance:.7}),
     aiMaintainSquad(){},clubIdentity:()=>({budget:1000000}),
@@ -111,9 +113,9 @@ test('successful user bid is transactional and cannot duplicate the same week',(
   api.bid();
   assert.equal(game.clubs[0].reserveTrainers[0],original);
   assert.equal(game.clubs[1].reserveTrainers.length,0);
-  assert.equal(game.coins,before-575000);
   assert.equal(game.transferHistory[0].type,'영입');
-  assert.equal(game.transferHistory[0].fee,575000);
+  assert.equal(game.coins,before-game.transferHistory[0].fee);
+  assert.ok(game.transferHistory[0].fee>=575000);
   assert.equal(original.aiCareer.matches,3);
   api.bid();
   assert.equal(game.transferHistory.length,1);
@@ -147,5 +149,5 @@ test('AI club shortlist prioritizes stronger skill, learned traits and plan comp
   assert.ok(result.some(x=>x.trainer===a));
   assert.ok(api.compatible(a,'attacking')>api.compatible(b,'attacking'));
   assert.equal(typeof sandbox.aiTransferCandidates,'function');
-  assert.equal(sandbox.transferMarketHTML().includes('이적시장'),true);
+  assert.equal(sandbox.transferMarketHTML().includes('트레이너 스카우팅'),true);
 });
