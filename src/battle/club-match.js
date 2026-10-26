@@ -15,7 +15,8 @@ export async function simulateClubMatch(clubA, clubB, {seed, maxBattles = 9} = {
     const result = await simulateSixVsSix(teamA, teamB, {
       ...(seed ? {seed: seed.map((v,i) => (v + rounds.length * 65537 + i) >>> 0)} : {}),
       carry: {p1: carryA, p2: carryB},
-      trainerA: clubA[a], trainerB: clubB[b],
+      trainerA: {...clubA[a],relayOpponentsRemaining:5-b},
+      trainerB: {...clubB[b],relayOpponentsRemaining:5-a},
     });
     const victor = result.winner === 'Club A' ? 'A' : result.winner === 'Club B' ? 'B' : 'tie';
     rounds.push({trainerA: a, trainerB: b, winner: victor, pokemonOrder:{p1:teamA.map(mon=>mon.name),p2:teamB.map(mon=>mon.name)}, result});
