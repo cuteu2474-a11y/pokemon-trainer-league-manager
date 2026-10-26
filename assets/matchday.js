@@ -2133,3 +2133,13 @@
   script.async=false;
   document.body.append(script);
 })();
+
+
+/* Load the level-free CA/PA UI after the original office and matchday scripts. */
+(function loadStatAbilityUI(){
+  if(typeof document==='undefined'||!document.body?.append)return;
+  const script=document.createElement('script');
+  script.type='module';
+  script.src='assets/ability-ui.js';
+  document.body.append(script);
+})();
