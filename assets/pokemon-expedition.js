@@ -128,7 +128,11 @@
     if(!Number.isInteger(scout.skill))
       scout.skill=clamp(Math.round(4+Number(t.tactics||10)*.36+
         Number(t.switching||10)*.27+(hash(t.uid??t.name)%5)-2),1,20);
+    if(!Number.isInteger(scout.captureSkill))
+      scout.captureSkill=clamp(Math.round(3+Number(t.switching||10)*.47+
+        Number(t.tactics||10)*.21+(hash(String(t.uid??t.name)+':capture')%5)-2),1,20);
     if(!Number.isInteger(scout.experience))scout.experience=0;
+    if(!Number.isInteger(scout.captureExperience))scout.captureExperience=0;
     if(!Array.isArray(scout.history))scout.history=[];
     return scout;
   }
@@ -147,11 +151,19 @@
       return task?.season===game.season&&task?.week===game.week;
     }).length;
   }
-  function optionStats(region,focus,skill=10,habitat='grass',time='day'){
+  function skillsOf(skills=10){
+    const n=Number(typeof skills==='object'&&skills!==null?skills.skill:skills);
+    const c=Number(typeof skills==='object'&&skills!==null?
+      (skills.captureSkill??skills.skill):skills);
+    return {skill:clamp(Number.isFinite(n)?n:10,1,20),
+      captureSkill:clamp(Number.isFinite(c)?c:10,1,20)};
+  }
+  function optionStats(region,focus,skills=10,habitat='grass',time='day'){
+    const {skill,captureSkill}=skillsOf(skills);
     const rare=focus==='rare';
     const discovery=clamp(.89+skill*.004-(rare?.12:0)-
       (habitat==='sea'?.025:0)-(time==='night'?.02:0),.3,.98);
-    const capture=clamp(.66+skill*.012-(rare?.09:0)-
+    const capture=clamp(.66+captureSkill*.012-(rare?.09:0)-
       (habitat==='cave'?.02:0),.3,.94);
     return {discovery,capture};
   }
@@ -179,10 +191,10 @@
     return clamp(stats.capture-(rarity==='희귀'?.19:rarity==='드묾'?.08:0),.25,.94);
   }
   /** Exact unrounded probabilities used for both UI and the actual RNG draws. */
-  function encounterTable(region,habitat='grass',time='day',focus='balanced',skill=10){
+  function encounterTable(region,habitat='grass',time='day',focus='balanced',skills=10){
     const entries=encounterWeights(region,focus,habitat,time);
     const total=entries.reduce((sum,x)=>sum+x.weight,0);
-    const stats=optionStats(region,focus,skill,habitat,time);
+    const stats=optionStats(region,focus,skills,habitat,time);
     const pokemon=entries.map(x=>{
       const rate=x.weight/total;
       const chance=captureChance(x.rarity,stats);
@@ -190,7 +202,7 @@
         encounterRate:rate,findRate:stats.discovery*rate,
         captureRate:stats.discovery*rate*chance,captureIfFound:chance};
     });
-    return {region,habitat,time,focus,skill,findChance:stats.discovery,
+    return {region,habitat,time,focus,...skillsOf(skills),findChance:stats.discovery,
       noEncounterChance:1-stats.discovery,pokemon,
       totalCaptureChance:pokemon.reduce((sum,x)=>sum+x.captureRate,0)};
   }
@@ -211,10 +223,15 @@
       power:ca,ca,pa,careerSeasons:1,debutSeason:season,
       source:'wild-scout',scoutRarity:rarity};
   }
-  function outcome(mission,skill,season){
+  function outcome(mission,skills,season){
     const rand=localRng(mission.seed);
     const habitat=mission.habitat||'grass',time=mission.time||'day';
-    const odds=optionStats(mission.region,mission.focus,skill,habitat,time);
+    // Snapshot dispatched abilities so an in-flight trainer's later growth cannot
+    // silently change the probabilities shown when the manager approved this trip.
+    const used=mission.scoutSkill!=null?
+      skillsOf({skill:mission.scoutSkill,captureSkill:mission.captureSkill??mission.scoutSkill}):
+      skillsOf(skills);
+    const odds=optionStats(mission.region,mission.focus,used,habitat,time);
     if(rand()>=odds.discovery)
       return {status:'not-found',reason:'탐색했지만 포켓몬을 발견하지 못했습니다.'};
     const name=pickEncounter(mission.region,mission.focus,rand,habitat,time);
@@ -222,7 +239,7 @@
     const catchChance=captureChance(rarity,odds);
     if(rand()>=catchChance)return {status:'escaped',name,rarity,
       reason:name+' 발견에 성공했지만 포획에는 실패했습니다.'};
-    return {status:'captured',name,rarity,candidate:candidatePokemon(name,mission.focus,skill,rand,season),
+    return {status:'captured',name,rarity,candidate:candidatePokemon(name,mission.focus,used.skill,rand,season),
       reason:name+' 포획 성공 · 트레이너가 교체 후보로 보관 중입니다.'};
   }
   function suggestedSlot(trainer,mon){
@@ -252,7 +269,7 @@
     if(game.coins<due)return {ok:false,error:'파견 운영비가 부족합니다.'};
     // Record the expedition and deduct costs atomically. No instant rerolls.
     s.mission={status:'travel',season:game.season,week:game.week,region,focus,
-      habitat,time,cost:due,
+      habitat,time,cost:due,scoutSkill:s.skill,captureSkill:s.captureSkill,
       seed:hash([game.seed,game.season,game.week,keyOf(t),region,habitat,time,focus].join(':'))};
     game.coins-=due;
     data().missions++;
@@ -264,7 +281,7 @@
     const s=talent(t),m=s.mission;
     if(!m||m.status!=='travel')return null;
     if(game.season<m.season||(game.season===m.season&&game.week<=m.week))return null;
-    const result=outcome(m,s.skill,game.season);
+    const result=outcome(m,{skill:s.skill,captureSkill:s.captureSkill},game.season);
     m.status=result.status;m.result=result.reason;
     if(result.candidate){
       s.candidate=result.candidate;
@@ -272,7 +289,14 @@
       m.recommendation=chosen;
     }
     s.experience++;
-    if(s.experience>=4&&s.skill<20){s.experience=0;s.skill++;}
+    if(s.experience>=4){s.experience=0;if(s.skill<20)s.skill++;}
+    if(result.status==='captured'){
+      s.captureExperience++;
+      if(s.captureExperience>=4){
+        s.captureExperience=0;
+        if(s.captureSkill<20)s.captureSkill++;
+      }
+    }
     const item={season:game.season,week:game.week,trainer:t.name,region:m.region,
       habitat:m.habitat||'grass',time:m.time||'day',
       focus:m.focus,status:result.status,description:result.reason,
