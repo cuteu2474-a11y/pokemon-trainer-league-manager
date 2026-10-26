@@ -142,18 +142,18 @@ test('feedback depends on personality and match performance, not a guaranteed tr
   const success=api.offerFeedback(save,0,round,2,'analysis');
   assert.equal(success.ok,true);
   assert.equal(success.feedback.response,'수용');
-  assert.equal(save.trainerAI.trust.home2,52);
+  assert.equal(save.trainerAI.trust['club:0:home2'],52);
   assert.equal(api.offerFeedback(save,0,round,2,'praise').ok,false,'no repeat meetings');
   assert.equal(api.offerFeedback(save,0,round,4,'praise').ok,false,'bench cannot be praised for match play');
   assert.equal(api.offerFeedback(save,0,'unknown',2,'praise').ok,false);
   assert.equal(api.offerFeedback(save,0,round,2,'bad input').ok,false);
   const other=game(),trainer=other.clubs[0].trainers[2];
   trainer.autonomyAI.conviction=19;trainer.autonomyAI.openness=3;
-  other.trainerAI={version:1,trust:{home2:30}};
+  other.trainerAI={version:1,trust:{'club:0:home2':30}};
   api.applyMatch(other,fixture(),0);
   const rejected=api.offerFeedback(other,0,round,2,'challenge');
   assert.equal(rejected.feedback.response,'반발');
-  assert.equal(other.trainerAI.trust.home2,27);
+  assert.equal(other.trainerAI.trust['club:0:home2'],27);
 });
 test('feedback never changes match replay results or Pokémon stats',()=>{
   const api=careerApi(),save=game(),p=fixture(),before=JSON.stringify(p.result);
