@@ -3,6 +3,7 @@ import {trainerPersonality} from './battle-autonomy.js';
 import {RandomPlayerAI,Dex} from '@pkmn/sim';
 import {selectTacticalMove,searchBudget,evaluateMove} from './tactical-search.js';
 import {rolloutActions} from './showdown-rollout.js';
+import {traitValue,assessMoveTraits,switchTraitBonus} from './trait-decision.js';
 
 const clamp=x=>Math.max(1,Math.min(20,Number.isFinite(x)?x:10));
 const limit=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -95,17 +96,11 @@ export class TrainerAI extends RandomPlayerAI{
     chance*=.35+this.profile.switchSkill/20;
     if(this.profile.preservation>=16&&this.remaining>1&&health<.55)chance+=.10;
     // Earned play traits influence decision tendencies, not legal actions or stats.
-    if(this.profile.traits?.includes('적극적인 교체'))chance+=.075;
-    if(this.profile.traits?.includes('에이스 보존')&&this.remaining>1&&health<.75)chance+=.06;
+    chance+=.075*traitValue(this.profile,'switch');
+    if(this.remaining>1&&health<.75)chance+=.06*traitValue(this.profile,'preserve');
     // Successful previous choices strengthen a habit even without fresh manager input.
-    const switchHabit=Math.max(0,Math.min(100,Number(this.profile.habitScores?.switch)||0));
-    const preserveHabit=Math.max(0,Math.min(100,Number(this.profile.habitScores?.preserve)||0));
-    if(mismatch)chance+=.001*switchHabit;
-    if(this.remaining>1&&health<.45&&danger>=2)chance+=.0006*preserveHabit;
-    if(this.profile.behaviorAdvice==='switch'&&mismatch)
-      chance+=.075*(this.profile.behaviorWeight||0);
-    if(this.profile.behaviorAdvice==='preserve'&&this.remaining>1&&health<.45&&danger>=2)
-      chance+=.06*(this.profile.behaviorWeight||0);
+    if(mismatch)chance+=.03*traitValue(this.profile,'matchup');
+    if(this.remaining>1&&health<.45&&danger>=2)chance+=.035*traitValue(this.profile,'preserve');
     return 1-limit(chance,0,.48);
   }
   preference(move,battle){
@@ -120,9 +115,7 @@ export class TrainerAI extends RandomPlayerAI{
     if(!own)return 0;
     const hp=own.hp/Math.max(1,own.maxhp);
     const conservation=Math.max(0,(this.profile.preservation-10)*.8+(this.remaining-1)*2+
-      (this.profile.traits?.includes('에이스 보존')?5:0)+
-      (Math.min(100,Number(this.profile.habitScores?.preserve)||0)/20)+
-      (this.profile.behaviorAdvice==='preserve'?3*(this.profile.behaviorWeight||0):0));
+      5*traitValue(this.profile,'preserve'));
     if(move.heal&&hp<.65)return conservation+6;
     if(move.drain&&hp<.60)return conservation;
     if(move.selfdestruct||move.id==='explosion'||move.id==='selfdestruct')return -conservation*3;
@@ -130,8 +123,8 @@ export class TrainerAI extends RandomPlayerAI{
     // never a substitute for a clear knockout or Showdown's PP accounting.
     const slot=own.moveSlots?.find(entry=>entry.id===move.id);
     if(this.profile.preservation>=14&&slot&&slot.pp<=2&&slot.maxpp>=5&&
-      move.category!=='Status'&&move.basePower>=70){
-      return -Math.min(8,conservation*.8);
+      move.category!=='Status'&&move.basePower>=70&&traitValue(this.profile,'pp')>0){
+      return -Math.min(8,conservation*.8)*traitValue(this.profile,'pp');
     }
     return 0;
   }
@@ -141,6 +134,11 @@ export class TrainerAI extends RandomPlayerAI{
     const battle=this.battleProvider?.();
     const {ownTypes,foeTypes}=this.matchup();
     const context={foeTypes,ownTypes,ownAbility:this.ownActive?.ability,ownItem:this.ownActive?.item};
+    const battleSlots=battle?.[this.side]?.active?.[0]?.moveSlots||[];
+    const legalMoveData=moves.map(entry=>{
+      const slotNumber=Number(entry.choice?.match(/^move ([1-4])/)?.[1])-1;
+      return Dex.moves.get(battleSlots[slotNumber]?.id||entry.move?.id||entry.move?.move||entry.move||'');
+    }).filter(move=>move.exists);
     const analysisHabit=Math.min(100,Math.max(0,Number(this.profile.habitScores?.analysis)||0));
     const meetingBoost=this.profile.behaviorAdvice==='analysis'?
       1.5*(this.profile.behaviorWeight||0):0;
@@ -167,7 +165,10 @@ export class TrainerAI extends RandomPlayerAI{
         for(const candidate of ranked){
           const index=Number(candidate.choice.split(' ')[1])-1;
           const move=Dex.moves.get(battle[this.side].active[0].moveSlots[index]?.id);
-          candidate.score+=this.preference(move,battle)+this.contextualBonus(move,battle);
+          const effects=assessMoveTraits({move,battle,side:this.side,profile:this.profile,
+            remaining:this.remaining,options:legalMoveData,forecast:candidate});
+          candidate.traitEvidence=effects.quality;
+          candidate.score+=this.preference(move,battle)+this.contextualBonus(move,battle)+effects.bonus;
         }
         ranked.sort((a,b)=>b.score-a.score||a.choice.localeCompare(b.choice));
         if(ranked[0]?.runs>0&&Number.isFinite(ranked[0].score)){
@@ -180,9 +181,11 @@ export class TrainerAI extends RandomPlayerAI{
           this.record('move',ranked[0].choice,
             this.profile.preservation>=14&&this.remaining>1?'전황 분석·연승 전력 관리':'전황 분석·실전 시뮬레이션',
             {plan:this.plan,advantage:Number(ranked[0].score.toFixed(1)),
-             quality:{analysis:ranked[0].runs>=2&&ranked[1]?.runs>=2&&gap>=8,
+             quality:{...ranked[0].traitEvidence,
+               analysis:ranked[0].runs>=2&&ranked[1]?.runs>=2&&gap>=8,
                analysisGap:Number(gap.toFixed(1)),preserve:preserveCandidate,
-               preserveMove:preserveCandidate?chosen.id:null}});
+               preserveMove:preserveCandidate?chosen.id:null,
+               koRate:Number((ranked[0].koRate||0).toFixed(2))}});
           
           return ranked[0].choice;
         }
@@ -195,11 +198,13 @@ export class TrainerAI extends RandomPlayerAI{
       const value=evaluateMove(entry,context);
       const preference=this.preference(move,battle);
       const bonus=this.contextualBonus(move,battle);
+      const trait=assessMoveTraits({move,battle,side:this.side,profile:this.profile,
+        remaining:this.remaining,options:legalMoveData});
       const lean=move.exists?(this.plan==='tempo'&&move.priority>0?13:
         this.plan==='control'&&move.category==='Status'?26:
         this.plan==='offense'&&move.category!=='Status'?5:
         this.plan==='endurance'&&move.heal?12:0):0;
-      return {entry,i,value:value+preference+bonus+lean};
+      return {entry,i,quality:trait.quality,value:value+preference+bonus+lean+trait.bonus};
     }).sort((a,b)=>b.value-a.value||a.i-b.i);
     if(rankings[0]?.value>0){
       const choice=rankings[0].entry.choice;
@@ -208,7 +213,8 @@ export class TrainerAI extends RandomPlayerAI{
       const own=battle?.[this.side]?.active?.[0];
       const preserve=this.remaining>1&&own?.maxhp>0&&own.hp/own.maxhp<.66&&Boolean(move.heal||move.drain);
       this.record('move',choice,'선플·상성·전술 우선순위',
-        {plan:this.plan,quality:{analysis:false,preserve,preserveMove:preserve?move.id:null}});
+        {plan:this.plan,quality:{...rankings[0].quality,analysis:false,preserve,
+          preserveMove:preserve?move.id:null}});
       return choice;
     }
     const choice=selectTacticalMove(moves,context,this.skill.tactics,()=>this.prng.random());
@@ -230,14 +236,26 @@ export class TrainerAI extends RandomPlayerAI{
       const threat=foeTypes.length?Math.max(...foeTypes.map(t=>typeMultiplier(t,species.types))):1;
       const attack=foeTypes.length?Math.max(...species.types.map(t=>typeMultiplier(t,foeTypes))):1;
       const preserve=this.remaining>1&&this.profile.preservation>=14;
+      const ownTypes=this.battleProvider?.()?.[this.side]?.active?.[0]?.getTypes?.()||
+        this.matchup().ownTypes;
+      const currentThreat=foeTypes.length&&ownTypes.length?
+        Math.max(...foeTypes.map(type=>typeMultiplier(type,ownTypes))):1;
+      const state=this.battleProvider?.()?.[this.side]?.sideConditions||{};
+      const rock=state.stealthrock?.layers?
+        .125*typeMultiplier('Rock',species.types):0;
+      const spikes=state.spikes?.layers&& !species.types.includes('Flying')?
+        Math.min(.25,(Number(state.spikes.layers)||1)*.0834):0;
+      const traits=switchTraitBonus(this.profile,{currentThreat,nextThreat:threat,
+        health,offense:attack,hazards:rock+spikes});
       const score=(threat===0?32:30/(Math.max(.25,threat)))+
-        (attack===0?0:Math.min(4,attack)*15)+health*(preserve?34:20);
-      return {entry,i,score};
+        (attack===0?0:Math.min(4,attack)*15)+health*(preserve?34:20)+traits.bonus;
+      return {entry,i,score,quality:traits.quality};
     }).sort((a,b)=>b.score-a.score||a.i-b.i);
     // Weaker evaluators are allowed to be less precise, but never pick an invalid slot.
     const uncertainty=(20-this.profile.switchSkill)/20;
     const index=scored.length>1&&this.prng.random()<uncertainty*.35?1:0;
-    const best=scored[index]?.entry||switches[0];
+    const selected=scored[index]||scored[0];
+    const best=selected?.entry||switches[0];
     const activePokemon=this.battleProvider?.()?.[this.side]?.active?.[0];
     const ownTypes=activePokemon?.getTypes?.()||this.matchup().ownTypes;
     const currentThreat=foeTypes.length&&ownTypes.length?
@@ -255,6 +273,7 @@ export class TrainerAI extends RandomPlayerAI{
     this.record('switch',String(best.slot),active===undefined?'기절 교체 · 잔존 전력 평가':
       '불리한 상성·HP 위험에 따른 자율 교체',
       {plan:this.plan,quality:{switch:validQuality,
+        matchup:validQuality&&Boolean(selected?.quality?.matchup),
         preserve:validQuality&&this.remaining>1&&endangered,
         currentThreat,nextThreat}});
     
