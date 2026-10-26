@@ -81,7 +81,7 @@
     request[p.home===mine?'home':'away'].trainers.forEach((trainer,i)=>{
       trainer.directorAdvice=p.plans?.[i]||null;
       trainer.directorBehaviorAdvice=p.behaviors?.[i]||null;
-      const tid=String(trainer.id??(String(mine)+':'+i+':'+trainer.name));
+      const tid=window.TrainerCareer?.trainerId?.(trainer,mine,i)??String(trainer.uid??(String(mine)+':'+i+':'+trainer.name));
       trainer.directorTrust=game.trainerAI?.trust?.[tid]??50;
     });
     try {
@@ -541,7 +541,7 @@
         for(let slot=0;slot<p.order.length;slot++){
           const index=p.order[slot],trainer=myClub().trainers[index],summary=team[slot];
           if(!trainer||!summary||summary.response==='자율'||!p.plans?.[index])continue;
-          const tid=String(trainer.id??(String(myClub().id)+':'+index+':'+trainer.name));
+          const tid=window.TrainerCareer?.trainerId?.(trainer,myClub().id,index)??String(trainer.uid??(String(myClub().id)+':'+index+':'+trainer.name));
           const prior=relationships[tid]??50;
           const delta=summary.response==='수용'?(won?2:-1):summary.response==='절충'?(won?1:0):won?2:-2;
           const next=Math.min(85,Math.max(15,prior+delta));
@@ -859,7 +859,7 @@
   const number=value=>Number.isFinite(Number(value))&&value!==null&&value!==undefined&&value!==''?Number(value):null;
   const hash=text=>{let h=2166136261;for(const char of String(text)){h=Math.imul(h^char.charCodeAt(0),16777619);}return h>>>0;};
   const roll=key=>hash(key)/4294967296;
-  const identifier=(trainer,clubId,index)=>String(trainer.id??(String(clubId)+':'+index+':'+trainer.name));
+  const identifier=(trainer,clubId,index)=>String(trainer.uid!=null?'trainer:'+trainer.uid:'club:'+clubId+':'+String(trainer.id??index));
   const clock=game=>String(game.season??1)+':'+String(game.week??game.round??0);
   const safe=value=>escapeHTML(String(value??''));
   function skillValue(trainer,keys){
@@ -1119,7 +1119,7 @@
   const keys=Object.keys(plays);
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const hash=text=>{let h=2166136261;for(const ch of String(text))h=Math.imul(h^ch.charCodeAt(0),16777619);return h>>>0;};
-  const ident=(t,c,i)=>String(t.id??(String(c)+':'+i+':'+t.name));
+  const ident=(t,c,i)=>String(t.uid!=null?'trainer:'+t.uid:'club:'+c+':'+String(t.id??i));
   const week=()=>String(game?.season??1)+':'+String(game?.week??game?.round??0);
   const safe=value=>escapeHTML(String(value??''));
   let pending=null,visible=false,feedback='';
@@ -1357,7 +1357,7 @@
   const esc=value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   const trainerId=(trainer,clubId,index)=>
-    String(trainer.id??(String(clubId)+':'+index+':'+trainer.name));
+    String(trainer.uid!=null?'trainer:'+trainer.uid:'club:'+clubId+':'+String(trainer.id??index));
   const threshold=skill=>20+skill*5;
   const HABITS=Object.freeze({
     kill:{label:'킬각 포착',description:'직접 공격으로 상대를 마무리한 성공 경험',threshold:55,matches:3},
