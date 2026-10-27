@@ -1523,8 +1523,8 @@ function applyWeeklyProgram(){
  }else if(p.id==='power'){
   const t=selection.trainer,d=weeklyDevelopment(t);
   d.power++;let result='';
-  if(d.power>=2){d.power=0;const eligible=t.pokemon.filter(x=>x.power<99);
-   if(eligible.length){const mon=eligible[rnd(game,0,eligible.length-1)];mon.power++;result=' · '+mon.name+' 전투력 +1';}}
+  if(d.power>=2){d.power=0;const eligible=t.pokemon.filter(x=>window.PokemonAbilities?Object.keys(x.statCA||{}).some(k=>x.statCA[k]<x.statPA[k]):x.power<99);
+   if(eligible.length){const mon=eligible[rnd(game,0,eligible.length-1)];const growth=window.PokemonAbilities?.increaseOne(mon);if(growth)result=' · '+mon.name+' '+growth.statName+' CA +'+growth.delta;else if(!window.PokemonAbilities){mon.power++;result=' · '+mon.name+' 전투력 +1';}}}
   c.fatigue=Math.min(100,c.fatigue+8);
   detail=t.name+' 포켓몬 육성 '+d.power+'/2'+result+' · 피로 +8';
  }else if(p.id==='scrimmage'){
@@ -1896,8 +1896,8 @@ function aiWeeklyPlan(targetWeek){
    }else{
     t.aiPokemonPractice=(t.aiPokemonPractice||0)+1;
     if(t.aiPokemonPractice>=4){
-     const eligible=t.pokemon.filter(p=>p.power<94);
-     if(eligible.length){const p=eligible[rnd(game,0,eligible.length-1)];p.power++;}
+     const eligible=t.pokemon.filter(p=>window.PokemonAbilities?Object.keys(p.statCA||{}).some(k=>p.statCA[k]<p.statPA[k]):p.power<94);
+     if(eligible.length){const p=eligible[rnd(game,0,eligible.length-1)];if(window.PokemonAbilities)window.PokemonAbilities.increaseOne(p);else p.power++;}
      t.aiPokemonPractice=0;
     }
     c.fatigue=Math.min(100,(c.fatigue||0)+4);

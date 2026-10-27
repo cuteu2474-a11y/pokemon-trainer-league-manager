@@ -17,7 +17,8 @@
     if (!root) {root = document.createElement('section');root.id='matchday';root.setAttribute('aria-label','경기 준비 및 관전');document.body.append(root);}
     return root;
   };
-  const pending = () => game?.pendingMatch;
+  let review=null;
+  const pending = () => review||game?.pendingMatch;
   function fixture() {
     initCalendar();
     const current = calendarRoundForWeek(game.week);
@@ -76,6 +77,9 @@
   async function run() {
     const p=pending();if (!p || p.phase==='running') return;
     p.phase='running';delete p.error;persist();render();
+    if(window.TrainerMoveAI&&!await window.TrainerMoveAI.queue()){
+      if(game.trainerAI?.movesProcessedWeek!==p.season+':'+game.week){p.phase='prepare';p.error='이번 주 기술 연구를 완료한 뒤 경기를 시작해 주세요.';persist();render();return;}
+    }
     const order=[...p.order], mine=myClub().id;
     const identity=[0,1,2,3,4];
     const request={home:copy(game.clubs[p.home]),away:copy(game.clubs[p.away]),homeOrder:p.home===mine?order:identity,awayOrder:p.away===mine?order:identity,seed:[game.seed>>>0,p.season,p.round,7919]};
@@ -85,6 +89,8 @@
       const tid=window.TrainerCareer?.trainerId?.(trainer,mine,i)??String(trainer.uid??(String(mine)+':'+i+':'+trainer.name));
       trainer.directorTrust=game.trainerAI?.trust?.[tid]??50;
     });
+    p.matchId=[p.season,p.round,p.home,p.away].join(':');
+    p.meeting={matchId:p.matchId,order:[...order],plans:copy(p.plans),behaviors:copy(p.behaviors)};persist();
     try {
       if (!/^https?:$/.test(location.protocol)) throw new Error('경기는 웹 주소에서 실행해 주세요. HTML 파일만 열면 전투 서버에 연결할 수 없습니다.');
       const response=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
@@ -523,8 +529,9 @@
     if(watchMode==='highlights'&&(/^\|faint\|/.test(line)||event?.end))base=Math.max(base,3000);
     timer=setTimeout(tick,Math.max(65,base/speed));
   }
-  function complete(){const r=pending().result;announce('경기 종료 · '+r.aScore+' : '+r.bScore);document.getElementById('md-score').textContent=r.aScore+' : '+r.bScore;document.getElementById('md-stage').textContent='경기 종료';document.getElementById('md-summary').textContent=contributionSummary();renderContributions();document.getElementById('md-finish').disabled=false;document.getElementById('md-next-moment').disabled=true;if(r.report){document.getElementById('md-report-content').innerHTML=reportHTML(r);document.getElementById('md-report').hidden=false;}spotlight('경기 종료',r.aScore+' : '+r.bScore);document.getElementById('md-pause').disabled=true;document.getElementById('md-skip').disabled=true;}
+  function complete(){const r=pending().result;announce('경기 종료 · '+r.aScore+' : '+r.bScore);document.getElementById('md-score').textContent=r.aScore+' : '+r.bScore;document.getElementById('md-stage').textContent='경기 종료';document.getElementById('md-summary').textContent=contributionSummary();renderContributions();document.getElementById('md-finish').disabled=false;document.getElementById('md-next-moment').disabled=true;if(window.MatchFeedback){const node=document.getElementById('md-summary');node.innerHTML=window.MatchFeedback.html(pending(),!!review);window.MatchFeedback.bind(node,pending());}if(r.report){document.getElementById('md-report-content').innerHTML=reportHTML(r);document.getElementById('md-report').hidden=false;}spotlight('경기 종료',r.aScore+' : '+r.bScore);document.getElementById('md-pause').disabled=true;document.getElementById('md-skip').disabled=true;}
   function finish(){
+    if(review){closeReview();return;}
     const p=pending();if(!p||!p.result||cursor<events.length)return;
     if(game.season!==p.season||game.round!==p.round-1){alert('일정이 변경되어 결과를 적용할 수 없습니다.');return;}
     const before=copy(game);
@@ -541,7 +548,7 @@
         const entries=[];
         for(let slot=0;slot<p.order.length;slot++){
           const index=p.order[slot],trainer=myClub().trainers[index],summary=team[slot];
-          if(!trainer||!summary||summary.response==='자율'||!p.plans?.[index])continue;
+          if(!trainer||!summary||summary.response==='자율'||!p.plans?.[index]||!p.result.rounds.some(r=>(homeSide?r.trainerA:r.trainerB)===slot))continue;
           const tid=window.TrainerCareer?.trainerId?.(trainer,myClub().id,index)??String(trainer.uid??(String(myClub().id)+':'+index+':'+trainer.name));
           const prior=relationships[tid]??50;
           const delta=summary.response==='수용'?(won?2:-1):summary.response==='절충'?(won?1:0):won?2:-2;
@@ -559,12 +566,29 @@
         window.TrainerCareer.applyMatch(game,p,myClub().id):null;
       game.lastMatch.engine='showdown';game.lastMatch.replay=p.result;
       if(careerReport)game.lastMatch.learning=careerReport;
-      delete game.pendingMatch;persist();clearTimeout(timer);document.getElementById('matchday')?.remove();for(const id of ['mainmenu','clubselect','clubtrainers']){const node=document.getElementById(id);if(node)node.hidden=true;}document.getElementById('dashboard').hidden=false;tab='fixtures';renderOffice();
+      game.lastMatch.meeting=copy(p.meeting||{});
+      game.lastMatch.feedbackMatch={season:p.season,week:p.week,round:p.round,home:p.home,away:p.away,order:[...p.order],meeting:copy(p.meeting||{})};
+      delete game.pendingMatch;persist();clearTimeout(timer);document.getElementById('matchday')?.remove();for(const id of ['mainmenu','clubselect','clubtrainers']){const node=document.getElementById(id);if(node)node.hidden=true;}document.getElementById('dashboard').hidden=false;tab='fixtures';renderOffice();window.MatchFeedback?.show(game.lastMatch.feedbackMatch);
     } catch(error){game=before;persist();alert(error.message);}finally{active=null;}
   }
   const priorReportRender=renderOffice;
   renderOffice=function(){priorReportRender();const panel=document.getElementById('dashpanel');if(panel&&game?.lastMatch?.replay?.report&&['home','fixtures'].includes(tab)){const button=document.createElement('button');button.className='g-btn alt';button.textContent='지난 경기 활약 보고서';button.onclick=()=>{const root=screen();root.innerHTML='<h1>지난 경기 활약 보고서</h1>'+reportHTML(game.lastMatch.replay)+'<button id="md-report-back">구단 화면으로</button>';root.querySelector('#md-report-back').onclick=()=>root.remove();};panel.append(button);}};
-  window.MatchdayPreparation={render,pending};
+  function closeReview(){review=null;replayRequest++;clearTimeout(timer);document.getElementById('matchday')?.remove();}
+  async function openReview(p,duel=0,turn=1){
+    if(game?.pendingMatch)return;
+    review={...p,phase:'watch'};
+    await startReplay();if(!review)return;
+    clearTimeout(timer);skipping=true;
+    let current=-1;
+    while(cursor<events.length){const e=events[cursor];if(e.intro!==undefined)current=e.intro;
+      if(current===duel&&e.line?.startsWith('|turn|')&&Number(e.line.split('|')[2])>=turn)break;
+      step();
+    }
+    skipping=false;
+    const button=document.createElement('button');button.textContent='보고서로 돌아가기';button.onclick=()=>{closeReview();window.MatchFeedback?.show(p);};screen().prepend(button);
+    document.getElementById('md-finish').textContent='관전 닫기';tick();
+  }
+  window.MatchdayPreparation={render,pending,review:openReview};
   if(game?.pendingMatch){if(game.pendingMatch.phase==='running')game.pendingMatch.phase='prepare';render();}
 })();
 
@@ -931,6 +955,25 @@
     return next;
   }
   function trainMon(mon,focus,trainer,key){
+    if(mon?.statCA&&mon?.statPA){
+      if(mon.trainingHistory?.some(x=>x.week===key))return null;
+      const eligible=STATS.filter(k=>Number.isInteger(mon.statCA[k])&&Number.isInteger(mon.statPA[k])&&mon.statCA[k]<mon.statPA[k]);
+      if(!eligible.length)return null;
+      const skill=teachingSkill(trainer),potential=potentialSkill(trainer);
+      const chance=clamp(.16+skill*.017+potential*.007,.16,.78);
+      if(roll(key+':growth')>=chance)return null;
+      const preferences=(FOCI[focus]||FOCI.balanced).stats;
+      const stat=focus==='balanced'?eligible.sort((a,b)=>(mon.statCA[a]/mon.statPA[a])-(mon.statCA[b]/mon.statPA[b]))[0]:preferences.find(k=>eligible.includes(k));
+      const from=mon.statCA[stat],gain=skill>=17&&potential>=15&&roll(key+':bonus')<.12?2:1;
+      const to=Math.min(mon.statPA[stat],from+gain);
+      mon.statCA[stat]=to;
+      mon.power=Math.round(STATS.reduce((sum,k)=>sum+mon.statCA[k],0)/6);
+      mon._abilityMirror=mon.power;
+      const changes=[STAT_KO[stat]+' CA '+from+'→'+to];
+      mon.trainingHistory ||= [];
+      mon.trainingHistory.unshift({week:key,stat,from,to,focus,changes});mon.trainingHistory.length=Math.min(12,mon.trainingHistory.length);
+      return {name:mon.name||mon.species||'포켓몬',stat,from,to,changes};
+    }
     const current=number(mon?.ca??mon?.power),max=number(mon?.pa??mon?.potential);
     if(current===null||max===null||!Number.isInteger(current)||!Number.isInteger(max)||
        current<1||max>200||current>=max||current>200)return null;
@@ -957,7 +1000,7 @@
     const roster=Array.isArray(trainer.pokemon)?trainer.pokemon:[];
     const seed=String(period)+':'+identifier(trainer,clubId,index);
     // Trainers allocate a limited three-pokemon session, not direct 6-pokemon manager upgrades.
-    const candidates=roster.map((mon,i)=>({mon,i,ca:number(mon?.ca??mon?.power),pa:number(mon?.pa??mon?.potential)}))
+    const candidates=roster.map((mon,i)=>({mon,i,ca:mon?.statCA?STATS.reduce((v,k)=>v+mon.statCA[k],0)/6:number(mon?.ca??mon?.power),pa:mon?.statPA?STATS.reduce((v,k)=>v+mon.statPA[k],0)/6:number(mon?.pa??mon?.potential)}))
       .filter(x=>x.ca!==null&&x.pa!==null&&x.ca<x.pa)
       .sort((a,b)=>{
         if(traits.style==='balanced')return (a.ca/a.pa)-(b.ca/b.pa)||a.i-b.i;
@@ -1087,7 +1130,7 @@
       '<section class="at-report"><h3>주간 성장 보고</h3><p class="at-note">첫 주차가 지나면 트레이너의 실제 훈련 성과가 기록됩니다.</p></section>';
     mask.innerHTML='<div class="at-dialog" role="dialog" aria-modal="true" aria-labelledby="at-heading">'+
       '<button class="at-close" type="button" aria-label="닫기">닫기</button><h2 id="at-heading">자율 훈련 · 감독 권고</h2>'+
-      '<p class="at-note">감독은 방향을 제시할 뿐, 기술·훈련 대상과 GP 배분은 트레이너 AI가 결정합니다. 권고는 트레이너별 주 1회만 가능하며 다음 훈련에서 판단됩니다.</p>'+
+      '<p class="at-note">감독은 방향을 제시할 뿐, 기술·훈련 대상과 능력치별 성장 방향은 트레이너 AI가 결정합니다. 권고는 트레이너별 주 1회만 가능하며 다음 훈련에서 판단됩니다.</p>'+
       (feedback?'<p class="at-action" role="status">'+safe(feedback)+'</p>':'')+
       reportHTML+'<div class="at-card-grid">'+rows+'</div></div>';
     mask.querySelector('.at-close').onclick=()=>{showing=false;mask.remove();};
@@ -1230,12 +1273,14 @@
   function queue(){
     if(!game||!club())return;
     const s=state(),current=week();
-    if(s.movesProcessedWeek===current||pending?.week===current||(s.moveAttempts[current]||0)>=2)return;
+    if(s.movesProcessedWeek===current)return Promise.resolve(true);
+    if(pending?.week===current)return pending.promise;
+    if((s.moveAttempts[current]||0)>=2)return Promise.resolve(false);
     const data=roster();
     if(!data.length)return;
     s.moveAttempts[current]=(s.moveAttempts[current]||0)+1;
     const target=game;pending={week:current};
-    fetch('/api/trainer-moves',{method:'POST',headers:{'Content-Type':'application/json'},
+    const job=fetch('/api/trainer-moves',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({period:current,trainers:data.map(x=>x.input)})})
       .then(async r=>{
         const result=await r.json();
@@ -1248,6 +1293,8 @@
       })
       .catch(err=>{if(game!==target)return;s.moveError=String(err.message||err);if(visible)openDialog();})
       .finally(()=>{if(pending?.week===current)pending=null;});
+    pending.promise=job.then(()=>game===target&&state().movesProcessedWeek===current);
+    return pending.promise;
   }
   function reportView(r){
     if(!r)return '<p class="am-small">기술 연구를 정산하면 결과가 표시됩니다.</p>';
@@ -1479,10 +1526,11 @@
     career.observed.voluntary+=evidence.voluntary;
     career.observed.analyses+=evidence.analyses;
     career.observed.preservation+=evidence.preservation;
-    const levels=[];
+    const levels=[],experience=[];
     for(const field of Object.keys(FIELDS)){
       // Initialise previously missing specialist attributes from existing overall ability.
       if(!Number.isFinite(Number(trainer[field])))trainer[field]=skill(trainer,field);
+      const beforeXP=Number(career.experience[field])||0,beforeSkill=skill(trainer,field);
       let score=skill(trainer,field),xp=Math.max(0,Number(career.experience[field])||0)+earned[field];
       while(score<20&&xp>=threshold(score)){
         xp-=threshold(score);
@@ -1491,6 +1539,7 @@
       }
       trainer[field]=score;
       career.experience[field]=score===20?Math.min(xp,threshold(20)):xp;
+      experience.push({field,label:FIELDS[field].label,from:beforeSkill,to:score,beforeXP,afterXP:career.experience[field],earned:earned[field]});
     }
     const ai=trainer.autonomyAI ||= {};
     const traits=ai.playTraits ||= [];
@@ -1532,7 +1581,7 @@
       duels:evidence.duels,wins:evidence.wins,losses:evidence.losses,
       moves:evidence.moves,voluntary:evidence.voluntary,analyses:evidence.analyses,
       qualified,progress,advice:advice?{target:advice,response}:null,
-      levels,learned,trainerId:String(trainer.id??'')};
+      levels,experience,learned,trainerId:String(trainer.id??'')};
     career.events.unshift(event);
     career.events.length=Math.min(career.events.length,18);
     return event;
@@ -1792,11 +1841,11 @@
   const score=trainer=>{
     if(!trainer)return {strength:0,potential:0,habits:0,learned:0,ability:0,pokemon:0};
     const mons=Array.isArray(trainer.pokemon)?trainer.pokemon:[];
-    const power=mons.length?mons.reduce((sum,mon)=>
-      sum+clamp(value(mon.ca, value(mon.power,50)),1,200),0)/mons.length:50;
-    const growth=mons.length?mons.reduce((sum,mon)=>
-      sum+clamp(value(mon.pa, value(mon.ca,value(mon.power,50)))-
-        value(mon.ca,value(mon.power,50)),0,150),0)/mons.length:0;
+    const stats=['hp','atk','def','spa','spd','spe'];
+    const mean=(mon,kind)=>stats.reduce((sum,k)=>sum+clamp(value(mon[kind]?.[k],
+      kind==='statCA'?value(mon.ca,value(mon.power,50)):value(mon.pa,value(mon.ca,value(mon.power,50)))),1,200),0)/6;
+    const power=mons.length?mons.reduce((sum,mon)=>sum+mean(mon,'statCA'),0)/mons.length:50;
+    const growth=mons.length?mons.reduce((sum,mon)=>sum+Math.max(0,mean(mon,'statPA')-mean(mon,'statCA')),0)/mons.length:0;
     const ca=value(trainer.profile?.ca,Math.round((value(trainer.tactics,10)+value(trainer.switching,10))*4.6));
     const pa=value(trainer.profile?.pa,ca);
     const learned=(trainer.autonomyAI?.playTraits||[]).filter(x=>Object.values(TRAITS).includes(x)).length;
@@ -1810,7 +1859,7 @@
     const potential=clamp(Math.round((growth/100*.65+Math.max(0,pa-ca)/200*.35)*100),0,100);
     const strength=clamp(Math.round(tactical*3.25+power*.23+
       learned*3+Math.min(12,habit*.1)),0,100);
-    return {strength,potential,habits:habit,learned,ability:Math.round(tactical),pokemon:Math.round(power)};
+    return {strength,potential,pokemonGrowth:Math.round(growth),trainerGrowth:Math.max(0,pa-ca),habits:habit,learned,ability:Math.round(tactical),pokemon:Math.round(power)};
   };
   const compatible=(t,style='balanced')=>{
     const preference=STYLE[style]||STYLE.balanced;
@@ -1832,7 +1881,7 @@
   const suggestion=(trainer,club,budget=Infinity,style='balanced')=>{
     const ability=score(trainer),fit=compatible(trainer,style);
     const fee=typeof transferValuation==='function'?transferValuation(trainer,club):0;
-    const affordability=fee<=budget;
+    const affordability=quote(fee).offered<=budget;
     return {...ability,fit,fee,affordability,
       overall:Math.round(ability.strength*.55+ability.potential*.18+
         fit*.22+ability.learned*1.5)};
@@ -1919,7 +1968,17 @@
     else buyer.reserveTrainers.push(trainer);
     return {ok:true,trainer,placement:checked.placement};
   }
-  const state=()=>game.marketV2 ||= {style:'balanced',sort:'recommended',premium:1.15,intel:{},attempts:{}};
+  const state=()=>{
+    const s=game.marketV2 ||= {};
+    s.style ||= 'balanced';s.sort ||= 'recommended';s.premium ??= 1.15;
+    s.intel ||= {};s.attempts ||= {};s.page ||= 0;
+    return s;
+  };
+  function quote(base){
+    const premium=clamp(value(state().premium,1.15),1,1.4);
+    return {base,premium,offered:Math.min(750000000,Math.max(10000000,
+      Math.round(base*premium/10000000)*10000000))};
+  }
   function scoutSelected(){
     if(!game)return {ok:false,message:'게임을 시작해 주세요.'};
     const x=marketTarget?.();if(!x)return {ok:false,message:'트레이너를 선택해 주세요.'};
@@ -1942,8 +2001,7 @@
     if(!transferOpen()){alert('이적시장이 열려 있지 않습니다.');return;}
     if(s.attempts[key]===token){alert('이 트레이너와는 이번 주 이미 협상했습니다. 다음 주 다시 제안할 수 있습니다.');return;}
     const base=transferValuation(x.t,x.c);
-    const fee=Math.min(750000000,Math.max(10000000,
-      Math.round(base*clamp(value(s.premium,1.15),1,1.4)/10000000)*10000000));
+    const fee=quote(base).offered;
     const checked=checkTransfer({buyer:own,seller:x.c,trainer:x.t,
       sourceKind:x.kind,slot:x.slot,fee,budget:game.coins});
     if(!checked.ok){alert(checked.reason);return;}
@@ -1953,7 +2011,7 @@
     const trainerChance=clamp(value(assessment.trainerChance,.4)+(fit-50)/350,.03,.97);
     const combined=clubChance*trainerChance;
     if(!confirm(x.t.name+' 및 보유 포켓몬 6마리 영입\n'+
-      '제안 금액: '+wonReadable(fee)+'\n'+
+      '기본 평가액: '+wonReadable(base)+'\n제안 금액: '+wonReadable(fee)+'\n영입 후 잔액: '+wonReadable(game.coins-fee)+'\n'+
       '구단 수락 약 '+Math.round(clubChance*100)+'% · 트레이너 동의 약 '+
       Math.round(trainerChance*100)+'% · 종합 약 '+Math.round(combined*100)+
       '%\n협상을 진행하시겠습니까?'))return;
@@ -1981,71 +2039,69 @@
   }
   function esc(v){return typeof escapeHTML==='function'?escapeHTML(String(v??'')):
     String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');}
-  function renderMarket(previous){
+  function renderMarket(previous=''){
     if(!game)return previous;
-    const s=state(),style=s.style||'balanced',sort=s.sort||'recommended',
-      list=candidates(game,style,sort);
-    const eligible=list.filter(x=>x.report.affordability);
-    const shown=(eligible.length?eligible:list).slice(0,5);
+    const s=state(),style=s.style,all=candidates(game,style,s.sort),own=myClub();
+    const search=String(s.search||'').trim().toLowerCase();
+    const list=all.filter(x=>(!search||(x.trainer.name+' '+x.club.name).toLowerCase().includes(search))&&
+      (!s.division||s.division==='all'||String(x.club.division)===s.division));
+    const available=x=>transferOpen()&&checkTransfer({buyer:own,seller:x.club,trainer:x.trainer,
+      sourceKind:x.kind,slot:x.slot,fee:quote(x.report.fee).offered,budget:game.coins}).ok;
+    const pageSize=12,page=Math.max(0,Math.min(Number(s.page)||0,Math.max(0,Math.ceil(list.length/pageSize)-1)));
+    s.page=page;
     const money=x=>wonReadable(Math.max(0,Math.round(x)||0));
     const options=(choices,active)=>Object.entries(choices).map(([key,label])=>
       '<option value="'+esc(key)+'" '+(key===active?'selected':'')+'>'+esc(label)+'</option>').join('');
-    const top='<section class="tm2-market"><div class="tm2-head"><div><h2>트레이너 스카우팅 · 영입 우선순위</h2>'+
-      '<p>현재 능력, 미래 잠재력, 선플, 감독 전술과의 궁합을 함께 평가합니다. 트레이너는 포켓몬 6마리를 동반합니다.</p>'+
-      '</div><span>확인 가능한 후보 '+list.length+'명</span></div>'+
-      '<div class="tm2-filters"><label>감독 전술 방향 <select onchange="TrainerMarketV2.setStyle(this.value)">'+
-      options(Object.fromEntries(Object.entries(STYLE).map(([k,v])=>[k,v.label])),style)+'</select></label>'+
-      '<label>비교 기준 <select onchange="TrainerMarketV2.setSort(this.value)">'+
-      options({recommended:'종합 추천',current:'현재 전력',potential:'성장 가능성',fit:'전술 궁합'},sort)+'</select></label></div>'+
-      '<div class="tm2-list">'+shown.map((x,i)=>'<div class="tm2-row"><div><b>'+esc(x.trainer.name)+'</b>'+
-      '<small>'+esc(x.club.name)+' · '+(x.kind==='active'?'주전':'후보')+' · 선플 '+
-      (x.trainer.autonomyAI?.playTraits||[]).length+'종</small></div>'+
-      '<div class="tm2-metrics"><span>전력 '+x.report.strength+'</span><span>궁합 '+x.report.fit+'</span>'+
-      '<span>'+money(x.report.fee)+'</span></div>'+
-      '<button type="button" class="row-btn" onclick="marketSelect('+x.club.id+',\''+x.kind+'\','+x.slot+')">비교</button></div>').join('')+'</div></section>';
-    const x=marketTarget?.();
-    let detail='';
+    const band=(n,max=100)=>Math.max(0,Math.floor(n/20)*20)+'~'+Math.min(max,Math.floor(n/20)*20+20);
+    const intel=t=>s.intel[candidateKey(t)]?.season===game.season;
+    const rows=list.slice(page*pageSize,(page+1)*pageSize).map(x=>{
+      const q=quote(x.report.fee);
+      return '<div class="tm2-row"><div><b>'+esc(x.trainer.name)+'</b><small>'+esc(x.club.name)+
+        ' · '+(x.kind==='active'?'주전':'후보')+' · '+(available(x)?'협상 가능':'현재 협상 불가')+'</small></div>'+
+        '<div class="tm2-metrics"><span>전력 '+(intel(x.trainer)?x.report.strength:band(x.report.strength)+' 추정')+
+        '</span><span>기본 평가액 '+money(q.base)+'</span><span>제안액 '+money(q.offered)+'</span></div>'+
+        '<button type="button" class="row-btn" onclick="marketSelect('+x.club.id+',\''+x.kind+'\','+x.slot+')">비교·협상</button></div>';
+    }).join('');
+    const header='<section class="tm2-market"><div class="tm2-head"><div><h2>트레이너 스카우팅 · 이적시장</h2>'+
+      '<p>조사·비교·협상에 같은 후보와 가격을 사용합니다. 보유 포켓몬은 트레이너와 함께 이적합니다.</p></div>'+
+      '<span>전체 등록 '+all.length+'명 · 검색 결과 '+list.length+'명 · 현재 협상 가능 '+list.filter(available).length+'명</span></div>'+
+      '<p>운영 자금 <b>'+money(game.coins)+'</b> · '+(transferOpen()?'이적시장 개장':'이적시장 폐장')+'</p>'+
+      '<div class="tm2-filters"><label>이름·구단 검색 <input id="tm2-search" value="'+esc(s.search||'')+'" onchange="TrainerMarketV2.search(this.value)"></label>'+
+      '<label>리그 <select onchange="TrainerMarketV2.division(this.value)">'+options({all:'전체 리그',0:'1부',1:'2부',2:'3부',3:'4부'},s.division||'all')+'</select></label>'+
+      '<label>감독 전술 방향 <select onchange="TrainerMarketV2.setStyle(this.value)">'+options(Object.fromEntries(Object.entries(STYLE).map(([k,v])=>[k,v.label])),style)+'</select></label>'+
+      '<label>비교 기준 <select onchange="TrainerMarketV2.setSort(this.value)">'+options({recommended:'종합 추천',current:'현재 전력',potential:'성장 가능성',fit:'전술 궁합'},s.sort)+'</select></label></div>';
+    const x=marketTarget?.();let detail='';
     if(x){
-      const r=suggestion(x.t,x.c,game.coins,style),
-        me=myClub(),team=me.trainers.filter(Boolean);
-      const weakest=team.length?team.reduce((best,t)=>
-        score(t).strength<score(best).strength?t:best,team[0]):null;
-      const info=s.intel[candidateKey(x.t)];
-      const researched=info?.season===game.season;
-      const personality=x.t.autonomyAI||{};
-      const traitNames=(personality.playTraits||[]).filter(Boolean);
-      const p=transferProfile(x.t,x.c);
-      const full=researched?
-        '<div class="tm2-scouted">스카우트 완료 · 트레이너 성장 잠재력 '+esc(p.pa)+
-        ' / 200 · 개방성 '+esc(personality.openness??'미측정')+
-        ' · 소신 '+esc(personality.conviction??'미측정')+
-        ' · 포켓몬 잠재력 '+x.t.pokemon.map(m=>esc(m.name)+' '+esc(m.pa??'미확인')).join(', ')+
-        '</div>':
-        '<div class="tm2-scouted">잠재력 및 성격은 추정치입니다. 유료 스카우트 후 세부 정보를 확인할 수 있습니다.'+
-        '<button type="button" class="row-btn" onclick="TrainerMarketV2.scout()">정밀 조사 '+money(3000000)+'</button></div>';
-      const multiple=clamp(value(s.premium,1.15),1,1.4);
-      const base=r.fee,offered=Math.min(750000000,
-        Math.round(base*multiple/10000000)*10000000),
-        acceptance=transferAcceptance(x.t,x.c,me,base,offered);
-      const sellerChance=clamp(value(acceptance.clubChance,.2),.05,.95);
-      const coachChance=clamp(value(acceptance.trainerChance,.4)+(r.fit-50)/350,.03,.97);
-      detail='<section class="tm2-detail"><h3>'+esc(x.t.name)+' · 영입 분석</h3>'+
-        '<div class="tm2-stats"><div>현재 전력 <b>'+r.strength+'</b></div>'+
-        '<div>성장 가능성 <b>'+(researched?r.potential+' / 100':'조사 필요')+'</b></div>'+
-        '<div>전술 궁합 <b>'+r.fit+' / 100</b></div>'+
-        '<div>보유 선플 <b>'+traitNames.length+'종</b></div></div>'+
-        '<p>대표 선플: '+(traitNames.length?traitNames.map(esc).join(', '):'아직 없음')+
-        ' · 감독 권고에 대한 수용 정도는 트레이너가 결정합니다.</p>'+
-        (weakest?'<p>우리 구단 최저 전력 '+esc(weakest.name)+'('+score(weakest).strength+
-          ') 대비 후보 전력 '+r.strength+'</p>':'')+full+
-        '<div class="tm2-offer"><label>제안 프리미엄 <select onchange="TrainerMarketV2.setPremium(this.value)">'+
-        options({'1':'기준가 100%','1.15':'기준가 115%','1.3':'기준가 130%','1.4':'기준가 140%'},String(multiple))+
-        '</select></label><div>제안액 <b>'+money(offered)+'</b><small>예상 성사 확률 '+
-        Math.round(sellerChance*coachChance*100)+'% · 금액은 성사 시에만 차감</small></div></div>'+
-        '</section>';
+      const r=suggestion(x.t,x.c,game.coins,style),q=quote(r.fee),p=transferProfile(x.t,x.c),known=intel(x.t);
+      const traits=x.t.autonomyAI?.playTraits||[];
+      const weakest=own.trainers.filter(Boolean).sort((a,b)=>score(a).strength-score(b).strength)[0];
+      const guard=checkTransfer({buyer:own,seller:x.c,trainer:x.t,sourceKind:x.kind,slot:x.slot,fee:q.offered,budget:game.coins});
+      const assessment=transferAcceptance(x.t,x.c,own,q.base,q.offered);
+      const chance=clamp(value(assessment.clubChance,.2),.05,.95)*clamp(value(assessment.trainerChance,.4)+(r.fit-50)/350,.03,.97);
+      detail='<section class="tm2-detail" id="tm2-detail"><h3>'+esc(x.t.name)+' · 영입 분석</h3><div class="tm2-stats">'+
+        '<div>현재 전력 <b>'+(known?r.strength:band(r.strength)+' 추정')+'</b></div>'+
+        '<div>포켓몬 평균 성장 여유 <b>'+(known?r.pokemonGrowth:band(r.pokemonGrowth,200)+' 추정')+' CA</b></div>'+
+        '<div>트레이너 잠재력 <b>'+(known?esc(p.pa):band(value(p.pa),200)+' 추정')+' / 200</b></div>'+
+        '<div>전술 궁합 <b>'+r.fit+' / 100</b></div></div>'+
+        '<p>성장 여유는 포켓몬 6능력치의 PA−CA 평균입니다. 트레이너 잠재력과는 별도 지표입니다.</p>'+
+        (weakest?'<p>우리 구단 비교: '+esc(weakest.name)+' · 전력 '+score(weakest).strength+'</p>':'')+
+        '<p>선플: '+(traits.length?traits.map(esc).join(', '):'아직 없음')+'</p>'+
+        '<details><summary>동반 포켓몬 '+x.t.pokemon.length+'마리</summary>'+x.t.pokemon.map(mon=>{
+          const stats=['hp','atk','def','spa','spd','spe'];
+          return '<p>'+esc(mon.name)+' · '+(known?stats.map(k=>esc(k.toUpperCase())+' '+esc(mon.statCA?.[k]??mon.ca??mon.power)+'/'+esc(mon.statPA?.[k]??mon.pa??'미확인')).join(' · '):'능력치별 CA·PA는 정밀 조사 후 확인')+'</p>';
+        }).join('')+'</details>'+
+        (known?'<p class="tm2-scouted">이번 시즌 정밀 조사 완료</p>':'<div class="tm2-scouted">추정 범위를 표시하고 있습니다. <button class="row-btn" onclick="TrainerMarketV2.scout()">정밀 조사 '+money(3000000)+'</button></div>')+
+        '<div class="tm2-offer"><label>제안 배율 <select onchange="TrainerMarketV2.setPremium(this.value)">'+options({'1':'100%','1.15':'115%','1.3':'130%','1.4':'140%'},String(q.premium))+'</select></label>'+
+        '<div>기본 평가액 '+money(q.base)+' → 제안액 <b>'+money(q.offered)+'</b><small>영입 후 잔액 '+money(game.coins-q.offered)+' · 예상 성사 '+Math.round(chance*100)+'%</small></div></div>'+
+        '<p>현재 연봉 '+money(p.salary||0)+' · 계약 만료 '+esc(p.contract)+'시즌 (급여 정산·신규 계약 조건 협상은 후속 작업)</p>'+
+        '<button class="g-btn" onclick="marketOffer()" '+(!transferOpen()||!guard.ok?'disabled':'')+'>표시한 제안액으로 협상</button>'+
+        (!guard.ok?'<p>'+esc(guard.reason)+'</p>':'')+'</section>';
     }
-    return top+previous.replace('<h2>우리 구단 계약 관리</h2>',
-      detail+'<h2>우리 구단 계약 관리</h2>');
+    // Preserve contract/free-agent/history operations, remove the entire legacy candidate list and offer box.
+    const at=previous.indexOf('<h2>우리 구단 계약 관리</h2>');
+    const management=at<0?'':previous.slice(at);
+    return header+detail+'<div class="tm2-list">'+(rows||'<p>검색 결과가 없습니다.</p>')+'</div>'+
+      '<div class="tm2-offer"><button class="row-btn" onclick="TrainerMarketV2.page(-1)" '+(!page?'disabled':'')+'>이전</button><span>'+(page+1)+' / '+Math.max(1,Math.ceil(list.length/pageSize))+'</span><button class="row-btn" onclick="TrainerMarketV2.page(1)" '+((page+1)*pageSize>=list.length?'disabled':'')+'>다음</button></div></section>'+management;
   }
   const previousMarket=transferMarketHTML;
   transferMarketHTML=function(){return renderMarket(previousMarket());};
@@ -2104,11 +2160,14 @@
   document.head.append(style);
   window.TrainerMarketV2={
     STYLE,TRAITS,score,compatible,aiStyle,suggestion,candidates,checkTransfer,
-    executeTransfer,migrate,renderMarket,
+    executeTransfer,migrate,renderMarket,quote,
+    search:v=>{state().search=String(v);state().page=0;persist();renderOffice();},
+    division:v=>{state().division=String(v);state().page=0;persist();renderOffice();},
+    page:delta=>{state().page=Math.max(0,state().page+delta);persist();renderOffice();},
     scout:()=>scoutSelected(),bid:()=>bidSelected(),
-    setStyle:style=>{if(!STYLE[style])return;state().style=style;persist();renderOffice();},
+    setStyle:style=>{if(!STYLE[style])return;state().style=style;state().page=0;persist();renderOffice();},
     setSort:sort=>{if(!['recommended','current','potential','fit'].includes(sort))return;
-      state().sort=sort;persist();renderOffice();},
+      state().sort=sort;state().page=0;persist();renderOffice();},
     setPremium:n=>{if(![1,1.15,1.3,1.4].includes(Number(n)))return;
       state().premium=Number(n);persist();renderOffice();}
   };

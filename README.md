@@ -35,7 +35,7 @@ npm run dev
 
 브라우저에서 http://127.0.0.1:8000 을 엽니다. HTML 파일만 열면 경기 API를 사용할 수 없습니다. 이미지와 데이터 파일도 필요하므로 `index.html`만 복사하지 마세요.
 
-현재 로컬 서버는 `/api/match`만 연결합니다. `/api/opponent-scout`와 `/api/trainer-moves`는 별도 서버 연결이 필요합니다. 로컬 실행을 배포 환경의 모든 API 검증과 동일하게 보지 않습니다.
+로컬 서버는 `/api/match`, `/api/opponent-scout`, `/api/trainer-moves`를 연결합니다. 로컬 실행과 Vercel 배포 검증은 구분합니다.
 
 ## 검사 명령
 

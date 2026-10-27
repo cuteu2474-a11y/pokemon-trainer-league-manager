@@ -19,9 +19,9 @@ for (const asset of assets) {
 }
 for (const path of ['src/battle/showdown.js', 'src/battle/club-match.js', 'src/league/season.js',
   'src/scouting/opponent-report.js', 'api/opponent-scout.js',
-  'assets/opponent-scout-ui.js', 'assets/pokemon-expedition.js']) {
+  'assets/opponent-scout-ui.js', 'assets/pokemon-expedition.js','assets/management-ui.js','assets/match-feedback.js']) {
   if (!existsSync(new URL(path, root))) throw new Error(`엔진 파일 누락: ${path}`);
-  if (path==='assets/opponent-scout-ui.js'||path==='assets/pokemon-expedition.js')
+  if (path.startsWith('assets/'))
     new Script(readFileSync(new URL(path,root),'utf8'),{filename:path});
 }
 console.log(`웹 기준 버전 검사 통과: 스크립트 ${scripts}개, 이미지 파일 ${assets.size}개, 전투/리그 코드 보존`);

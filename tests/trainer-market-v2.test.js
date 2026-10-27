@@ -181,3 +181,20 @@ test('AI buyers prefer compatible learned traits at equal cost and initial score
   assert.equal(sorted[0].e.t,strong);
   assert.ok(sorted[0].score>sorted[1].score);
 });
+
+test('six-stat potential survives removal of old CA/PA fields and uses one quoted price',()=>{
+  const {api,game,sandbox}=setup();
+  const t=game.clubs[1].reserveTrainers[0];
+  for(const mon of t.pokemon){delete mon.ca;delete mon.pa;delete mon.gp;
+    mon.statCA=Object.fromEntries(['hp','atk','def','spa','spd','spe'].map(k=>[k,100]));
+    mon.statPA=Object.fromEntries(['hp','atk','def','spa','spd','spe'].map(k=>[k,199]));
+  }
+  assert.equal(api.score(t).pokemonGrowth,99);
+  assert.ok(api.score(t).potential>60);
+  const html=api.renderMarket('<h2>old candidate table</h2><h2>우리 구단 계약 관리</h2>contracts');
+  assert.ok(!html.includes('old candidate table'));
+  assert.match(html,/전체 등록 6명 · 검색 결과 6명/);
+  assert.match(html,/기본 평가액/);
+  const offered=api.quote(sandbox.transferValuation(t,game.clubs[1])).offered;
+  api.bid();assert.equal(game.transferHistory[0].fee,offered);
+});

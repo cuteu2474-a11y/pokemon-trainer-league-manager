@@ -1,24 +1,28 @@
 import matchHandler from '../api/match.js';
+import scoutHandler from '../api/opponent-scout.js';
+import movesHandler from '../api/trainer-moves.js';
+const handlers={'/api/match':matchHandler,'/api/opponent-scout':scoutHandler,'/api/trainer-moves':movesHandler};
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {resolve, sep, extname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const types = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml'};
+const types = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8'};
 createServer(async (req, res) => {
   try {
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
-    if (pathname === '/api/match') {
+    if (handlers[pathname]) {
+      res.setHeader('Content-Type','application/json; charset=utf-8');
       let chunks = [], size = 0;
       for await (const chunk of req) {
         size += chunk.length;
-        if (size > 262144) {res.writeHead(413).end(); return;}
+        if (size > (pathname==='/api/trainer-moves'?900000:262144)) {res.writeHead(413).end(); return;}
         chunks.push(chunk);
       }
       try {req.body = JSON.parse(Buffer.concat(chunks).toString() || '{}');}
       catch {res.writeHead(400).end(JSON.stringify({error:'요청 형식 오류'})); return;}
-      await matchHandler(req, res); return;
+      await handlers[pathname](req, res); return;
     }
     const path = resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
     const relative = path.slice(root.length);

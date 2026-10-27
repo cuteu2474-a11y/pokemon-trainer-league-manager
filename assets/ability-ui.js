@@ -29,6 +29,7 @@ function increaseOne(mon){
   const upgraded=growStat(mon,stat);
   mon.statCA=upgraded.statCA;
   mon.statPA=upgraded.statPA;
+  mon.power=meanStatCA(mon);mon._abilityMirror=mon.power;
   if(upgraded.delta){
     growthEvents.push({name:mon.name||mon.species,stat,
       statName:ABILITY_NAMES[stat],before:upgraded.oldValue,after:upgraded.newValue});
@@ -186,3 +187,6 @@ styles.textContent=[
   '@media(max-width:650px){#dashpanel .g-pokemon{grid-template-columns:repeat(2,minmax(0,1fr))}#dashpanel .ca-pa-row{font-size:11px;gap:4px}}'
 ].join('');
 document.head.append(styles);
+
+// Install calendar and navigation after the ability migration wrapper.
+import('./match-feedback.js').then(()=>import('./management-ui.js'));
