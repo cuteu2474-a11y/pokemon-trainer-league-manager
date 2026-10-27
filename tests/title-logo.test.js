@@ -3,13 +3,21 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const art=readFileSync(new URL('../assets/ui/penta-rivals-title.webp',import.meta.url));
 
-test('the opening title uses sharp Korean text and a vector capture-ball emblem',()=>{
-  assert.match(html,/logo\.className='title-logo-only title-creature-logo'/);
-  assert.match(html,/aria-label','트레이너 리그 매니저'/);
-  assert.ok(html.includes('<span class="title-logo-primary">트레이너</span>'));
-  assert.ok(html.includes('<span class="title-logo-secondary">리그 매니저</span>'));
-  assert.ok(html.includes('viewBox="0 0 120 120"'));
-  assert.match(html,/\.title-creature-logo\{/);
-  assert.doesNotMatch(html,/const KOREAN_TITLE_LOGO=/,'the low-resolution bitmap must not return as the menu logo');
+test('the opening title uses the approved Pokémon: Penta Rivals logo',()=>{
+  assert.match(html,/<title>포켓몬: 펜타 라이벌즈 \| Pokémon: Penta Rivals<\/title>/);
+  assert.match(html,/const PENTA_RIVALS_TITLE_LOGO='assets\/ui\/penta-rivals-title\.webp'/);
+  assert.match(html,/logo\.className='title-logo-only'/);
+  assert.match(html,/logo\.src=PENTA_RIVALS_TITLE_LOGO/);
+  assert.match(html,/logo\.alt='포켓몬: 펜타 라이벌즈 — Pokémon: Penta Rivals'/);
+  assert.doesNotMatch(html,/const KOREAN_TITLE_LOGO=/);
+  assert.doesNotMatch(html,/title-creature-logo/);
+});
+
+test('the approved artwork is a browser-ready high-resolution WebP',()=>{
+  assert.equal(art.subarray(0,4).toString(),'RIFF');
+  assert.equal(art.subarray(8,12).toString(),'WEBP');
+  assert.ok(art.byteLength>100_000,'title logo must contain the full artwork');
+  assert.match(html,/logo\.width=1697;logo\.height=927/);
 });
