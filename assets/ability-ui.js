@@ -73,7 +73,7 @@ const abilityRows=p=>{
 function cardMarkup(p){
   return '<div class="ca-pa-card"><strong>'+escape(p.name||p.species)+'</strong>'+
     '<div class="ca-pa-values">'+abilityRows(p)+'</div>'+
-    '<small>활동 '+(p.careerSeasons||1)+'/8시즌</small></div>';
+    '<small>활동 '+(p.careerSeasons||1)+'시즌 · 은퇴 '+(p.retirementSeason??'8~12')+'시즌</small></div>';
 }
 function updateOffice(){
   if(!game)return;

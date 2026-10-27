@@ -699,8 +699,8 @@
   }
   function profileCard(p,i) {
     return '<div class="profile-mon pkm-profile-card">'+image(p)+
-      '<div class="pkm-card-text"><b>'+(i+1)+'. '+safe(p.name||p.species)+'</b><small>Lv.'+safe(p.level??'—')+' · 전투력 '+safe(p.power??'—')+
-      (p.careerSeasons?'<br>활동 '+safe(p.careerSeasons)+' / 8시즌':'')+'</small><div class="g-bar"><i style="width:'+Math.max(0,Math.min(100,Number(p.power)||0))+'%"></i></div></div></div>';
+      '<div class="pkm-card-text"><b>'+(i+1)+'. '+safe(p.name||p.species)+'</b><small>전투력 '+safe(p.power??'—')+
+      (p.careerSeasons?'<br>활동 '+safe(p.careerSeasons)+'시즌 · 은퇴 '+safe(p.retirementSeason??'8~12')+'시즌':'')+'</small><div class="g-bar"><i style="width:'+Math.max(0,Math.min(100,Number(p.power)||0))+'%"></i></div></div></div>';
   }
   const originalCell=trainerCell;
   trainerCell=function(entry,column) {
@@ -723,8 +723,8 @@
     return html.replace(/<div class="ct-pokemon-grid">[\s\S]*$/, '<div class="ct-pokemon-grid pkm-choose-grid">'+trainer.pokemon.map((p,i)=>
       '<div class="ct-pokemon pkm-choose-card">'+image(p)+
       '<span><strong>'+String(i+1).padStart(2,'0')+' '+safe(p.name||p.species)+'</strong>'+
-      '<small>레벨 '+safe(p.level??'—')+' · 전투력 '+safe(p.power??'—')+'</small>'+
-      '<em>활동 '+safe(p.careerSeasons||1)+' / 8시즌</em></span></div>').join('')+'</div>');
+      '<small>전투력 '+safe(p.power??'—')+'</small>'+
+      '<em>활동 '+safe(p.careerSeasons||1)+'시즌 · 은퇴 '+safe(p.retirementSeason??'8~12')+'시즌</em></span></div>').join('')+'</div>');
   };
   const originalClubTrainers=renderClubTrainers;
   renderClubTrainers=function() {
@@ -2273,4 +2273,13 @@
 (function useApprovedNimbasaCrest(){
   if(typeof CLUB_EMBLEM_IMAGES==='undefined'||CLUB_EMBLEM_IMAGES.length!==40)return;
   CLUB_EMBLEM_IMAGES[9]='assets/ui/asset-60.webp';
+})();
+
+/* Season-based retirement and complete trainer-owned transfer roster. */
+(function loadPokemonCareerRoster(){
+  if(typeof document==='undefined'||!document.body?.append||window.PokemonCareerRoster)return;
+  const script=document.createElement('script');
+  script.src='assets/pokemon-career-roster.js';
+  script.async=false;
+  document.body.append(script);
 })();
