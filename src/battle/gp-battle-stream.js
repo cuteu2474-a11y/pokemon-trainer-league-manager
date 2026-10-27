@@ -1,3 +1,5 @@
+import {installLeagueRules} from '../core/league-rules.js';
+import {captureRelayState,restoreRelayState} from './relay-state.js';
 import {BattleStreams, Teams} from '@pkmn/sim';
 import {convertPokemon, injectBattleTeams, applyFormChange} from './gp-adapter.js';
 import {normalizeStatPairs} from '../core/stat-potential.js';
@@ -32,9 +34,9 @@ function natureModifiers(dex, name) {
   return mods;
 }
 
-function currentStats(battle) {
+export function currentStats(battle) {
   const [p1, p2] = [battle.p1, battle.p2].map(side => side.pokemon.map(mon => ({
-    species: mon.species.name,
+    ...captureRelayState(mon,mon.leagueMeta),species: mon.species.name,
     hp: mon.hp, maxhp: mon.maxhp, status: mon.status,
     pp: mon.baseMoveSlots.map(slot => slot.pp), maxpp:mon.baseMoveSlots.map(slot=>slot.maxpp),
     atk: mon.storedStats.atk, def: mon.storedStats.def, spa: mon.storedStats.spa,
@@ -44,13 +46,17 @@ function currentStats(battle) {
 }
 
 /** Per-instance hook: avoids modifying the Showdown Pokemon prototype globally. */
-export function installFormHooks(battle, teams, formEvents = []) {
+export function installFormHooks(battle, teams=null, formEvents = []) {
   for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
     const side = sideIndex ? battle.p2 : battle.p1;
     for (let i = 0; i < side.pokemon.length; i++) {
       const mon = side.pokemon[i];
-      const meta = {...teams[sideIndex][i], natureModifiers: natureModifiers(battle.dex, teams[sideIndex][i].nature)};
+      if(mon.__leagueFormHook)continue;
+      const input=teams?.[sideIndex]?.[i]||mon.leagueMeta;if(!input)continue;
+      const meta={...input,natureModifiers:natureModifiers(battle.dex,input.nature)};mon.leagueMeta=meta;
+      Object.defineProperty(mon,'__leagueFormHook',{value:true});
       const originalSetSpecies = mon.setSpecies;
+      mon.updateMaxHp=function(){return applyFormChange(this,meta,this.species);};
       mon.setSpecies = function (...args) {
         const prior = {hp: this.hp, maxhp: this.maxhp, speciesId: this.species.id};
         const result = originalSetSpecies.apply(this, args);
@@ -69,10 +75,10 @@ export function installFormHooks(battle, teams, formEvents = []) {
 
 /** Provides Battle access before the simulator's very first turn. */
 export class GPBattleStream extends BattleStreams.BattleStream {
-  constructor(teamA, teamB, carry = {}) {
+  constructor(teamA, teamB, carry = {}, options = {}) {
     super({noCatch: true});
     this.gpTeams = [teamA, teamB];
-    this.carry = carry;
+    this.carry = carry;this.options=options;
     this.initialStats = null;
     this.formEvents = [];
   }
@@ -81,7 +87,9 @@ export class GPBattleStream extends BattleStreams.BattleStream {
     if (type !== 'start') return;
     const battle = this.battle;
     if (!battle) throw new Error('Showdown did not create a Battle');
-    installLevelFreeDamage(battle);
+    installLevelFreeDamage(battle);installLeagueRules(battle,this.options);
+    const originalAction=battle.runAction;
+    battle.runAction=function(action){const result=originalAction.call(this,action);if(action.choice==='start')for(const side of this.sides)side.pokemonLeft=side.pokemon.filter(mon=>mon.hp>0).length;return result;};
     const originalSend=battle.send, sentStates=new Map();
     battle.send=function(type,data){
       if(type==='update'&&Array.isArray(data)&&battle.started){
@@ -107,6 +115,7 @@ export class GPBattleStream extends BattleStreams.BattleStream {
         return convertPokemon({...meta, natureModifiers: natureModifiers(battle.dex, meta.nature)}, mon.species);
       }));
       injectBattleTeams(battle, converted[0], converted[1]);
+      installFormHooks(battle, self.gpTeams, self.formEvents);
       for (const [sideIndex, key] of ['p1','p2'].entries()) {
         const prior = self.carry[key];
         if (!prior) continue;
@@ -114,20 +123,11 @@ export class GPBattleStream extends BattleStreams.BattleStream {
           const mon = sides[sideIndex].pokemon[i];
           const saved = prior[i];
           if (!saved) throw new Error(`Missing carry state for ${key} slot ${i}`);
-          mon.hp = Math.max(0, Math.min(mon.maxhp, saved.hp));
-          mon.fainted = mon.hp === 0;
-          mon.status = mon.hp > 0 ? (saved.status || '') : '';
-          mon.statusState = mon.status ? {id: mon.status, target: mon} : {};
-          for (let j = 0; j < mon.baseMoveSlots.length; j++) {
-            if (saved.pp?.[j] === undefined) continue;
-            const slot = mon.baseMoveSlots[j];
-            slot.pp = Math.max(0, Math.min(slot.maxpp, saved.pp[j]));
-          }
-          mon.moveSlots = mon.baseMoveSlots.slice();
+          restoreRelayState(battle,mon,mon.leagueMeta,saved);
         }
       }
       for (const side of sides) side.pokemonLeft = side.pokemon.filter(mon => mon.hp > 0).length;
-      installFormHooks(battle, self.gpTeams, self.formEvents);
+      for(const side of sides)if(!side.pokemonLeft)throw Error('기절한 트레이너의 선수단은 다시 출전할 수 없습니다.');
       // Side.pokemon is reordered on every switch; retain original object identities.
       self.originalPokemon=Object.fromEntries(['p1','p2'].map((key,i)=>[key,[...sides[i].pokemon]]));
       self.initialStats = currentStats(battle);

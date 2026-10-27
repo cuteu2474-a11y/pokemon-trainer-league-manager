@@ -33,7 +33,7 @@ function browser(g,store,locks){
   localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>{if(store.fail&&k==='save')throw Error('quota');store.set(k,v);},removeItem:k=>store.delete(k)},
   freshGame:()=>clone(g),renderOffice(){},myClub:()=>ctx.game.clubs[0],
   document:{getElementById(){return null;},createElement(){return {style:{},append(){}};},body:{append(){}}},addEventListener(){}};
- ctx.window=ctx;
+ ctx.MatchdayPreparation={invalidate(){ctx.invalidated=true;},render(){}};ctx.window=ctx;
  const source=readFileSync(new URL('../assets/match-registration-ui.js',import.meta.url),'utf8').replace(/^import .*;\n/,'');
  runInNewContext(source,ctx);return ctx;
 }
@@ -58,4 +58,10 @@ test('changed registered lineup is rejected before any reward is applied',async(
  const {g}=await fixture(),store=new Map([['save',JSON.stringify(g)]]),ctx=browser(g,store,serialLocks());
  ctx.game.clubs[1].trainers[0].pokemon[0].item='Leftovers';ctx.persist();let applied=false;
  await assert.rejects(ctx.MatchRegistration.commit(ctx.game.pendingMatch,()=>{applied=true;}),/선수단이 변경/);assert.equal(applied,false);
+});
+
+ test('a pending old-rule match returns to preparation while completed receipts remain intact',async()=>{
+ const {g}=await fixture();g.pendingMatch.frozen.registration.rulesVersion='old-rules';g.appliedMatches={'earlier':{id:'completed'}};
+ const store=new Map([['save',JSON.stringify(g)]]),ctx=browser(g,store,serialLocks());
+ assert.equal(ctx.invalidated,true);assert.equal(ctx.game.pendingMatch.phase,'prepare');assert.equal(ctx.game.pendingMatch.frozen,undefined);assert.equal(ctx.game.pendingMatch.result,undefined);assert.equal(ctx.game.appliedMatches.earlier.id,'completed');
 });

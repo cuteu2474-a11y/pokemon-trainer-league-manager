@@ -1,5 +1,7 @@
+import {LEAGUE_RULES} from './league-rules.js';
 /** Shared browser/API contract for immutable official-match inputs. */
-export const RULES_VERSION='relay-implemented-20261027';
+export const RULES_VERSION=LEAGUE_RULES.version;
+export const rules=LEAGUE_RULES;
 export const ENGINE_VERSION='pkmn-sim-0.10.11-level-free-v1';
 const copy=x=>JSON.parse(JSON.stringify(x));
 function canonical(value){

@@ -57,4 +57,4 @@ function showNotice(){
  const box=document.createElement('aside');box.id='match-save-notice';box.style.cssText='position:fixed;top:12px;left:12px;right:12px;z-index:4000;background:#203e50;color:white;padding:14px;border:1px solid #b4cdbc';
  box.textContent='다른 탭에서 저장이 변경됐습니다. ';const b=document.createElement('button');b.textContent='저장 불러오기';b.onclick=()=>{box.remove();reload();};box.append(b);document.body.append(box);
 }
-if(game){identity();registration.ensureRosterIds(game);save();}
+if(game){identity();const p=game.pendingMatch;if(p?.frozen&&p.frozen.registration?.rulesVersion!==registration.RULES_VERSION){window.MatchdayPreparation?.invalidate();delete p.frozen;delete p.result;p.phase='prepare';p.error='대회 규정이 갱신됐습니다. 출전 선수단을 다시 확정해 주세요.';}registration.ensureRosterIds(game);save();if(p?.phase==='prepare')window.MatchdayPreparation?.render();}

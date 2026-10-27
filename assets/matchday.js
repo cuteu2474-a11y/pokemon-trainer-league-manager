@@ -62,6 +62,7 @@
     const root=screen(), busy=['research','running'].includes(p.phase),frozen=!!p.frozen;
     root.innerHTML=`<div class="md-muted">${p.week}주차 · 리그 ${p.round}라운드</div><h1>${esc(c.name)} vs ${esc(opponent.name)}</h1><div class="md-top"><strong>경기 전 미팅 · 출전 순서와 플레이 방식 권고</strong><span>구단 피로 ${c.fatigue??0}/100 · 사기 ${c.morale??50}/100</span></div><p class="md-muted">감독의 제안은 명령이 아닙니다. 트레이너가 수용·절충·거부하며, 실제 경기에서 좋은 결과를 경험한 행동은 다음 경기의 자율 선택에도 영향을 줍니다.</p>`+
       p.order.map((index,slot)=>{const t=c.trainers[index];return `<div class="md-row"><div><strong>${slot+1}. ${esc(t?.name||'출전 불가')}</strong><small>개별 컨디션 미측정 · 전술 분석 ${t?.tactics??'—'} · 교체 판단 ${t?.switching??'—'}<br>${(t?.pokemon||[]).map(mon=>esc(mon.name)).join(' · ')}</small></div><div><div class="md-meeting-controls"><select data-plan="${index}" aria-label="${esc(t?.name)} 전술 방향" ${busy||frozen?'disabled':''}><option value="" ${!p.plans[index]?'selected':''}>전술 방향: AI 자율</option>${Object.entries(planLabels).map(([key,label])=>`<option value="${key}" ${p.plans[index]===key?'selected':''}>${label}</option>`).join('')}</select><select data-behavior="${index}" aria-label="${esc(t?.name)} 플레이 방식 권고" ${busy||frozen?'disabled':''}><option value="" ${!p.behaviors[index]?'selected':''}>플레이 방식: 권고 없음</option>${Object.entries(behaviorLabels).map(([key,label])=>`<option value="${key}" ${p.behaviors[index]===key?'selected':''}>${label}</option>`).join('')}</select></div> <button data-up="${slot}" aria-label="${slot+1}번 트레이너 위로" ${busy||frozen||slot===0?'disabled':''}>↑</button> <button data-down="${slot}" aria-label="${slot+1}번 트레이너 아래로" ${busy||frozen||slot===4?'disabled':''}>↓</button></div></div>`}).join('')+
+      '<details class="md-report"><summary>대회 규정</summary>'+((window.MatchRegistration?.rules?.descriptions||[]).map(text=>'<p class="md-muted">'+esc(text)+'</p>').join(''))+'</details>'+
       '<p class="md-muted">이미 등록된 기술과 능력치는 변경하지 않습니다. 권고가 효과적이었다고 확인된 경기만 트레이너의 플레이 성향 학습에 반영됩니다.</p>'+
       `<div class="md-error" role="alert">${esc(p.error)}</div>${frozen?'<p class="md-muted">출전 선수단 확정 · 기술·능력치·난수 시드 고정</p><button id="md-unlock" '+(busy?'disabled':'')+'>확정 해제 · 다시 준비</button>':''}<div class="md-actions"><button id="md-cancel" ${busy?'disabled':''}>${frozen?'확정 유지 · 구단 화면으로':'구단 화면으로'}</button><button id="md-confirm" class="primary" ${busy?'disabled':''}>${busy?'경기 준비·계산 중…':frozen?'같은 선수단으로 재시도':'출전 순서 확정 · 경기 시작'}</button></div>`;
     for (const button of root.querySelectorAll('[data-up],[data-down]')) button.onclick=()=>{
@@ -464,16 +465,16 @@
     const side=previous.winner==='A'&&previous.trainerA===battle.trainerA?'p1':previous.winner==='B'&&previous.trainerB===battle.trainerB?'p2':null;
     if(!side)return;
     const index=battle[side==='p1'?'trainerA':'trainerB'],trainer=pending().result.teams[side==='p1'?'home':'away'][index];
-    const prior=new Map(oldParties[side].map(mon=>[mon.name,mon]));
-    const rows=battle.initial[side].map(state=>{const old=prior.get(state.name),mon=trainer.team.find(m=>m.name===state.name);return {state,old,name:mon?.displayName||state.name};});
+    const prior=new Map((previous.final?.[side]||[]).map((mon,i)=>[String(mon.pokemonId??previous.initial?.[side]?.[i]?.name),mon]));
+    const rows=battle.initial[side].map(state=>{const old=prior.get(String(state.pokemonId??state.name)),mon=trainer.team.find(m=>m.name===state.name);return {state,old,name:mon?.displayName||state.name};});
     const dead=rows.filter(r=>r.state.hp===0).length,alive=rows.length-dead;
     box.hidden=false;box.open=false;
-    document.getElementById('md-relay-summary').textContent=trainer.name+' 이어 출전 · 기절 '+dead+'마리 그대로 · 생존 '+alive+'마리만 회복 · PP·상태 유지';
-    document.getElementById('md-relay-rows').innerHTML='<p>생존 포켓몬만 최대 HP의 10% 회복하며, 기절한 포켓몬은 부활하지 않습니다.</p>'+rows.map(({state,old,name})=>{
+    document.getElementById('md-relay-summary').textContent=trainer.name+' 이어 출전 · 기절 '+dead+'마리 그대로 · 생존 '+alive+'마리만 회복 · PP·상태·도구 유지';
+    document.getElementById('md-relay-rows').innerHTML='<p>생존 포켓몬만 최대 HP의 10% 회복하며, 기절한 포켓몬은 부활하지 않습니다. 소모·제거·교환된 도구와 남은 수면 진행도 유지합니다.</p>'+rows.map(({state,old,name})=>{
       const before=old?.hp,delta=Number.isFinite(before)?state.hp-before:null;
       const hp=state.hp===0?'기절 유지':(Number.isFinite(before)?before+' → ':'')+state.hp+'/'+state.maxhp+(delta!==null?' ('+(delta>=0?'+':'')+delta+')':'');
       const pp=state.pp?.reduce((n,v)=>n+v,0),oldPP=old?.pp?.reduce((n,v)=>n+v,0);
-      return `<div class="md-carry-row ${state.hp===0?'out':''}"><strong>${esc(name)}</strong><span>${hp}</span><small>PP 합계 ${oldPP??'—'} → ${pp??'—'} · ${statusNames[state.status]||'상태이상 없음'}</small></div>`;
+      return `<div class="md-carry-row ${state.hp===0?'out':''}"><strong>${esc(name)}</strong><span>${hp}</span><small>PP 합계 ${oldPP??'—'} → ${pp??'—'} · ${statusNames[state.status]||'상태이상 없음'}${state.status==='slp'&&Number.isFinite(state.statusData?.time)?' · 수면 진행 유지':''} · ${state.item===undefined?'도구 기록 없음':state.item?'도구 유지':'도구 없음'}${state.protectionBusted?' · 보호 형태 소모 유지':''}</small></div>`;
     }).join('');
   }
   const skillStyles=document.createElement('style');skillStyles.textContent=`
@@ -513,7 +514,7 @@
       const b=event.battle;document.getElementById('md-trainers').textContent=`${event.intro+1}번째 대결 · ${r.teams.home[b.trainerA].name} vs ${r.teams.away[b.trainerB].name}`;
       const previous=currentBattle,previousParties={p1:copy(visualState.p1.party||[]),p2:copy(visualState.p2.party||[])};currentBattle=b;renderContributions();visualIntro(b);initialiseParty(b);storyIntro(b,previous);showRelayCarry(b,previous,previousParties);renderMovePanels();append('── 트레이너 대결 '+(event.intro+1)+' ──');return;
     }
-    if(event.end){recordBattleWin(event.end);if(event.end.winner==='A')score[0]++;else if(event.end.winner==='B')score[1]++;else {score[0]++;score[1]++;}document.getElementById('md-score').textContent=score.join(' : ');return;}
+    if(event.end){if(event.end.endReason==='turn-limit')append((event.end.turns||300)+'턴 종료 · 양쪽 주자 탈락');else if(event.end.winner==='tie')append('엔진 무승부 · 양쪽 주자 탈락');recordBattleWin(event.end);if(event.end.winner==='A')score[0]++;else if(event.end.winner==='B')score[1]++;else {score[0]++;score[1]++;}if(event.end.exhausted){score[event.end.exhausted==='A'?1:0]++;append('생존 포켓몬이 없어 승리 주자도 퇴장 · 다음 주자 출전');}document.getElementById('md-score').textContent=score.join(' : ');return;}
     const parts=event.line.split('|'), type=parts[1],actor=parts[2]||'',side=actor.startsWith('p1')?'p1':'p2',name=actorName(actor);
     syncParty(parts);visualEvent(parts);contextualCommentary(parts);renderMovePanels();
     if(type==='turn'){document.getElementById('md-stage').textContent=parts[2]+'턴';return;}
@@ -609,7 +610,7 @@
     const button=document.createElement('button');button.textContent='보고서로 돌아가기';button.onclick=()=>{closeReview();window.MatchFeedback?.show(p);};screen().prepend(button);
     document.getElementById('md-finish').textContent='관전 닫기';tick();
   }
-  window.MatchdayPreparation={render,pending,review:openReview};
+  window.MatchdayPreparation={render,pending,review:openReview,invalidate:()=>{clearTimeout(timer);replayRequest++;cursor=0;}};
   if(game?.pendingMatch){if(!game.pendingMatch.frozen&&game.pendingMatch.phase==='watch'){game.pendingMatch.phase='prepare';delete game.pendingMatch.result;game.pendingMatch.error='업데이트 전 경기입니다. 출전 선수단을 다시 확정해 주세요.';}if(['running','research'].includes(game.pendingMatch.phase))game.pendingMatch.phase=game.pendingMatch.frozen?'retry':'prepare';render();}
 })();
 

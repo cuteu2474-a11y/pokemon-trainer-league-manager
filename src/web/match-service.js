@@ -1,3 +1,4 @@
+import {LEAGUE_RULES} from '../core/league-rules.js';
 import {validateRequest} from '../core/match-registration.js';
 import {readFileSync} from 'node:fs';
 import {battlePlan, planMoves} from '../battle/battle-plans.js';
@@ -26,7 +27,7 @@ export function battlePokemon(p, plan='balanced') {
   const ability = p.ability ?? species.abilities['0'];
   if (!Dex.abilities.get(ability).exists) throw new RangeError('특성 데이터 오류');
   if (p.item && !Dex.items.get(p.item).exists) throw new RangeError('도구 데이터 오류');
-  return {name:p.name,species:species.name,statCA,statPA,
+  return {name:p.name,pokemonId:p.uid??p.id,ownerTrainerId:p.ownerTrainerId,species:species.name,statCA,statPA,
     nature:p.nature||'Hardy',ability,item:p.item||'',moves};
 }
 export function prepareClub(club, order) {
@@ -38,7 +39,7 @@ export function prepareClub(club, order) {
     const plan=aiProfile.plan;
     const team=trainer.pokemon.map(p=>battlePokemon(p,plan));
     const counts=team.reduce((map,mon)=>(map[mon.name]=(map[mon.name]||0)+1,map),{});
-    team.forEach((mon,slot)=>{mon.displayName=mon.name;if(counts[mon.name]>1)mon.name=mon.name+'·'+(slot+1);});
+    team.forEach((mon,slot)=>{mon.pokemonId ??= String(club.id)+':'+String(trainer.uid??i)+':'+slot;mon.displayName=mon.name;if(counts[mon.name]>1)mon.name=mon.name+'·'+(slot+1);});
     return {name:trainer.name,tactics:trainer.tactics,switching:trainer.switching,
       battleAnalysis:trainer.battleAnalysis??trainer.analysis,
       resourceManagement:trainer.resourceManagement??trainer.management,
@@ -71,9 +72,9 @@ export async function runMatch(body) {
       if (move.exists) moveVisuals[part[3]] = moveInfo(move);
     }
   }
-  return {engine:'showdown', ...(registration?{registration}:{}),visuals, moveVisuals, report:buildBattleReport(result.rounds,home,away), typeChart,
+  return {engine:'showdown',rules:LEAGUE_RULES, ...(registration?{registration}:{}),visuals, moveVisuals, report:buildBattleReport(result.rounds,home,away), typeChart,
     coaching:Object.fromEntries([['home',home],['away',away]].map(([side,group])=>[side,group.map(t=>({name:t.name,
       ...t.aiProfile,plan:t.battlePlan}))])), home:body.home.id, away:body.away.id, aScore:result.trainersDefeated.B, bScore:result.trainersDefeated.A,
-    teams:{home,away}, rounds:result.rounds.map(r => ({trainerA:r.trainerA, trainerB:r.trainerB, winner:r.winner,aiDecisions:r.result.aiDecisions,
-      final:r.result.finalState, initial:Object.fromEntries(['p1','p2'].map(side=>[side,r.result.initialStats[side].map((state,i)=>({name:r.pokemonOrder[side][i],hp:state.hp,maxhp:state.maxhp,status:state.status,pp:state.pp,maxpp:state.maxpp}))])), log:r.result.log}))};
+    teams:{home,away}, rounds:result.rounds.map(r => ({trainerA:r.trainerA, trainerB:r.trainerB, winner:r.winner,exhausted:r.exhausted||null,endReason:r.result.endReason,turns:r.result.turns,turnLimit:r.result.turnLimit,rulesVersion:r.result.rulesVersion,aiDecisions:r.result.aiDecisions,
+      final:r.result.finalState, initial:Object.fromEntries(['p1','p2'].map(side=>[side,r.result.initialStats[side].map((state,i)=>({name:r.pokemonOrder[side][i],hp:state.hp,maxhp:state.maxhp,status:state.status,statusData:state.statusData,item:state.item,lastItem:state.lastItem,form:state.form,protectionBusted:state.protectionBusted,pokemonId:state.pokemonId,pp:state.pp,maxpp:state.maxpp}))])), log:r.result.log}))};
 }
