@@ -1,3 +1,4 @@
+import {initialEnhancement,installEnhancementRules} from './enhancement.js';
 import {installLeagueRules} from '../core/league-rules.js';
 import {captureRelayState,restoreRelayState} from './relay-state.js';
 import {BattleStreams, Teams} from '@pkmn/sim';
@@ -126,6 +127,8 @@ export class GPBattleStream extends BattleStreams.BattleStream {
           restoreRelayState(battle,mon,mon.leagueMeta,saved);
         }
       }
+      installEnhancementRules(battle,Object.fromEntries(['p1','p2'].map((key,i)=>[key,initialEnhancement(self.gpTeams[i],self.options.enhancements?.[key]||{kind:'none'},self.carry.enhancements?.[key])])));
+      self.initialEnhancements=structuredClone(battle.leagueEnhancements);
       for (const side of sides) side.pokemonLeft = side.pokemon.filter(mon => mon.hp > 0).length;
       for(const side of sides)if(!side.pokemonLeft)throw Error('기절한 트레이너의 선수단은 다시 출전할 수 없습니다.');
       // Side.pokemon is reordered on every switch; retain original object identities.

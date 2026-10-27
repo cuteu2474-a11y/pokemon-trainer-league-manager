@@ -1,3 +1,4 @@
+import {installEnhancementRules} from './enhancement.js';
 import {installLeagueRules} from '../core/league-rules.js';
 import {installFormHooks} from './gp-battle-stream.js';
 import {Battle} from '@pkmn/sim';
@@ -29,7 +30,7 @@ export function rolloutActions(battle, {sideId='p1', choices, opponentChoices, d
       // Showdown serialization retains the original log array by reference.
       // Each search branch must own its log, including separate samples.
       const clone=installLevelFreeDamage(Battle.fromJSON(structuredClone(baseline)));
-      installLeagueRules(clone);installFormHooks(clone);
+      installLeagueRules(clone);installFormHooks(clone);installEnhancementRules(clone);
       const enemy = opponentChoices?.[i % opponentChoices.length] ||
         legalRolloutMoves(clone,foeId)[i % Math.max(1,legalRolloutMoves(clone,foeId).length)]?.choice;
       if (!enemy) continue;

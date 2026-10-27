@@ -13,7 +13,7 @@ export function captureRelayState(mon,meta){
   hp,maxhp,status:hp>0?mon.status:'',
   statusData:mon.status==='slp'?Object.fromEntries(statusKeys.filter(k=>Number.isFinite(mon.statusState[k])).map(k=>[k,mon.statusState[k]])):{},
   item:mon.item,lastItem:mon.lastItem||'',ateBerry:!!mon.ateBerry,bondTriggered:!!mon.bondTriggered,
-  protectionBusted:!!mon.abilityState?.busted||['mimikyubusted','mimikyubustedtotem','eiscuenoice'].includes(mon.baseSpecies.id),terastallized:mon.terastallized||'',
+  protectionBusted:!!mon.abilityState?.busted||['mimikyubusted','mimikyubustedtotem','eiscuenoice'].includes(mon.baseSpecies.id),terastallized:mon.terastallized||'',stellarBoostedTypes:[...(mon.stellarBoostedTypes||[])],
   pp:mon.baseMoveSlots.map(m=>m.pp),moves:mon.baseMoveSlots.map(m=>({id:m.id,pp:m.pp,maxpp:m.maxpp}))};
 }
 export function restoreRelayState(battle,mon,meta,saved){
@@ -45,7 +45,7 @@ export function restoreRelayState(battle,mon,meta,saved){
   mon.item=saved.item;mon.itemState=battle.initEffectState({id:mon.item,target:mon});
  }
  mon.lastItem=saved.lastItem||'';mon.ateBerry=!!saved.ateBerry;
- if(saved.terastallized){mon.terastallized=saved.terastallized;mon.canTerastallize=null;mon.teraType=saved.terastallized;}
+ if(saved.terastallized){mon.terastallized=saved.terastallized;mon.canTerastallize=null;mon.teraType=saved.terastallized;mon.stellarBoostedTypes=[...(saved.stellarBoostedTypes||[])];}
  for(let i=0;i<mon.baseMoveSlots.length;i++){
   const slot=mon.baseMoveSlots[i];
   const index=saved.moves?(saved.moves[i]?.id===slot.id?i:saved.moves.findIndex(m=>m.id===slot.id)):i;

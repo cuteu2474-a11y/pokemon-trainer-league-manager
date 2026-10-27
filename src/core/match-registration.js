@@ -35,10 +35,10 @@ export function ensureRosterIds(g){
 }
 const keys=(obj,names)=>Object.fromEntries(names.filter(k=>obj[k]!==undefined).map(k=>[k,copy(obj[k])]));
 export function lineupState(g,p){
- return {order:p.order,plans:p.plans,behaviors:p.behaviors,clubs:[p.home,p.away].map(id=>{
+ return {order:p.order,plans:p.plans,behaviors:p.behaviors,enhancements:p.enhancements,clubs:[p.home,p.away].map(id=>{
   const c=g.clubs.find(c=>String(c.id)===String(id));if(!c)throw Error('경기 구단이 없습니다.');
-  return {...keys(c,['id','fatigue','morale']),trainers:c.trainers.map(t=>t&&({...keys(t,['uid','id','name','tactics','switching','battleAnalysis','analysis','resourceManagement','management','moveJudgment','switchJudgment','autonomyAI','skills','preferredPlay','playStyle','preferredPlays']),
-   pokemon:(t.pokemon||[]).map(mon=>keys(mon,['uid','ownerTrainerId','name','species','formId','statCA','statPA','power','ca','pa','potential','gp','nature','ability','item','moves']))}))};
+  return {...keys(c,['id','fatigue','morale']),trainers:c.trainers.map(t=>t&&({...keys(t,['uid','id','name','tactics','switching','battleAnalysis','analysis','resourceManagement','management','moveJudgment','switchJudgment','autonomyAI','skills','preferredPlay','playStyle','preferredPlays','enhancement']),
+   pokemon:(t.pokemon||[]).map(mon=>keys(mon,['uid','ownerTrainerId','name','species','formId','statCA','statPA','power','ca','pa','potential','gp','nature','ability','item','moves','teraType']))}))};
  })};
 }
 export function validateRoster(request){

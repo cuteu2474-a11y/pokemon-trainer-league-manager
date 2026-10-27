@@ -129,6 +129,11 @@ export class TrainerAI extends RandomPlayerAI{
     return 0;
   }
   chooseMove(active,moves){
+    // Evaluate the exact enhanced command that will be sent to the live engine.
+    const request=this.request?.active?.[0];
+    const flag=request?.canMegaEvo?'mega':request?.canDynamax?'dynamax':request?.canTerastallize?'terastallize':null;
+    if(flag)moves=moves.map(entry=>({...entry,choice:entry.choice+' '+flag,
+      ...(flag==='dynamax'?{move:{...entry.move,move:request.maxMoves?.maxMoves?.[Number(entry.choice.split(' ')[1])-1]?.move||entry.move?.move}}:{})}));
     this.decisions.moves++;
     if(!moves.length)return super.chooseMove(active,moves);
     const battle=this.battleProvider?.();
