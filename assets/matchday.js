@@ -2301,3 +2301,12 @@
   script.async=false;
   document.body.append(script);
 })();
+
+/* AI head-coach contracts and long-term youth development at season boundaries. */
+(function loadAICoachCareer(){
+  if(typeof document==='undefined'||!document.body?.append||window.AICoachCareer)return;
+  const script=document.createElement('script');
+  script.src='assets/ai-coach-career.js';
+  script.async=false;
+  document.body.append(script);
+})();

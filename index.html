@@ -922,7 +922,7 @@ function newPokemonProspect(c,t){return {name:SPECIES[rnd(game,0,SPECIES.length-
 function trainerRetirementState(t){if(!t.retirement)t.retirement={intent:0,noticeSeason:null};return t.retirement}
 function trainerRetirementLabel(t){const r=trainerRetirementState(t);return r.noticeSeason!==null?'은퇴 예고':r.intent>=60?'은퇴 고민':'현역 유지'}
 function ensureTrainerAcademies(){for(const c of game.clubs){c.trainerAcademy=c.trainerAcademy||[];c.reserveTrainers=c.reserveTrainers||[];}}
-function generateAcademyTrainers(){ensureTrainerAcademies();for(const c of game.clubs){const n=1+rnd(game,0,1);for(let i=0;i<n;i++){const t=mkTrainer(game,c,5+c.trainerAcademy.length+i);t.name='아카데미 신인 '+game.season+'-'+(c.trainerAcademy.length+1);t.academySeason=game.season+1;c.trainerAcademy.push(t);}if(c.name===game.club)game.log.unshift('구단 아카데미 신인 트레이너 '+n+'명 배출 · 아카데미 탭에서 확인');}}
+function generateAcademyTrainers(){ensureTrainerAcademies();for(const c of game.clubs){const slots=Math.max(0,10-c.trainerAcademy.length),n=Math.min(slots,1+rnd(game,0,1));for(let i=0;i<n;i++){const t=mkTrainer(game,c,5+c.trainerAcademy.length+i);t.name='아카데미 신인 '+game.season+'-'+(c.trainerAcademy.length+1);t.academySeason=game.season+1;c.trainerAcademy.push(t);}if(c.name===game.club)game.log.unshift(n?'구단 아카데미 신인 트레이너 '+n+'명 배출 · 아카데미 탭에서 확인':'아카데미 정원 10명 · 신입 생성 보류');}}
 function academyPromote(i){const c=myClub();ensureTrainerAcademies();const t=c.trainerAcademy[i];if(!t)return;const slot=c.trainers.findIndex(x=>x===null);if(slot<0&&c.reserveTrainers.length>=5){alert('빈 출전 슬롯이나 후보 명단 자리가 없습니다.');return;}c.trainerAcademy.splice(i,1);if(slot>=0){c.trainers[slot]=t;game.log.unshift(t.name+' 아카데미에서 출전 '+(slot+1)+'번 자리로 승격');}else{c.reserveTrainers.push(t);game.log.unshift(t.name+' 아카데미에서 후보 명단으로 승격');}persist();renderOffice()}
 function processTrainerRetirements(){
  ensureTrainerAcademies();
@@ -1859,7 +1859,7 @@ function aiMaintainSquad(c){
   const candidate=options[0];
   if(candidate&&(m.youth>=53||aiUnitScore(candidate.t)>aiUnitScore(aiWeakest(c).t)+2))changed=aiPromote(c,candidate,'후보진 뎁스 강화')||changed;
  }
- if(c.trainerAcademy.length>10){c.trainerAcademy.splice(0,c.trainerAcademy.length-10);}
+ // A saved academy over capacity is preserved; intake pauses until space opens.
  return changed;
 }
 function aiStyleFor(c,opp){
