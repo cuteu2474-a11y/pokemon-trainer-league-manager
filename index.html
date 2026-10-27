@@ -2043,15 +2043,17 @@ function aiTransferWindow(attemptLimit=6){
  aiInit();const AI=game.clubs.filter(c=>c.id!==myClub().id);let signed=0;
  // Re-rank managers by immediate needs, available spending and risk; not random empty-slot buying.
  for(const c of AI)aiMaintainSquad(c);
- const buyers=AI.map(c=>({c,weight:(c.trainers.some(t=>!t)?68:0)+
+ const buyers=AI.map(c=>({c,weight:c.trainers.filter(t=>!t||!Array.isArray(t.pokemon)||t.pokemon.length!==6).length*68+
   ((c.reserveTrainers||[]).length===0?12:0)+(aiManager(c).risk/7)+rng(game)*26})).sort((a,b)=>b.weight-a.weight);
  const bidders=buyers.slice(0,Math.min(AI.length,Math.max(12,attemptLimit*3)));
  const potential=[];
  for(const {c} of bidders){
   const manager=aiManager(c),budget=clubIdentity(c).budget;
-  const needs=c.trainers.some(t=>!t);
+  const needs=c.trainers.some(t=>!t||!Array.isArray(t.pokemon)||t.pokemon.length!==6);
   if(!needs&&rng(game)>Math.max(.14,manager.risk/135))continue;
-  if((c.reserveTrainers||[]).length<2&&game.freeAgents.length&&rng(game)<.32){if(aiSignFreeAgent(c)){signed++;continue;}}
+  if((needs||(c.reserveTrainers||[]).length<2)&&game.freeAgents.length&&(needs||rng(game)<.32)){
+   if(aiSignFreeAgent(c)){signed++;continue;}
+  }
   const shortlist=aiTransferCandidates(c);
   if(!shortlist.length){if(needs)aiRecord(c,'영입 대상 탐색','예산 또는 구단·트레이너 선호도 조건에 맞는 매물 없음',false);continue;}
   const chosen=shortlist[rnd(game,0,Math.min(2,shortlist.length-1))];
@@ -2060,13 +2062,13 @@ function aiTransferWindow(attemptLimit=6){
   if(fee<chosen.fee||!aiBidFits(c,chosen.e.t,fee))continue;
   potential.push({buyer:c,target:chosen,fee});
  }
- // Rival bids for the same unit compete; highest approved offer is attempted first.
+ // Rival bids for the same unit compete; if the leading bid fails, a rival may try.
  potential.sort((a,b)=>b.fee-a.fee);
  const targeted=new Set();
  for(const bid of potential){
   const uid=bid.target.e.t.uid;
-  if(targeted.has(uid))continue;targeted.add(uid);
-  if(aiExecuteBid(bid.buyer,bid.target,bid.fee))signed++;
+  if(targeted.has(uid))continue;
+  if(aiExecuteBid(bid.buyer,bid.target,bid.fee)){targeted.add(uid);signed++;}
   if(signed>=Math.max(3,Math.ceil(attemptLimit*.85)))break;
  }
  if(game.week===4||game.week===15)aiRecord(AI[0],'이적시장 마감','AI 감독 간 영입 경쟁 및 예산 조정 완료',false);

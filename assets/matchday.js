@@ -2292,3 +2292,12 @@
   script.async=false;
   document.body.append(script);
 })();
+
+/* Keep AI bidding priorities and season-to-season strength reports consistent. */
+(function loadAISeasonMarket(){
+  if(typeof document==='undefined'||!document.body?.append||window.AISeasonMarket)return;
+  const script=document.createElement('script');
+  script.src='assets/ai-season-market.js';
+  script.async=false;
+  document.body.append(script);
+})();
