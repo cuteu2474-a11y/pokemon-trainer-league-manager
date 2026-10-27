@@ -1,27 +1,61 @@
-# Showdown 전투 엔진 연동 상태
+# Showdown 연동
 
-## 채택한 구조
+갱신일: 2026년 10월 27일
 
-- 시뮬레이터: `@pkmn/sim@0.10.11`, MIT 라이선스, https://github.com/pkmn/ps
-- 우리 게임의 CA/PA/GP가 **유일한 능력치 결정 체계**입니다. 원작 IV/EV를 억지로 변환하지 않습니다.
-- Showdown은 기술·상성·특성·상태이상·판정·피해량을 처리합니다.
-- `src/battle/gp-battle-stream.js`: 첫 턴 전 GP 능력치 주입 + 폼체인지 시 GP로 재계산.
-- `src/battle/gp-adapter.js`: 종족값, 레벨, 성격, GP에서 능력치 계산.
-- `src/battle/showdown.js`: GP 데이터가 있는 양측 6마리의 자동 배틀과 결과/로그/초기 스탯 반환.
-- `tests/sim.test.js`: GP가 다른 동일종 포켓몬을 사용한 실제 엔진 통합 테스트.
+현재 전투 코드의 구조와 검증 범위를 설명합니다. 앞으로 적용할 대회 규칙은 [개발 작업 목록](DEVELOPMENT_TODO.md#4-확정-규칙과-구현-기준)에 있습니다.
 
-## 제한
+## 구성
 
-- 배틀 엔진을 설치하지 못한 환경에서는 6대6 실제 실행 성공을 주장하지 않습니다.
-- 현재는 `gen9customgame` 싱글만 지원합니다. `TrainerAI`가 기술·교체를 판단하고 Showdown 상태를 복제한 탐색을 사용합니다.
-- `src/battle/club-match.js`에 5인 연승전, 경기 사이 HP/PP/상태 계승 및 생존 포켓몬 최대 HP 10% 회복이 구현되어 있습니다. 운영 화면은 `assets/matchday.js`와 `/api/match`를 통해 우리 구단의 실제 경기에 연결되어 있습니다. 영구적 폼변경의 장기 상태 저장은 남아 있습니다.
-- 특수 전투 기술 및 폼변경 이벤트에서 숫자가 다시 덮어써지는 사례가 없는지 엔드투엔드 회귀 검증이 필요합니다.
+시뮬레이터는 `@pkmn/sim@0.10.11`입니다. [상위 프로젝트](https://github.com/pkmn/ps)의 기술·타입·특성·도구·상태 처리를 사용하고, 리그 전용 능력치와 피해 계산을 전투 인스턴스에 연결합니다.
 
-## 테스트
+| 코드 | 담당 |
+| --- | --- |
+| [match-service.js](../src/web/match-service.js) | 웹 선수단 변환, 경기 실행, 관전·상성·활약 데이터 반환 |
+| [gp-battle-stream.js](../src/battle/gp-battle-stream.js) | 팀 포장, 시작 전 능력치 주입, 폼 변경, HP·PP·상태 인계 |
+| [level-free-damage.js](../src/battle/level-free-damage.js) | 레벨 없는 피해·혼란·일부 고정 피해 |
+| [trainer-ai.js](../src/battle/trainer-ai.js) | 기술·교체 선택 |
+| [showdown-rollout.js](../src/battle/showdown-rollout.js) | 실제 전투와 분리한 가상 전투 탐색 |
+| [showdown.js](../src/battle/showdown.js) | 자동 6대6 실행과 로그·최종 상태 |
+| [club-match.js](../src/battle/club-match.js) | 5인 연승 순서와 생존 개체 회복 |
+| [replay-report.js](../src/battle/replay-report.js) | 실제 기록의 직접 피해·격파 집계 |
+
+형식은 현재 `gen9customgame` 6대6 싱글입니다. 다른 세대·포맷을 지원한다고 간주하지 않습니다.
+
+## 웹 API
+
+| 경로 | 역할 |
+| --- | --- |
+| [POST /api/match](../api/match.js) | 실제 우리 구단 경기 |
+| [POST /api/opponent-scout](../api/opponent-scout.js) | 상대 분석과 출전 순서 근사 추천 |
+| [POST /api/trainer-moves](../api/trainer-moves.js) | 주간 기술 편성과 연구 |
+
+[로컬 서버](../scripts/serve.mjs)는 현재 경기 API만 연결합니다. 나머지 두 경로는 정적 파일 응답으로 처리되므로 로컬 기능 검증 전에 라우팅을 추가해야 합니다. 배포 환경의 함수 연결과 구분합니다.
+
+## 현재 경계
+
+- 우리 구단 경기만 웹에서 실제 전투를 사용합니다. 다른 구단의 19경기는 간이 계산입니다.
+- [별도 리그 엔진](../src/league/season.js)에 실제 전투 어댑터가 있어도 웹 전체 시즌이 그 경로를 사용한다는 뜻은 아닙니다.
+- 일부 특수 기술에 남은 내부 레벨 참조와 폼·소모 도구·상태 내부값의 장기 인계는 추가 작업입니다.
+- 현재 상대 순서 추천은 같은 순번 대면 중심의 근사 점수입니다. 연승전 전체의 최적 순서를 보장하지 않습니다.
+- 가상 전투는 로그 배열을 포함한 상태를 독립 복제하고 레벨 없는 피해 처리를 설치합니다. 상대 미공개 정보·난수 접근 범위와 폼 변경 후킹의 일치 여부는 별도 검증 대상입니다.
+
+## 검증
 
 ```bash
 npm ci
+npm run check:web
 npm test
 ```
 
-새 브랜치나 GitHub Actions 워크플로를 생성하지 않습니다.
+| 범위 | 확인할 검사 |
+| --- | --- |
+| 능력치·레벨 제거 | [level-free-stats.test.js](../tests/level-free-stats.test.js), [gp-adapter.test.js](../tests/gp-adapter.test.js) |
+| 실제 6대6·연승전 | [sim.test.js](../tests/sim.test.js), [club-match.test.js](../tests/club-match.test.js), [live-move-state.test.js](../tests/live-move-state.test.js) |
+| 가상 전투·AI | [showdown-rollout.test.js](../tests/showdown-rollout.test.js), [seven-traits.test.js](../tests/seven-traits.test.js) |
+| 웹 경기 API | [web-match.test.js](../tests/web-match.test.js) |
+| 리그 일정·승강 | [league-season.test.js](../tests/league-season.test.js) |
+| 생성 구단의 실제 경기 연결 | [real-league-integration.test.js](../tests/real-league-integration.test.js) |
+
+리그 일정 검사의 360경기와 실제 전투 360경기 검증을 구분합니다. 브라우저 통합 평가는 새 게임부터 두 번째 경기까지, 장기 검증은 실제 시즌·다년 운영으로 나눠 기록합니다.
+
+이번 문서 정리에서는 테스트와 플레이를 새로 실행하지 않았습니다. 과거의 통과 개수나 초기 설치 실패 기록을 현재 상태로 기재하지 않습니다.
