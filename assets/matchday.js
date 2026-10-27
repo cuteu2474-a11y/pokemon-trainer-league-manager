@@ -804,13 +804,13 @@
   const css=document.createElement('style');
   css.textContent=[
     '.pkm-art[role=button]{cursor:pointer}.pkm-art[role=button]:focus-visible{outline:3px solid #75cddd;outline-offset:3px;border-radius:6px}',
-    '.pki-shade{position:fixed;inset:0;z-index:2500;background:#07111cde;display:grid;place-items:center;padding:18px;color:#e7f0f8;font:14px "Malgun Gothic",sans-serif}',
-    '.pki-panel{position:relative;width:min(850px,100%);max-height:92vh;overflow:auto;background:linear-gradient(145deg,#19334a,#101d2f);border:1px solid #56758a;border-radius:12px;box-shadow:0 22px 80px #000b}',
+    '.pki-panel{position:relative;width:100%;background:linear-gradient(145deg,#19334a,#101d2f);border:1px solid #56758a;border-radius:12px;color:#e7f0f8;font:14px "Malgun Gothic",sans-serif}',
+    '.pki-page{max-width:1100px;margin:0 auto;min-height:50vh}.pki-navigation{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 auto 15px;max-width:1100px;color:#8dbed0;font-size:12px}',
+    '.pki-return{background:#1d465f;border:1px solid #4c809d;border-radius:7px;color:#d9f7fa;padding:10px 15px;cursor:pointer}.pki-return:focus-visible{outline:2px solid #a5e8ea}',
     '.pki-top{display:flex;align-items:center;gap:22px;padding:23px 55px 23px 20px;border-bottom:1px solid #39556e}',
     '.pki-image{width:158px;height:158px;flex:none;display:grid;place-items:center;background:#0a1d31;border:1px solid #41637b;border-radius:10px}',
     '.pki-image img{width:144px;height:144px;object-fit:contain}.pki-top h2{font-size:25px;margin:3px 0 10px}.pki-top small{color:#acc7d7}',
     '.pki-types{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.pki-type{padding:4px 11px;border-radius:16px;font-size:12px}',
-    '.pki-close{position:absolute;top:12px;right:13px;background:#243f56;border:1px solid #648297;color:white;border-radius:6px;width:38px;height:38px;font-size:23px;cursor:pointer}',
     '.pki-body{padding:19px 22px 23px;display:grid;gap:18px}.pki-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}',
     '.pki-kpi,.pki-fact,.pki-move{background:#162e43;border:1px solid #38556e;border-radius:7px;padding:12px;min-width:0}',
     '.pki-kpi small,.pki-fact small{display:block;color:#aac4d6;margin-bottom:6px;font-size:12px}.pki-kpi strong{display:block;font-size:18px;overflow-wrap:anywhere}',
@@ -820,7 +820,7 @@
     '.pki-stat span{width:68px;flex:none;font-size:12px}.pki-stat b{width:35px;text-align:right}.pki-meter{flex:1;height:7px;background:#395166;border-radius:5px;overflow:hidden}.pki-meter i{display:block;height:100%;background:#62b9a2}',
     '.pki-moves{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.pki-move{display:flex;justify-content:space-between;align-items:center;gap:8px}.pki-move small{color:#aac4d6}',
     '.pki-note{color:#adc3d2;font-size:12px;line-height:1.6;margin:6px 0 0}',
-    '@media(max-width:630px){.pki-shade{padding:7px}.pki-body{padding:13px}.pki-top{padding:16px 48px 16px 13px;gap:11px}.pki-top h2{font-size:20px}.pki-image{width:106px;height:112px}.pki-image img{width:100px;height:106px}.pki-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.pki-grid,.pki-stats,.pki-moves{grid-template-columns:repeat(2,minmax(0,1fr))}}',
+    '@media(max-width:630px){.pki-body{padding:13px}.pki-top{padding:16px 13px;gap:11px}.pki-top h2{font-size:20px}.pki-image{width:106px;height:112px}.pki-image img{width:100px;height:106px}.pki-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.pki-grid,.pki-stats,.pki-moves{grid-template-columns:repeat(2,minmax(0,1fr))}}',
     '@media(max-width:380px){.pki-grid,.pki-stats,.pki-moves{grid-template-columns:1fr}}'
   ].join('');
   document.head.appendChild(css);
@@ -855,7 +855,8 @@
   }
   function render(id){
     if(!active||active.id!==id)return;
-    const root=document.getElementById('pki-overlay');if(!root)return;
+    if(active.mode==='dashboard'&&tab!=='pokemonDetail')return;
+    const root=document.getElementById(active.mode==='clubSelect'?'clubtrainers':'dashpanel');if(!root)return;
     const mon=active.mon,meta=active.dex,info=ui.resolve(mon);
     const savedTypes=Array.isArray(mon?.types)?mon.types:(exists(mon?.type)?String(mon.type).split('/'):[]);
     const monTypes=savedTypes.length?savedTypes:meta?.types||[];
@@ -876,49 +877,64 @@
       (hasBase?section('종족값 · 도감 참고 정보',stats(meta.base,255)+'<p class="pki-note">외부 도감의 종족값이며 개체의 전투 능력치가 아닙니다.</p>'):'')+
       (!hasStats&&!hasGP&&!hasBase?'<p class="pki-note">능력치 데이터는 아직 기록되지 않았습니다.</p>':'');
     const image=ui.image(mon).replace('tabindex="0"','tabindex="-1"');
-    root.innerHTML='<div class="pki-panel" role="dialog" aria-modal="true" aria-labelledby="pki-heading" tabindex="-1">'+
-      '<button class="pki-close" type="button" aria-label="상세 정보 닫기">×</button>'+
+    const back=active.mode==='clubSelect'?'트레이너 정보':
+      ({profile:'트레이너 프로필',pokemon:'포켓몬 명단',transfer:'이적시장',career:'통산 기록'}[active.fromTab]||'이전 화면');
+    const career=active.mode==='dashboard'&&mon?.uid!=null&&window.SeasonRecords?
+      '<button type="button" class="tlm-career-link" data-tlm-career-kind="pokemon" data-tlm-career-id="'+esc(mon.uid)+'">통산 실전 기록 보기</button>':'';
+    root.innerHTML='<div class="pki-navigation"><button class="pki-return" type="button">← '+esc(back)+'로 돌아가기</button><span>POKÉMON / PROFILE</span></div>'+
+      '<section class="pki-panel pki-page" aria-labelledby="pki-heading" tabindex="-1">'+
       '<header class="pki-top"><div class="pki-image">'+image+'</div><div><small>'+(info.baseId?'도감 No. '+String(info.baseId).padStart(4,'0'):'도감 번호 미확인')+'</small>'+
       '<h2 id="pki-heading">'+show(mon?.name||mon?.species)+'</h2><div>Lv. '+show(mon?.level)+'</div><div class="pki-types">'+monTypes.map(t=>'<span class="pki-type" style="background:'+(color[String(t).toLowerCase()]||'#51677b')+'">'+esc(types[String(t).toLowerCase()]||t)+'</span>').join('')+'</div></div></header>'+
-      '<div class="pki-body">'+kpiHTML+section('기본 정보',facts)+section('기술과 PP',moves(mon))+statsHTML+
-      '<p class="pki-note">현재 HP·상태·CA·PA·GP·기술은 저장된 값만 표시합니다. 종족값은 참고용 외부 도감 자료입니다.</p></div></div>';
-    root.querySelector('.pki-close').onclick=close;
-    root.querySelector('.pki-panel').focus({preventScroll:true});
+      '<div class="pki-body">'+kpiHTML+section('기본 정보',facts)+section('기술과 PP',moves(mon))+statsHTML+career+
+      '<p class="pki-note">현재 HP·상태·CA·PA·GP·기술은 저장된 값만 표시합니다. 종족값은 참고용 외부 도감 자료입니다.</p></div></section>';
+    root.querySelector('.pki-return').onclick=close;
   }
   function close(){
-    document.getElementById('pki-overlay')?.remove();active=null;serial++;
+    const previous=active;if(!previous)return;
+    active=null;serial++;
+    if(previous.mode==='dashboard'&&tab==='pokemonDetail'){
+      tab=previous.fromTab||'pokemon';renderOffice();
+    }else if(previous.mode==='clubSelect'&&typeof renderClubTrainers==='function')renderClubTrainers();
+    if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>window.scrollTo?.(0,previous.scrollY||0));
     if(focusBefore?.isConnected)focusBefore.focus({preventScroll:true});
     focusBefore=null;
   }
-  function open(mon){
+  function open(mon,source){
     if(!mon)return;
+    const mode=source==='clubSelect'||(source!=='dashboard'&&!document.getElementById('clubtrainers')?.hidden)?'clubSelect':'dashboard';
+    if(mode==='dashboard'&&!game)return;
     focusBefore=document.activeElement;
-    const id=++serial;active={id,mon,dex:null};
-    document.getElementById('pki-overlay')?.remove();
-    const root=document.createElement('div');root.id='pki-overlay';root.className='pki-shade';
-    root.onclick=e=>{if(e.target===root)close();};
-    document.body.appendChild(root);render(id);
+    const id=++serial;active={id,mon,dex:null,mode,fromTab:tab==='pokemonDetail'?'pokemon':tab,
+      scrollY:typeof window.scrollY==='number'?window.scrollY:0};
+    if(mode==='dashboard'){tab='pokemonDetail';renderOffice();}
+    else render(id);
+    window.scrollTo?.(0,0);
+    document.getElementById(mode==='clubSelect'?'clubtrainers':'dashpanel')?.querySelector('.pki-return')?.focus?.({preventScroll:true});
     const info=ui.resolve(mon);
     dex(info.id||info.baseId).then(data=>{if(active?.id!==id)return;active.dex=data;render(id);});
   }
+  const oldRenderOffice=renderOffice;
+  renderOffice=function(...args){
+    if(active?.mode==='dashboard'&&!['pokemonDetail','career'].includes(tab)){active=null;serial++;}
+    const result=oldRenderOffice(...args);
+    if(tab==='pokemonDetail'&&active?.mode==='dashboard')render(active.id);
+    return result;
+  };
   function pick(target){
-    if(!(target instanceof Element)||target.closest('#pki-overlay'))return null;
+    if(!(target instanceof Element)||target.closest('.pki-page'))return null;
     if(target.matches('.pkm-art[data-pkm-record]'))return target;
     return target.closest('.pkm-profile-card,.pkm-choose-card,.pkm-owned-card,#marketDetail .fm-detail-mon')?.querySelector('.pkm-art[data-pkm-record]')||null;
   }
-  document.addEventListener('click',event=>{const img=pick(event.target);if(!img)return;const mon=ui.getRecord(img.dataset.pkmRecord);if(mon){event.preventDefault();event.stopPropagation();open(mon);}},true);
+  document.addEventListener('click',event=>{const img=pick(event.target);if(!img)return;const mon=ui.getRecord(img.dataset.pkmRecord);if(mon){event.preventDefault();event.stopPropagation();open(mon,img.closest('#clubtrainers')?'clubSelect':'dashboard');}},true);
   document.addEventListener('keydown',event=>{
-    if(event.key==='Escape'&&active){event.preventDefault();close();return;}
-    if(active&&event.key==='Tab'){
-      const panel=document.querySelector('#pki-overlay .pki-panel');
-      if(panel&&!panel.contains(document.activeElement)){event.preventDefault();panel.querySelector('.pki-close')?.focus();}
-      return;
+    if(event.key==='Escape'&&active&&(active.mode==='clubSelect'||tab==='pokemonDetail')){
+      event.preventDefault();event.stopImmediatePropagation();close();return;
     }
-    if((event.key==='Enter'||event.key===' ')&&event.target?.matches?.('.pkm-art[data-pkm-record]')){
+    if((event.key==='Enter'||event.key===' ')&&event.target?.matches?.('.pkm-art[data-pkm-record]')&&!event.target.closest('.pki-page')){
       const mon=ui.getRecord(event.target.dataset.pkmRecord);
-      if(mon){event.preventDefault();open(mon);}
+      if(mon){event.preventDefault();open(mon,event.target.closest('#clubtrainers')?'clubSelect':'dashboard');}
     }
-  });
+  },true);
   window.PokemonDetailView={open,close};
 })();
 

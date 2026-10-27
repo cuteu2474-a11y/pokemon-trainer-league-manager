@@ -319,7 +319,7 @@
         if(panel){
           const {kind,uid,from}=selectedCareer;
           panel.innerHTML='<div class="profile-navigation"><button type="button" class="g-btn alt" data-tlm-career-back>← '+
-            (from==='profile'?'트레이너 프로필':from==='pokemon'?'포켓몬 명단':'시즌 기록실')+'</button><span>PLAYER / CAREER</span></div>'+
+            (from==='profile'?'트레이너 프로필':from==='pokemon'?'포켓몬 명단':from==='pokemonDetail'?'포켓몬 상세':'시즌 기록실')+'</button><span>PLAYER / CAREER</span></div>'+ 
             careerHTML(game,kind,uid);
         }
       }
