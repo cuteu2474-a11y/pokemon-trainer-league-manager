@@ -3143,20 +3143,78 @@ function clubTrainerPick(i){
 }
 
 /* Club preview images and cards: images are view-only; combat roster order is unchanged. */
-const CT_SPECIES_DEX={
- '피카츄':25,'리자몽':6,'이상해꽃':3,'거북왕':9,'팬텀':94,'망나뇽':149,'가디안':282,
- '루카리오':448,'한카리아스':445,'에브이':196,'블래키':197,'메타그로스':376,'번치코':257,
- '대짱이':260,'나무킹':254,'가디':58,'갸라도스':130,'킬가르도':681,'삼삼드래':635,
- '마릴리':184,'님피아':700,'핫삼':212,'토게키스':468,'로즈레이드':407,'윈디':59,
- '렌트라':405,'마스카나':908,'라우드본':911,'웨이니발':914,'에이스번':815,'고릴타':812,
- '인텔리레온':818,'모아머':542,'샤로다':497,'염무왕':500,'대검귀':503,
- '야나키':512,'바오키':514,'앗차키':516,'드레디어':549,'제브라이카':523,
- '펜드라':545,'아케오스':567,'라프라스':131,'잠만보':143,'피죤투':18,
- '꼬마돌':74,'롱스톤':95,'아쿠스타':121,'별가사리':120,'피죤':17,
- '메로엣타':648,'레지기가스':486,'보만다':373,'바랜드':508,'몽얌나':518,
- '후딘':65,'고우스트':93,'케이시':63,'괴력몬':68,'마기라스':248,
- '보스로라':306,'밀로틱':350,'한바이트':444,'토대부기':389,'초염몽':392,'엠페르트':395
+/* Uniform Pokemon Showdown pixel sprites for the six-Pokemon trainer previews. */
+const CT_SHOWDOWN_SPECIES={
+ '피카츄':'pikachu',
+ '리자몽':'charizard',
+ '이상해꽃':'venusaur',
+ '거북왕':'blastoise',
+ '팬텀':'gengar',
+ '망나뇽':'dragonite',
+ '가디안':'gardevoir',
+ '루카리오':'lucario',
+ '한카리아스':'garchomp',
+ '에브이':'espeon',
+ '블래키':'umbreon',
+ '메타그로스':'metagross',
+ '번치코':'blaziken',
+ '대짱이':'swampert',
+ '나무킹':'sceptile',
+ '가디':'growlithe',
+ '갸라도스':'gyarados',
+ '킬가르도':'aegislash',
+ '삼삼드래':'hydreigon',
+ '마릴리':'azumarill',
+ '님피아':'sylveon',
+ '핫삼':'scizor',
+ '토게키스':'togekiss',
+ '로즈레이드':'roserade',
+ '윈디':'arcanine',
+ '렌트라':'luxray',
+ '마스카나':'meowscarada',
+ '라우드본':'skeledirge',
+ '웨이니발':'quaquaval',
+ '에이스번':'cinderace',
+ '고릴타':'rillaboom',
+ '인텔리레온':'inteleon',
+ '모아머':'leavanny',
+ '샤로다':'serperior',
+ '염무왕':'emboar',
+ '대검귀':'samurott',
+ '야나키':'simisage',
+ '바오키':'simisear',
+ '앗차키':'simipour',
+ '드레디어':'lilligant',
+ '제브라이카':'zebstrika',
+ '펜드라':'scolipede',
+ '아케오스':'archeops',
+ '라프라스':'lapras',
+ '잠만보':'snorlax',
+ '피죤투':'pidgeot',
+ '꼬마돌':'geodude',
+ '롱스톤':'onix',
+ '아쿠스타':'starmie',
+ '별가사리':'staryu',
+ '피죤':'pidgeotto',
+ '메로엣타':'meloetta',
+ '레지기가스':'regigigas',
+ '보만다':'salamence',
+ '바랜드':'stoutland',
+ '몽얌나':'musharna',
+ '후딘':'alakazam',
+ '고우스트':'haunter',
+ '케이시':'abra',
+ '괴력몬':'machamp',
+ '마기라스':'tyranitar',
+ '보스로라':'aggron',
+ '밀로틱':'milotic',
+ '한바이트':'gabite',
+ '토대부기':'torterra',
+ '초염몽':'infernape',
+ '엠페르트':'empoleon'
 };
+const CT_SHOWDOWN_BASE='https://play.pokemonshowdown.com/sprites/gen5/';
+const CT_SHOWDOWN_FALLBACK=CT_SHOWDOWN_BASE+'substitute.png';
 const CT_TRAINER_SPRITES={
  '아티':'burgh','덴트':'cilan','팟':'chili','콘':'cress','알로에':'lenora',
  '시즈':'marlon','카밀레':'elesa','야콘':'clay','풍란':'skyla',
@@ -3182,9 +3240,10 @@ function ctSortedPokemon(t){
  return (t.pokemon||[]).slice().sort((a,b)=>(Number(b.power)||0)-(Number(a.power)||0));
 }
 function ctPokemonThumb(p){
- const dex=CT_SPECIES_DEX[p.name];
- return dex?'<img loading="lazy" alt="" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'+dex+'.png">':
-  '<span class="ct-mon-symbol" aria-hidden="true">◉</span>';
+ const raw=CT_SHOWDOWN_SPECIES[p.name]||String(p.showdownId||p.speciesId||'substitute');
+ const slug=raw.toLowerCase().replace(/[^a-z0-9-]/g,'')||'substitute';
+ return '<img class="ct-showdown-dot" loading="lazy" alt="'+escapeHTML(p.name)+' 포켓몬 도트" src="'+CT_SHOWDOWN_BASE+slug+
+   '.png" onerror="this.onerror=null;this.src=\''+CT_SHOWDOWN_FALLBACK+'\'">';
 }
 function clubTrainerDetailHTML(t){
  const roster=ctSortedPokemon(t);
@@ -3203,7 +3262,7 @@ function clubTrainerDetailHTML(t){
 function renderClubTrainers(){
  const c=clubSelectDraft?.clubs[clubSelectId];if(!c)return;
  const items=c.trainers.map((t,i)=>{
-  const icons=ctSortedPokemon(t).map(p=>'<span class="ct-mini-mon" title="'+escapeHTML(p.name)+' · 전투력 '+p.power+'">'+ctPokemonThumb(p)+'</span>').join('');
+  const icons=ctSortedPokemon(t).slice(0,6).map(p=>'<span class="ct-mini-mon" title="'+escapeHTML(p.name)+' · 전투력 '+p.power+'">'+ctPokemonThumb(p)+'</span>').join('');
   return '<button class="ct-trainer-card '+(clubTrainerIndex===i?'selected':'')+'" type="button" data-preview-index="'+i+'" aria-pressed="'+(clubTrainerIndex===i)+'" onclick="clubTrainerPick('+i+')">'+
    ctTrainerPortrait(t)+'<span class="ct-trainer-body"><strong class="ct-name">'+escapeHTML(t.name)+'</strong>'+
    '<small class="ct-sub">전술 '+t.tactics+' · 교체 '+t.switching+'</small>'+
