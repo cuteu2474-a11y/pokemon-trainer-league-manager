@@ -1,3 +1,4 @@
+import {createLottery,rankStandings,fastClubScore,STANDINGS_RULES} from '../core/standings.js';
 import {simulateClubMatch} from '../battle/club-match.js';
 
 export const DIVISIONS = 4;
@@ -6,7 +7,7 @@ export const ROUNDS_PER_SEASON = 18;
 const assert = (condition, message) => {if (!condition) throw new RangeError(message);};
 const clone = value => structuredClone(value);
 
-export function createLeague(divisions) {
+export function createLeague(divisions,{seed=1}={}) {
   assert(Array.isArray(divisions) && divisions.length === DIVISIONS, 'Four divisions required');
   const ids = new Set();
   const clubs = divisions.map((members, division) => {
@@ -17,7 +18,7 @@ export function createLeague(divisions) {
       return {...clone(club), division:division+1};
     });
   });
-  return {season:1, divisions:clubs, history:[], current:null};
+  return {season:1,seed,divisions:clubs,history:[],current:null};
 }
 
 /** Berger circle method: 9 pairings repeated with reversed venues. */
@@ -38,15 +39,15 @@ export function generateSchedule(ids) {
 const blankRow = club => ({id:club.id,name:club.name || club.id,played:0,won:0,drawn:0,lost:0,for:0,against:0,points:0});
 export function standings(current, division) {
   assert(current && division>=1 && division<=4, 'Invalid division');
-  return Object.values(current.tables[division-1]).sort((a,b)=>
-    b.points-a.points || (b.for-b.against)-(a.for-a.against) || b.for-a.for ||
-    b.won-a.won || a.id.localeCompare(b.id)).map((row,index)=>({...row,rank:index+1}));
+  current.ranking ||= {version:STANDINGS_RULES.version,migrated:current.round>0,lotteries:current.tables.map((table,i)=>createLottery(Object.keys(table),{seed:current.lotterySeed??1,season:current.season??1,division:i}))};
+  return rankStandings(Object.values(current.tables[division-1]),{results:current.results,lottery:current.ranking.lotteries[division-1]});
 }
 export function startSeason(league) {
   assert(!league.current || league.current.round===18, 'Previous season unfinished');
   const fixtures=league.divisions.map(clubs=>generateSchedule(clubs.map(c=>c.id)));
-  league.current={round:0,fixtures,tables:league.divisions.map(clubs=>
+  league.current={season:league.season,lotterySeed:league.seed??1,round:0,fixtures,tables:league.divisions.map(clubs=>
     Object.fromEntries(clubs.map(club=>[club.id,blankRow(club)]))),results:[]};
+  league.current.ranking={version:STANDINGS_RULES.version,migrated:false,lotteries:league.divisions.map((clubs,i)=>createLottery(clubs.map(c=>c.id),{seed:league.seed??1,season:league.season,division:i}))};
   return league.current;
 }
 function applyResult(table, home, away, homeScore, awayScore) {
@@ -103,7 +104,7 @@ export function advanceSeason(league) {
     const target=newDivisions.findIndex(list=>list.some(c=>c.id===club.id))+1;
     if(target!==i+1) movement.push({id:club.id,from:i+1,to:target});
   }
-  league.history.push({season:league.season,standings:ranked,results:league.current.results,movement});
+  league.history.push({season:league.season,standings:ranked,ranking:clone(league.current.ranking),results:league.current.results,movement});
   league.divisions=newDivisions;league.season++;league.current=null;
   startSeason(league);
   return movement;
@@ -127,14 +128,5 @@ export async function showdownLeagueMatch(home,away,options={}) {
 
 /** Explicit fast-mode adapter for non-player fixtures; deterministic given injected RNG. */
 export function createFastMatchEngine(random=Math.random) {
-  return async (home,away)=>{
-    const strength=club=>Number.isFinite(club.rating)?Math.max(1,club.rating):100;
-    const chance=strength(home)/(strength(home)+strength(away));
-    const roll=random();
-    assert(Number.isFinite(roll)&&roll>=0&&roll<1,'RNG must return [0,1)');
-    const draw=0.12;
-    if(roll<draw)return {homeScore:4,awayScore:4};
-    return roll<draw+(1-draw)*chance?{homeScore:5,awayScore:Math.floor(random()*5)}:
-      {homeScore:Math.floor(random()*5),awayScore:5};
-  };
+  return async(home,away)=>fastClubScore(home.rating,away.rating,random);
 }

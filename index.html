@@ -911,10 +911,11 @@ function persist(){try{localStorage.setItem(SKEY,JSON.stringify(game))}catch(e){
 function myClub(){return game.clubs.find(c=>c.name===game.club)}
 function nextFixture(){if(game.round>=18)return null;return game.fixtures[myClub().division][game.round].find(([a,b])=>a===myClub().id||b===myClub().id)}
 function clubPower(c,order){let base=c.skill+Math.round(c.trainers.filter(Boolean).reduce((sum,t)=>sum+t.tactics+t.switching,0)/15);let best=c.trainers.filter(Boolean).reduce((a,t)=>a+Math.round(t.pokemon.reduce((v,p)=>v+p.power,0)/6),0)/5;let orderBonus=order?(((c.trainers[order[0]]?.tactics||0)-(c.trainers[order[4]]?.tactics||0))*.35):0;return base*.55+best*.45+orderBonus}
-function matchSim(a,b){const mine=myClub();const aPower=clubPower(a,a.id===mine.id?game.order:null),bPower=clubPower(b,b.id===mine.id?game.order:null);let difference=aPower-bPower+2+(rng(game)-.5)*24;let aScore=0,bScore=0;for(let k=0;k<5;k++){const v=difference+(rng(game)-.5)*32;if(v>7)aScore++;else if(v< -7)bScore++;else if(rng(game)>.5)aScore++;else bScore++}return {aScore,bScore,home:a.id,away:b.id}}
+function matchSim(a,b){const mine=myClub();const aPower=clubPower(a,a.id===mine.id?game.order:null),bPower=clubPower(b,b.id===mine.id?game.order:null);if(window.LeagueStandings){const score=LeagueStandings.fastScore(aPower+2,bPower,()=>rng(game));return {home:a.id,away:b.id,aScore:score.homeScore,bScore:score.awayScore,engine:'fast'}}let difference=aPower-bPower+2+(rng(game)-.5)*24;let aScore=0,bScore=0;for(let k=0;k<5;k++){const v=difference+(rng(game)-.5)*32;if(v>7)aScore++;else if(v< -7)bScore++;else if(rng(game)>.5)aScore++;else bScore++}return {aScore,bScore,home:a.id,away:b.id}}
 function applyMatch(m){const a=game.clubs[m.home],b=game.clubs[m.away];a.gf+=m.aScore;a.ga+=m.bScore;b.gf+=m.bScore;b.ga+=m.aScore;if(m.aScore>m.bScore){a.w++;a.points+=3;b.l++}else if(m.aScore<m.bScore){b.w++;b.points+=3;a.l++}else{a.d++;b.d++;a.points++;b.points++}}
 function playNext(){if(game.round>=18)return;const r=game.round;const matches=[];for(let d=0;d<4;d++)for(const [a,b] of game.fixtures[d][r]){const m=matchSim(game.clubs[a],game.clubs[b]);applyMatch(m);matches.push(m)}game.results.push(matches);game.lastMatch=matches.find(m=>m.home===myClub().id||m.away===myClub().id);game.round++;const result=game.lastMatch;const win=result.aScore===result.bScore?'무승부':(result.home===myClub().id?result.aScore>result.bScore:result.bScore>result.aScore)?'승리':'패배';if(window.ClubFinance)ClubFinance.income(win==='승리'?5000000:win==='무승부'?2500000:1000000,'match-income:'+game.season+':'+game.round,'리그 경기 보상');else game.coins+=win==='승리'?5000000:win==='무승부'?2500000:1000000;game.log.unshift('시즌 '+game.season+' · '+game.round+'라운드 '+win+' · '+result.aScore+':'+result.bScore);persist();renderOffice()}
-function sortedDivision(){return game.clubs.filter(c=>c.division===myClub().division).sort((a,b)=>b.points-a.points||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf)}
+function rankedDivision(g,division){return window.LeagueStandings?LeagueStandings.clubs(g,division):g.clubs.filter(c=>c.division===division).sort((a,b)=>b.points-a.points||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf||b.w-a.w)}
+function sortedDivision(){return rankedDivision(game,myClub().division)}
 function preparePokemonCareers(){if(!game)return;for(const c of game.clubs)for(const t of c.trainers.concat(c.reserveTrainers||[]).filter(Boolean))for(const p of t.pokemon){if(!Number.isInteger(p.careerSeasons))p.careerSeasons=1;if(!Number.isInteger(p.debutSeason))p.debutSeason=game.season-p.careerSeasons+1;}if(!Array.isArray(game.hallOfFame))game.hallOfFame=[];}
 function pokemonRetirements(){preparePokemonCareers();let retired=0;for(const c of game.clubs){for(const t of c.trainers.concat(c.reserveTrainers||[]).filter(Boolean)){for(let i=0;i<t.pokemon.length;i++){const p=t.pokemon[i];p.careerSeasons++;if(p.careerSeasons>=8){const record={name:p.name,level:p.level,power:p.power,careerSeasons:8,trainer:t.name,club:c.name,season:game.season};if(c.name===game.club)game.hallOfFame.unshift(record);t.pokemon[i]=newPokemonProspect(c,t);retired++;if(c.name===game.club)game.log.unshift('은퇴: '+p.name+' ('+t.name+') · 아카데미 신예 영입');}}}}game.log.unshift('시즌 '+game.season+' 은퇴 정산: 전체 '+retired+'마리');return retired;}
 function newPokemonProspect(c,t){return {name:SPECIES[rnd(game,0,SPECIES.length-1)],level:rnd(game,20,32),power:rnd(game,38,62),careerSeasons:1,debutSeason:game.season+1};}
@@ -952,7 +953,7 @@ function processTrainerRetirements(){
  }
  game.log.unshift('트레이너 자발적 은퇴 '+count+'명 · 신규 은퇴 예고 '+notices+'명');
 }
-function startNewSeason(){if(game.round<18)return;pokemonRetirements();processTrainerRetirements();generateAcademyTrainers();aiTransferWindow();const divisions=[0,1,2,3].map(d=>game.clubs.filter(c=>c.division===d).sort((a,b)=>b.points-a.points||(b.gf-b.ga)-(a.gf-a.ga)));const changes=[];for(let d=0;d<3;d++){for(const c of divisions[d].slice(-2))changes.push([c,d+1]);for(const c of divisions[d+1].slice(0,2))changes.push([c,d]);}for(const [c,d] of changes)c.division=d;game.clubs.forEach(c=>{c.points=c.w=c.d=c.l=c.gf=c.ga=0});game.fixtures=ALL_CLUBS.map((_,d)=>mkSchedule(game.clubs.filter(c=>c.division===d).map(c=>c.id)));game.round=0;game.season++;game.results=[];game.lastMatch=null;game.coins+=180000;game.log.unshift('시즌 '+game.season+' 시작 · 승격/강등 및 은퇴 정산 · 아카데미 신인 배출');persist();renderOffice()}
+function startNewSeason(){if(game.round<18)return;pokemonRetirements();processTrainerRetirements();generateAcademyTrainers();aiTransferWindow();const divisions=[0,1,2,3].map(d=>rankedDivision(game,d));const changes=[];for(let d=0;d<3;d++){for(const c of divisions[d].slice(-2))changes.push([c,d+1]);for(const c of divisions[d+1].slice(0,2))changes.push([c,d]);}for(const [c,d] of changes)c.division=d;game.clubs.forEach(c=>{c.points=c.w=c.d=c.l=c.gf=c.ga=0});game.fixtures=ALL_CLUBS.map((_,d)=>mkSchedule(game.clubs.filter(c=>c.division===d).map(c=>c.id)));game.round=0;game.season++;game.results=[];game.lastMatch=null;game.coins+=180000;game.log.unshift('시즌 '+game.season+' 시작 · 승격/강등 및 은퇴 정산 · 아카데미 신인 배출');persist();renderOffice()}
 let selectedTrainerId=0;
 function showTrainerProfile(id){if(!game)return;const c=myClub();if(!Number.isInteger(id)||id<0||id>=allTrainers(c).length)return;selectedTrainerId=id;tab='profile';renderOffice()}
 function trainerAttribute(name,val){const v=Math.max(0,Math.min(20,Number(val)||0));return '<div class="trainer-attribute"><div class="attr-label"><span>'+name+'</span><b>'+v+'</b></div><div class="g-bar"><i style="width:'+(v*5)+'%"></i></div></div>'}
@@ -1178,7 +1179,7 @@ function trainerPreferences(t,c){
  return t.preferences;
 }
 function clubSeasonMetrics(c){
- const table=game.clubs.filter(x=>x.division===c.division).slice().sort((a,b)=>b.points-a.points||(b.gf-b.ga)-(a.gf-a.ga));
+ const table=rankedDivision(game,c.division);
  const rank=Math.max(1,table.findIndex(x=>x.id===c.id)+1);
  const played=c.w+c.d+c.l,form=played?Math.round(c.points/(played*3)*100):50;
  const division=100-c.division*18;
@@ -1412,8 +1413,8 @@ function seasonSettlement(){
 function startNewSeason(){
  initCalendar();
  if(game.week!==30||!game.seasonSettled)return;
- window.ClubFinance?.beforeAdvance();window.ClubFinance?.closeSeason();
- const divisions=[0,1,2,3].map(d=>game.clubs.filter(c=>c.division===d).sort((a,b)=>b.points-a.points||(b.gf-b.ga)-(a.gf-a.ga)));
+ window.ClubFinance?.beforeAdvance();window.ClubFinance?.closeSeason();window.LeagueStandings?.closeSeason();
+ const divisions=[0,1,2,3].map(d=>rankedDivision(game,d));
  const changes=[];
  for(let d=0;d<3;d++){for(const c of divisions[d].slice(-2))changes.push([c,d+1]);for(const c of divisions[d+1].slice(0,2))changes.push([c,d]);}
  for(const [c,d] of changes)c.division=d;

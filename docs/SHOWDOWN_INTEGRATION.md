@@ -55,9 +55,11 @@ npm test
 | 실제 6대6·연승전 | [sim.test.js](../tests/sim.test.js), [club-match.test.js](../tests/club-match.test.js), [live-move-state.test.js](../tests/live-move-state.test.js) |
 | 가상 전투·AI | [showdown-rollout.test.js](../tests/showdown-rollout.test.js), [seven-traits.test.js](../tests/seven-traits.test.js) |
 | 웹 경기 API | [web-match.test.js](../tests/web-match.test.js) |
-| 리그 일정·승강 | [league-season.test.js](../tests/league-season.test.js) |
+| 리그 일정·승강 | [league-season.test.js](../tests/league-season.test.js), [standings.test.js](../tests/standings.test.js) |
 | 생성 구단의 실제 경기 연결 | [real-league-integration.test.js](../tests/real-league-integration.test.js) |
 
 리그 일정 검사의 360경기와 실제 전투 360경기 검증을 구분합니다. 브라우저 통합 평가는 새 게임부터 두 번째 경기까지, 장기 검증은 실제 시즌·다년 운영으로 나눠 기록합니다.
 
 이번 변경에서는 웹 스크립트 검사와 상태 인계·무승부·제한 종료·폼·AI 가상 전투·경기 API·등록 관련 검사 58개를 확인했습니다. 전문 편성은 성격 후 5% 적용·폼 재계산·변신 복사·AI 복제·실제 5연전의 대표 사례를 포함합니다. 강화 검사는 네 방식 발동·AI 복제·Z 방어/사용 전 기절·다이맥스 3턴·5연전 1회·레쿠쟈·스텔라 이력을 포함합니다. 실제 제한 종료는 짧은 턴 제한으로 검증했으며 300턴 경기·시즌 완주 결과로 확대해 해석하지 않습니다.
+
+순위·승강 변경은 공통 순위 규칙 `standings-v1-20261027`을 사용합니다. 관련 검사 31개가 통과했으며, 다자 동률·저장된 추첨·웹과 리그의 순위 일치·실제 웹 시즌 전환 함수의 승강을 포함합니다. 간이 경기도 승자 5점·무승부 5:5로 계산하지만, 실제 Showdown 경기로 바뀐 것은 아닙니다.
