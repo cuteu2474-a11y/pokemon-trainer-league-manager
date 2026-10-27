@@ -1,7 +1,8 @@
 /** Exact direct-action statistics. Residual damage is excluded instead of guessed. */
 export function buildBattleReport(rounds,home,away){
  const teams={home,away};
- const stats=Object.fromEntries(Object.entries(teams).map(([side,trainers])=>[side,trainers.map(t=>t.team.map(mon=>({name:mon.name,displayName:mon.displayName||mon.name,species:mon.species,entries:0,damage:0,knockouts:0})))]));
+ const stats=Object.fromEntries(Object.entries(teams).map(([side,trainers])=>[side,trainers.map(t=>t.team.map(mon=>({name:mon.name,displayName:mon.displayName||mon.name,species:mon.species,
+   pokemonId:mon.pokemonId==null?null:String(mon.pokemonId),entries:0,damage:0,knockouts:0})))]));
  const keyFor=side=>side==='p1'?'home':'away';
  for(const round of rounds){
   const indices={p1:round.trainerA,p2:round.trainerB},hp=new Map(),hitBy=new Map();let move=null;
@@ -23,5 +24,6 @@ export function buildBattleReport(rounds,home,away){
    if(type==='faint'){const mon=hitBy.get(key);if(mon)mon.knockouts++;hitBy.delete(key);}
   }
  }
- return Object.fromEntries(Object.entries(stats).map(([key,trainers])=>[key,trainers.flatMap((mons,index)=>mons.map(mon=>({...mon,trainer:teams[key][index].name}))).filter(mon=>mon.entries>0).sort((a,b)=>b.knockouts-a.knockouts||b.damage-a.damage)]));
+ return Object.fromEntries(Object.entries(stats).map(([key,trainers])=>[key,trainers.flatMap((mons,index)=>mons.map(mon=>({...mon,trainer:teams[key][index].name,
+   trainerId:teams[key][index].uid??null,trainerSlot:index}))).filter(mon=>mon.entries>0).sort((a,b)=>b.knockouts-a.knockouts||b.damage-a.damage)]));
 }

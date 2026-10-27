@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
+import {buildBattleReport} from '../src/battle/replay-report.js';
 
 const source=readFileSync(new URL('../assets/season-records.js',import.meta.url),'utf8');
 function fixture(){
@@ -37,6 +38,19 @@ function realReport(season=1,round=1){
   {id:'trainer:two',clubId:0,name:'동명이인',slot:1,duels:0,wins:0,losses:0},
   {id:'trainer:foe',clubId:1,name:'상대',slot:0,duels:5,wins:0,losses:5}
  ]};
+}
+function pokemonMatch(){
+ const mon=(name,pokemonId)=>({name,pokemonId,displayName:'피카츄',species:'Pikachu'});
+ const teams={home:[{uid:'trainer:one',name:'같은 이름',team:[mon('피카츄·1','mon:first'),mon('피카츄·2','mon:second')]}],
+  away:[{uid:'trainer:other',name:'같은 이름',team:[{name:'상대 포켓몬',pokemonId:'mon:foe',species:'Raichu'}]}]};
+ const round={trainerA:0,trainerB:0,pokemonOrder:{p1:['피카츄·1','피카츄·2'],p2:['상대 포켓몬']},
+  result:{initialStats:{p1:[{hp:100},{hp:100}],p2:[{hp:100}]},log:[
+   '|switch|p1a: 피카츄·1|Pikachu|100/100','|switch|p2a: 상대 포켓몬|Raichu|100/100',
+   '|turn|1','|move|p1a: 피카츄·1|Thunderbolt|p2a: 상대 포켓몬','|-damage|p2a: 상대 포켓몬|60/100',
+   '|turn|2','|switch|p1a: 피카츄·2|Pikachu|100/100',
+   '|move|p1a: 피카츄·2|Thunderbolt|p2a: 상대 포켓몬','|-damage|p2a: 상대 포켓몬|0 fnt',
+   '|faint|p2a: 상대 포켓몬'].join('\n')}};
+ return {home:0,away:1,teams,report:buildBattleReport([round],teams.home,teams.away)};
 }
 
 test('season archives only the player matches with stable round/club keys',()=>{
@@ -100,4 +114,43 @@ test('real career match hook carries actual appearances into a single committed 
  s.context.persist();
  assert.equal(s.api.trainerStats(g,1).length,1);
  assert.equal(s.api.season(g,1).matches.filter(x=>x.trainers.length>0).length,1);
+});
+test('per-Pokémon achievements are joined to unique IDs rather than duplicate species or trainer names',()=>{
+ const g=fixture(),s=setup(g),result=pokemonMatch();
+ s.api.capture(g,{season:1,result},realReport());
+ const rows=s.api.pokemonStats(g,1);
+ assert.equal(rows.length,2);
+ const first=rows.find(p=>p.id==='mon:first'),second=rows.find(p=>p.id==='mon:second');
+ assert.equal(first.damage,40);assert.equal(first.knockouts,0);
+ assert.equal(second.damage,60);assert.equal(second.knockouts,1);
+ assert.equal(first.trainerId,'trainer:one');
+ assert.equal(second.trainerName,'같은 이름');
+ assert.match(s.api.html(g,1,0),/직접 격파/);
+});
+test('rejects mismatched or anonymous Pokémon IDs instead of awarding unverifiable credit',()=>{
+ const result=pokemonMatch(),g=fixture(),s=setup(g);s.api.sync(g);
+ result.teams.home[0].team[1].pokemonId='changed-id';
+ assert.equal(s.api.savePokemon(s.api.season(g).matches[0],result),true);
+ assert.equal(s.api.pokemonStats(g,1).length,1);
+ assert.equal(s.api.pokemonStats(g,1)[0].id,'mon:first');
+ const wrong=pokemonMatch();wrong.home=2;
+ const h=fixture(),t=setup(h);t.api.sync(h);
+ assert.equal(t.api.savePokemon(t.api.season(h).matches[0],wrong),false);
+});
+test('a repeated commit cannot duplicate Pokémon appearances, and their historical owner is immutable',()=>{
+ const g=fixture(),s=setup(g),result=pokemonMatch(),report=realReport();
+ assert.equal(s.api.capture(g,{season:1,result},report),true);
+ assert.equal(s.api.capture(g,{season:1,result},report),false);
+ assert.equal(s.api.pokemonStats(g,1)[0].matches,1);
+ const restored=JSON.parse(JSON.stringify(g));
+ restored.clubs[0].name='새 구단';restored.clubs[0].trainers=[{name:'새 주인'}];
+ const p=setup(restored).api.pokemonStats(restored,1);
+ assert.equal(p.length,2);assert.equal(p[0].trainerName,'같은 이름');
+});
+test('past saves without identified Pokémon cannot retroactively invent individual appearances',()=>{
+ const g=fixture(),s=setup(g);s.api.sync(g);
+ const old=pokemonMatch();for(const side of ['home','away'])for(const x of old.report[side])delete x.pokemonId;
+ assert.equal(s.api.savePokemon(s.api.season(g).matches[0],old),false);
+ assert.equal(s.api.pokemonStats(g,1).length,0);
+ assert.match(s.api.html(g,1,0),/개체 ID가 확인된 전투 기록 없음/);
 });

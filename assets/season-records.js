@@ -27,7 +27,7 @@
         s.matches.push({id:key,round,homeId:id(m.home),awayId:id(m.away),
           homeName:home?.name||'기록 없음',awayName:away?.name||'기록 없음',
           homeDivision:home?.division??null,awayDivision:away?.division??null,
-          homeScore:m.aScore,awayScore:m.bScore,engine:m.engine||'fast',trainers:[]});
+          homeScore:m.aScore,awayScore:m.bScore,engine:m.engine||'fast',trainers:[],pokemon:[]});
         changed=true;
       }
     }
@@ -40,7 +40,10 @@
     const latest=g.lastMatch;
     if(latest?.replay&&s.matches.length){
       const match=s.matches.find(item=>item.round===g.round&&id(item.homeId)===id(latest.home)&&id(item.awayId)===id(latest.away));
-      if(match&&match.engine!=='showdown'){match.engine='showdown';changed=true;}
+      if(match){
+        if(match.engine!=='showdown'){match.engine='showdown';changed=true;}
+        if(savePokemon(match,latest.replay))changed=true;
+      }
     }
     return changed;
   }
@@ -58,11 +61,50 @@
     match.engine='showdown';
     return true;
   }
+  function savePokemon(match,result){
+    if(!result?.report||!result?.teams||
+      id(result.home)!==match.homeId||id(result.away)!==match.awayId)return false;
+    if(!Array.isArray(result.report.home)||!Array.isArray(result.report.away)||
+      !Array.isArray(result.teams.home)||!Array.isArray(result.teams.away))return false;
+    match.pokemon ||= [];
+    if(match.pokemon.length)return false;
+    const found=new Map(),ambiguous=new Set();
+    for(const side of ['home','away']){
+      const clubId=side==='home'?match.homeId:match.awayId;
+      const used=new Set();
+      for(const record of result.report[side]){
+        if(record?.pokemonId==null||!Number.isInteger(record.trainerSlot)||
+          !Number.isInteger(record.entries)||record.entries<=0||
+          !Number.isFinite(record.damage)||record.damage<0||
+          !Number.isInteger(record.knockouts)||record.knockouts<0)continue;
+        const pokemonId=id(record.pokemonId),trainer=result.teams[side][record.trainerSlot];
+        const roster=trainer?.team;
+        if(!pokemonId||!Array.isArray(roster))continue;
+        const matches=roster.filter(mon=>id(mon.pokemonId)===pokemonId&&mon.name===record.name);
+        // Never assign achievements to the wrong duplicate Pokémon or trainer.
+        if(matches.length!==1||used.has(pokemonId)){ambiguous.add(pokemonId);continue;}
+        used.add(pokemonId);
+        if(found.has(pokemonId)){ambiguous.add(pokemonId);continue;}
+        const mon=matches[0];
+        found.set(pokemonId,{id:pokemonId,name:mon.displayName||record.displayName||mon.name,
+          battleName:mon.name,clubId,trainerId:trainer.uid==null?null:id(trainer.uid),
+          trainerName:trainer.name||record.trainer||'기록 없음',
+          entries:record.entries,damage:record.damage,knockouts:record.knockouts});
+      }
+    }
+    for(const value of ambiguous)found.delete(value);
+    if(!found.size)return false;
+    match.pokemon=[...found.values()];
+    match.engine='showdown';
+    return true;
+  }
   function capture(g,p,report){
     if(!g||!report)return false;
     sync(g);
     const s=season(g,p.season),item=s.matches.find(m=>m.id===report.key);
-    return item?saveParticipants(item,report):false;
+    if(!item)return false;
+    const trainers=saveParticipants(item,report),pokemon=savePokemon(item,p.result);
+    return trainers||pokemon;
   }
   function finalize(g,number){
     const s=getBook(g).seasons[id(number)];
@@ -81,6 +123,19 @@
       stats.set(key,prev);
     }
     return [...stats.values()].sort((a,b)=>b.wins-a.wins||b.duels-a.duels||a.name.localeCompare(b.name,'ko'));
+  }
+  function pokemonStats(g,number){
+    const s=getBook(g).seasons[id(number)];if(!s)return [];
+    const stats=new Map();
+    for(const match of s.matches)for(const p of match.pokemon||[]){
+      if(id(p.clubId)!==s.clubId)continue;
+      const previous=stats.get(p.id)||{id:p.id,name:p.name,trainerName:p.trainerName,
+        trainerId:p.trainerId,matches:0,entries:0,damage:0,knockouts:0};
+      previous.matches++;previous.entries+=p.entries;previous.damage+=p.damage;
+      previous.knockouts+=p.knockouts;
+      stats.set(p.id,previous);
+    }
+    return [...stats.values()].sort((a,b)=>b.knockouts-a.knockouts||b.damage-a.damage||a.name.localeCompare(b.name,'ko'));
   }
   function historicalTables(g,number){
     const previous=g.leagueSeasons?.[number];
@@ -101,7 +156,7 @@
     const clubs=g.clubs||[],chosen=Number.isInteger(Number(division))&&Number(division)>=0&&Number(division)<4?Number(division):currentClub(g)?.division||0;
     const rows=archive?.tables?.[chosen]||[];
     const movement=archive?.movement||[];
-    const actual=trainerStats(g,selected);
+    const actual=trainerStats(g,selected),pokemon=pokemonStats(g,selected);
     const fixtures=s?.matches||[];
     const games=fixtures.map(m=>{
       const mineHome=m.homeId===s.clubId;
@@ -116,6 +171,7 @@
       return '<tr><td>'+r.rank+'</td><td>'+esc(r.name)+'</td><td>'+r.played+'</td><td>'+r.won+'-'+r.drawn+'-'+r.lost+'</td><td>'+r.points+'</td><td>'+note+'</td></tr>';
     }).join('');
     const trainerRows=actual.map(t=>'<tr><td>'+esc(t.name)+'</td><td>'+t.matches+'</td><td>'+t.duels+'</td><td>'+t.wins+'-'+t.losses+'</td><td>'+t.allKills+'</td></tr>').join('');
+    const pokemonRows=pokemon.map(p=>'<tr><td>'+esc(p.name)+' <small class="g-muted" title="'+esc(p.id)+'">#'+esc(p.id.slice(-8))+'</small></td><td>'+esc(p.trainerName)+'</td><td>'+p.matches+'</td><td>'+p.entries+'</td><td>'+Math.round(p.damage)+'</td><td>'+p.knockouts+'</td></tr>').join('');
     const caveat=fixtures.length&&!actual.length?'기존 기록에는 실제 출전 자료가 없어 임의로 선수 기록을 만들지 않았습니다.':'등록만 하고 출전하지 않은 트레이너는 집계하지 않습니다.';
     return '<div class="eyebrow">LEAGUE ARCHIVE / SEASON RECORDS</div><h2>시즌 기록실</h2>'+ 
       '<p class="g-muted">지난 시즌의 결과는 이적·은퇴 뒤에도 당시 이름과 소속으로 보존합니다.</p>'+ 
@@ -125,9 +181,10 @@
       '<div class="league-table-scroll"><table class="g-table"><thead><tr><th>순위</th><th>구단</th><th>경기</th><th>승-무-패</th><th>승점</th><th>결과</th></tr></thead><tbody>'+(tableRows||'<tr><td colspan="6">순위 기록 없음</td></tr>')+'</tbody></table></div>'+ 
       '<h3>우리 구단 경기 ('+fixtures.length+'/18)</h3><div class="league-table-scroll"><table class="g-table"><thead><tr><th>R</th><th>상대</th><th>홈 : 원정</th><th>결과</th><th>계산</th></tr></thead><tbody>'+(games||'<tr><td colspan="5">경기 기록 없음</td></tr>')+'</tbody></table></div>'+ 
       '<h3>실제 출전 트레이너</h3><div class="league-table-scroll"><table class="g-table"><thead><tr><th>이름</th><th>단체전 출전</th><th>주자 대결</th><th>승-패</th><th>올킬</th></tr></thead><tbody>'+(trainerRows||'<tr><td colspan="5">실제 출전 기록 없음</td></tr>')+'</tbody></table></div>'+ 
-      '<p class="g-muted">'+caveat+' 포켓몬별 격파는 로그의 개체 ID 확인 전까지 표시하지 않습니다. 지난 전투의 대용량 재생 로그는 보존하지 않습니다.</p>';
+      '<h3>실제 출전 포켓몬</h3><div class="league-table-scroll"><table class="g-table"><thead><tr><th>개체</th><th>당시 트레이너</th><th>단체전 출전</th><th>교체·등장</th><th>직접 피해</th><th>직접 격파</th></tr></thead><tbody>'+(pokemonRows||'<tr><td colspan="6">개체 ID가 확인된 전투 기록 없음</td></tr>')+'</tbody></table></div>'+ 
+      '<p class="g-muted">'+caveat+' 포켓몬별 수치는 실제 전투 보고서의 개체 ID와 원래 출전 명단이 일치할 때만 기록합니다. 독·날씨 등 간접 피해에 의한 기절은 직접 격파로 계산하지 않습니다. 지난 전투의 대용량 재생 로그는 보존하지 않습니다.</p>';
   }
-  const api={season,sync,capture,finalize,trainerStats,historicalTables,html};
+  const api={season,sync,capture,finalize,trainerStats,pokemonStats,savePokemon,historicalTables,html};
   window.SeasonRecords=api;
   if(typeof persist==='function'){
     const previous=persist;
