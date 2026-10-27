@@ -49,6 +49,13 @@
     if(reason.match)window.MatchdayPreparation?.render();
     persist();renderOffice();
   }
+  const opening=()=>game.season===1&&game.round===0&&game.week<=4;
+  const marketDeadline=()=>[4,15].includes(game.week)&&!game.pendingMatch;
+  function nextAction(){
+    if(game.pendingMatch)return {label:'경기 준비로 돌아가기',action:'match'};
+    if(marketDeadline())return {label:game.week===4?'이적시장 마감 확인 · 개막전 준비':'이적시장 마감 확인 · 다음 일정',action:'progress'};
+    return {label:opening()?'추천 계획으로 개막전 준비':'다음 중요 일정까지 진행',action:'progress'};
+  }
   const priorNext=nextWeek;
   async function advance(automatic=false){
     if(!game||busy||(state().running&&!automatic))return false;
@@ -73,7 +80,9 @@
   window.nextWeek=()=>advance(false);
   async function important(){
     if(busy||state().running)return;
-    const g=game,s=state(),startWeek=g.week,startSeason=g.season,balance=g.coins,recordStart=g.weeklyPrograms?.length||0;
+    const g=game,s=state(),startWeek=g.week,startSeason=g.season,balance=g.coins,
+      recordStart=g.weeklyPrograms?.length||0,logHead=g.log?.[0],logCount=g.log?.length||0,
+      initialLedger=g.finance?.books?.[myClub().id]?.ledger||[],ledgerHead=initialLedger[0]?.id;
     s.running=true;stopRequested=false;
     let count=0,reason=null;
     try{
@@ -96,26 +105,49 @@
         await new Promise(resolve=>setTimeout(resolve,0));
       }
       if(game===g){
-        s.summary={season:startSeason,from:startWeek,to:game.week,weeks:count,balance:game.coins-balance,
-          programs:(game.weeklyPrograms||[]).slice(recordStart).map(x=>({week:x.week,title:x.title,detail:x.detail,cost:x.cost})),
-          reason:reason?.text||'중요 일정까지 진행했습니다.'};
-        s.notice=s.summary.reason;s.history.unshift(s.summary);s.history.length=Math.min(s.history.length,10);
+        const log=(game.log||[]),logIndex=logHead===undefined?-1:log.indexOf(logHead);
+        const newlyLogged=logHead===undefined?log.slice(0,Math.max(0,log.length-logCount)):
+          log.slice(0,logIndex<0?12:logIndex);
+        const ledger=game.finance?.books?.[myClub().id]?.ledger||[];
+        const ledgerIndex=ledgerHead===undefined?-1:ledger.findIndex(x=>x.id===ledgerHead);
+        const transactions=ledgerHead===undefined?ledger.slice():ledger.slice(0,ledgerIndex<0?ledger.length:ledgerIndex);
+        const finance={income:transactions.reduce((n,x)=>n+(Number(x.income)||0),0),
+          expenses:transactions.reduce((n,x)=>n+(Number(x.expense)||0),0),
+          paid:transactions.reduce((n,x)=>n+(Number(x.paid)||0),0),
+          transactions:transactions.slice(0,10).map(x=>({label:x.label,week:x.week,income:x.income||0,expense:x.expense||0}))};
+        const programs=(game.weeklyPrograms||[]).slice(recordStart)
+          .map(x=>({week:x.week,title:x.title,detail:x.detail,cost:x.cost}));
+        s.notice=reason?.text||'중요 일정까지 진행했습니다.';
+        // A blocked button press must not create another identical progress report.
+        if(count||programs.length||newlyLogged.length||transactions.length){
+          s.summary={season:startSeason,from:startWeek,to:game.week,weeks:count,balance:game.coins-balance,
+            programs,finance,events:newlyLogged.slice(0,12),reason:s.notice};
+          s.history.unshift(s.summary);s.history.length=Math.min(s.history.length,10);
+        }
       }
     }finally{if(game===g){s.running=false;persist();renderOffice();}}
     if(reason?.match)window.MatchdayPreparation?.render();
   }
   function policyHTML(){
-    const s=state(),summary=s.summary;
-    return '<section class="management-policy"><h3>주간 운영 방침</h3><p>추천 계획은 전술 분석 회의이며, 구단 피로 45 이상이면 회복으로 전환합니다. 실행한 주간 활동은 다시 적용하지 않습니다.</p>'+
+    const s=state(),summary=s.summary,action=nextAction(),first=opening()&&game.week===1;
+    return '<section class="management-policy">'+
+      (first?'<div class="management-onboarding"><strong>첫 경기까지 빠르게 시작하기</strong><p>원하는 방식으로 시작하세요. 자동 진행은 매주 훈련·급여·탐색을 처리하며, 마지막 이적시장 결정과 경기 준비에서는 멈춥니다.</p></div>':'')+
+      (marketDeadline()?'<div class="management-deadline"><strong>'+game.week+'주차 · 이적시장 마지막 결정 기회</strong><p>영입과 계약을 마쳤다면 아래 버튼을 눌러 마감을 승인하세요. 개막전에서는 선수 5명의 출전 순서와 포켓몬 상태를 직접 확인한 뒤 경기를 시작합니다.</p><button class="g-btn alt" onclick="setTab(&quot;transfer&quot;)">이적시장 확인</button></div>':'')+
+      '<h3>주간 운영 방침</h3><p>추천 계획은 전술 분석 회의이며, 구단 피로 45 이상이면 회복으로 전환합니다. 실행한 주간 활동은 다시 적용하지 않습니다.</p>'+
       '<div class="management-controls"><label>기본 활동 <select onchange="ManagementUI.program(this.value)">'+['tactics','power','scrimmage','recovery'].map(id=>{
         const p=TLM_WEEKLY_PROGRAMS.find(x=>x.id===id);return '<option value="'+id+'" '+(s.program===id?'selected':'')+'>'+esc(p.title)+' · '+wonReadable(p.cost)+'</option>';
       }).join('')+'</select></label><label>훈련 대상 <select onchange="ManagementUI.target(this.value)"><option value="">전술 능력이 낮은 선수 우선</option>'+roster().map(t=>'<option value="'+esc(identity(t))+'" '+(s.target===identity(t)?'selected':'')+'>'+esc(t.name)+'</option>').join('')+'</select></label>'+
       '<label><input type="checkbox" '+(s.autoRecovery?'checked':'')+' onchange="ManagementUI.recovery(this.checked)"> 피로가 높으면 회복</label></div>'+
-      '<div class="management-controls"><button class="g-btn" onclick="ManagementUI.important()" '+(s.running?'disabled':'')+'>'+(game.round===0&&game.week<5?'추천 계획으로 개막전까지 진행':'다음 중요 일정까지 진행')+'</button><button class="g-btn alt" onclick="nextWeek()" '+(s.running?'disabled':'')+'>다음 주 · 직접 준비</button>'+
+      '<div class="management-controls"><button class="g-btn" onclick="ManagementUI.'+(action.action==='match'?'openMatch':'important')+'()" '+(s.running?'disabled':'')+'>'+esc(action.label)+'</button><button class="g-btn alt" onclick="nextWeek()" '+(s.running?'disabled':'')+'>다음 주 · 직접 준비</button>'+
       (s.running?'<button class="g-btn alt" onclick="ManagementUI.stop()">진행 중단</button>':'')+
       '<button class="g-btn alt" onclick="ManagementUI.retryResearch()">기술 연구 재시도</button></div>'+
       '<p role="status">'+esc(s.notice||'진행 중에는 경기 준비·이적 제안·포획 후보·선수단 공석·시장 마감에서 멈춥니다.')+'</p>'+
-      (summary?'<details><summary>'+summary.from+'→'+summary.to+'주차 · 자금 증감 '+wonReadable(summary.balance)+'</summary>'+summary.programs.map(p=>'<p>'+p.week+'주 · '+esc(p.title)+' · '+esc(p.detail)+'</p>').join('')+'<p>훈련·탐색·AI 구단 처리는 기존 주간 절차를 따릅니다. 급여는 각 주차에 정산하며, 재정·계약 화면에서 지급 내역을 확인할 수 있습니다.</p></details>':'')+'</section>';
+      (summary?'<details class="management-progress-report"><summary>'+esc(summary.from+'→'+summary.to)+'주차 · '+esc(summary.weeks)+'주 진행 · 자금 증감 '+wonReadable(summary.balance)+'</summary>'+
+        (summary.programs||[]).map(p=>'<p>'+esc(p.week)+'주 · '+esc(p.title)+' · '+esc(p.detail)+'</p>').join('')+
+        (summary.finance?.transactions?.length?'<h4>구단 재정 정산</h4><p>수입 '+wonReadable(summary.finance.income)+' · 발생 지출 '+wonReadable(summary.finance.expenses)+' (실제 지급 '+wonReadable(summary.finance.paid)+')</p>'+
+          summary.finance.transactions.map(x=>'<p>'+esc(x.week)+'주 · '+esc(x.label)+' · '+(x.income?'수입 '+wonReadable(x.income):'지출 '+wonReadable(x.expense))+'</p>').join(''):'')+
+        (summary.events?.length?'<h4>진행 중 발생한 활동</h4><ul>'+summary.events.map(v=>'<li>'+esc(v)+'</li>').join('')+'</ul>':'')+
+        '<p>훈련·탐색·AI 구단 처리는 각 주차에 정산합니다. 급여 내역은 재정 화면에서 확인할 수 있습니다.</p></details>':'')+'</section>';
   }
   const previousRender=renderOffice;
   window.renderOffice=function(){
@@ -147,6 +179,7 @@
     }
   };
   window.ManagementUI={advance,important,blocker,policyHTML,tabGroup,
+    openMatch:()=>window.MatchdayPreparation?.render(),
     stop:()=>{stopRequested=true;},
     program:v=>{if(['tactics','power','scrimmage','recovery'].includes(v)){state().program=v;persist();renderOffice();}},
     target:v=>{state().target=v||null;persist();renderOffice();},
@@ -160,6 +193,7 @@
     #dashboard .management-nav button{min-width:0!important;padding:10px 4px;font-size:14px}
     .management-subnav{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}.management-subnav button{background:#21384d;color:white;border:1px solid #587187;padding:7px 10px;border-radius:5px}.management-subnav .active{border-color:#7bd5b5}
     .management-policy{background:#183447;border:1px solid #43667a;border-radius:8px;padding:15px;margin-bottom:16px}.management-policy h3{margin:0}.management-policy p{font-size:12px;line-height:1.6}
+    .management-onboarding,.management-deadline{border:1px solid #477f74;background:#173d41;border-radius:8px;padding:12px;margin-bottom:14px}.management-onboarding strong,.management-deadline strong{font-size:17px;color:#d1fff0}.management-deadline{border-color:#a88142;background:#473a2c}.management-deadline strong{color:#ffe5ad}.management-progress-report{margin-top:12px}.management-progress-report summary{cursor:pointer}.management-progress-report ul{padding-left:19px;font-size:12px;line-height:1.7}
     .management-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}.management-controls label{font-size:12px;display:grid;gap:5px}.management-controls select{padding:8px;max-width:100%;background:#203e52;color:white;border:1px solid #7394a6}.management-action{width:100%;margin-bottom:12px}
     @media(max-width:650px){#dashboard .dashpanel{padding:12px}.management-controls>*{max-width:100%}.management-controls select{min-width:0}.management-policy{padding:11px}}
   `;document.head.append(style);
