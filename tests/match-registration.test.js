@@ -28,6 +28,25 @@ test('stable Pokémon IDs and owner checks survive transfers and reject another 
  body.home.trainers[0].pokemon[0].ownerTrainerId=String(body.home.trainers[1].uid);
  assert.throws(()=>registration.validateRoster(body),/포획한 트레이너/);
 });
+test('old oversized collections migrate without discarding Pokémon, while match registration fixes six starters',async()=>{
+ const {g}=await fixture(),t=g.clubs[0].trainers[0];
+ const extras=Array.from({length:3},(_,i)=>({name:'이브이',uid:'pokemon:legacy-'+i,power:60}));
+ t.pokemon.push(...extras);
+ registration.ensureRosterIds(g);
+ assert.equal(t.pokemon.length,6);
+ assert.deepEqual(t.pokemonReserve,extras);
+ assert.equal(t.pokemonReserve.every(p=>p.ownerTrainerId===String(t.uid)),true);
+ const lineup=registration.lineupState(g,g.pendingMatch);
+ assert.equal(lineup.clubs[0].trainers[0].pokemon.length,6);
+ assert.equal(lineup.clubs[0].trainers[0].pokemonReserve.length,3);
+ const request={home:g.clubs[0],away:g.clubs[1],homeOrder:[0,1,2,3,4],awayOrder:[0,1,2,3,4],seed:[1,2,3,4]};
+ const frozen=await registration.freezeMatch(request,g.pendingMatch,lineup);
+ assert.equal(frozen.request.home.trainers[0].pokemon.length,6);
+ assert.equal(frozen.request.home.trainers[0].pokemonReserve.length,3);
+ const before=frozen.registration.liveHash;
+ [t.pokemon[0],t.pokemonReserve[0]]=[t.pokemonReserve[0],t.pokemon[0]];
+ assert.notEqual(await registration.digest(registration.lineupState(g,g.pendingMatch)),before);
+});
 function browser(g,store,locks){
  const ctx={registration,game:clone(g),SKEY:'save',crypto:webcrypto,navigator:{locks},Date,console,
   localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>{if(store.fail&&k==='save')throw Error('quota');store.set(k,v);},removeItem:k=>store.delete(k)},

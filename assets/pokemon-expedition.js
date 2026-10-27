@@ -150,8 +150,17 @@
   function teamMembers(c){
     return c.trainers.map((trainer,slot)=>({trainer,slot,kind:'active'}))
       .concat((c.reserveTrainers||[]).map((trainer,slot)=>({trainer,slot,kind:'reserve'})))
-      .filter(x=>x.trainer&&Array.isArray(x.trainer.pokemon)&&x.trainer.pokemon.length===6);
+      .filter(x=>x.trainer&&Array.isArray(x.trainer.pokemon)&&x.trainer.pokemon.length<=6);
   }
+  const MAX_HELD=12;
+  function collection(t){
+    if(!Array.isArray(t.pokemon))t.pokemon=[];
+    if(!Array.isArray(t.pokemonReserve))t.pokemonReserve=[];
+    if(t.pokemon.length>6)t.pokemonReserve.unshift(...t.pokemon.splice(6));
+    return {active:t.pokemon,reserve:t.pokemonReserve,
+      count:t.pokemon.length+t.pokemonReserve.length};
+  }
+  function rosterLocked(){return !!window.MatchRegistration?.locked(myClub().id);}
   const keyOf=t=>String(t?.uid??('legacy:'+t?.id+':'+t?.name));
   const findTrainer=key=>teamMembers(myClub()).find(entry=>keyOf(entry.trainer)===String(key));
   function data(){const g=game;g.pokemonScout ||= {season:g.season,week:g.week,missions:0,history:[],selectedTrainer:'',region:'',focus:'balanced'};return g.pokemonScout;}
@@ -287,6 +296,8 @@
       reason:name+' 포획 성공 · 트레이너가 교체 후보로 보관 중입니다.'};
   }
   function suggestedSlot(trainer,mon){
+    const {active}=collection(trainer);
+    if(!active.length)return {slot:0,gain:0};
     const preferences=trainer.autonomyAI?.preferredPlay||'balanced';
     const futureBias=preferences==='endurance'?.32:.22;
     const rating=p=>{
@@ -298,9 +309,9 @@
         Math.max(0,Number(p.careerSeasons||1)-5)*1.5;
     };
     let worst=0;
-    for(let i=1;i<trainer.pokemon.length;i++)
-      if(rating(trainer.pokemon[i])<rating(trainer.pokemon[worst]))worst=i;
-    return {slot:worst,gain:Math.round(rating(mon)-rating(trainer.pokemon[worst]))};
+    for(let i=1;i<active.length;i++)
+      if(rating(active[i])<rating(active[worst]))worst=i;
+    return {slot:worst,gain:Math.round(rating(mon)-rating(active[worst]))};
   }
   function dispatch(trainerKey,region,focus,habitat='grass',time='day'){
     if(!game)return {ok:false,error:'진행 중인 게임이 없습니다.'};
@@ -312,6 +323,7 @@
     if(window.MatchRegistration?.locked(myClub().id))return {ok:false,error:'경기 결과 확인 후 변경할 수 있습니다.'};
     const allowed=window.SquadCondition?.canDispatch(record.trainer,record.kind);if(allowed&&!allowed.ok)return allowed;
     const t=record.trainer,s=talent(t),due=cost(region);
+    if(collection(t).count>=MAX_HELD)return {ok:false,error:'최대 12마리 보유 중입니다. 보관 명단을 정리한 뒤 파견하세요.'};
     if(s.candidate)return {ok:false,error:'이미 포획한 후보가 있습니다. 먼저 등록하거나 보내 주세요.'};
     if(s.mission?.status==='travel')return {ok:false,error:'이미 해당 트레이너가 탐색 중입니다.'};
     if(s.mission?.season===game.season&&s.mission.week===game.week)
@@ -330,7 +342,7 @@
     persist();renderOffice();
     return {ok:true,mission:s.mission};
   }
-  function resolveOne(t){
+  function resolveOne(t,reportToPlayer=true){
     const s=talent(t),m=s.mission;
     if(!m||m.status!=='travel')return null;
     if(game.season<m.season||(game.season===m.season&&game.week<=m.week))return null;
@@ -356,9 +368,59 @@
       focus:m.focus,status:result.status,description:result.reason,
       name:result.name||null};
     s.history.unshift(item);s.history.length=Math.min(s.history.length,12);
-    const state=data();state.history.unshift(item);state.history.length=Math.min(state.history.length,60);
-    game.log.unshift(t.name+' 탐색 결과 · '+result.reason);
+    if(reportToPlayer){
+      const state=data();state.history.unshift(item);state.history.length=Math.min(state.history.length,60);
+      game.log.unshift(t.name+' 탐색 결과 · '+result.reason);
+    }
     return item;
+  }
+  /** AI clubs spend their own budgets and use reserve trainers, never match starters. */
+  function resolveAI(){
+    if(!game)return [];
+    const clock=game.season+':'+game.week;
+    if(game.aiPokemonScoutWeek===clock)return [];
+    const finished=[];
+    for(const club of game.clubs){
+      if(club.id===myClub().id)continue;
+      const staff=teamMembers(club).filter(entry=>entry.kind==='reserve');
+      for(const {trainer} of staff){
+        const report=resolveOne(trainer,false);
+        if(!report)continue;
+        finished.push({...report,club:club.name});
+        const scout=talent(trainer),held=collection(trainer),candidate=scout.candidate;
+        if(!candidate||held.count>=MAX_HELD)continue;
+        const proposed=suggestedSlot(trainer,candidate);
+        if(held.active.length<6)held.active.push(candidate);
+        else if(proposed.gain>5){held.reserve.push(held.active[proposed.slot]);held.active[proposed.slot]=candidate;}
+        else held.reserve.push(candidate);
+        delete scout.candidate;
+      }
+      const region=worldClubRegion(club);
+      if(!Object.hasOwn(BIOMES,region)||!staff.length)continue;
+      const h=hash([game.seed,clock,club.id,'AI-expedition'].join(':'));
+      if(h%3!==0)continue;
+      const eligible=staff.filter(({trainer})=>{
+        const s=talent(trainer),held=collection(trainer);
+        return held.count<MAX_HELD&&!s.candidate&&s.mission?.status!=='travel'&&
+          !(s.mission?.season===game.season&&s.mission?.week===game.week);
+      });
+      if(!eligible.length)continue;
+      const wallet=typeof clubIdentity==='function'?clubIdentity(club):null;
+      if(!wallet||!Number.isFinite(wallet.budget)||wallet.budget<BASE_COST)continue;
+      const trainer=eligible[h%eligible.length].trainer,s=talent(trainer);
+      const habitat=Object.keys(HABITATS)[(h>>>8)%Object.keys(HABITATS).length];
+      const time=Object.keys(TIMES)[(h>>>13)%Object.keys(TIMES).length];
+      const focus=s.skill>=16?'rare':'balanced';
+      s.mission={status:'travel',rulesVersion:'expedition-v2',season:game.season,
+        week:game.week,region,focus,habitat,time,cost:BASE_COST,
+        scoutSkill:s.skill,appraisalSkill:s.appraisalSkill,
+        seed:hash([game.seed,clock,club.id,keyOf(trainer),habitat,time,focus].join(':'))};
+      wallet.budget-=BASE_COST;
+      if(typeof aiRecord==='function')aiRecord(club,'포켓몬 탐색',
+        trainer.name+' · '+region+' · '+HABITATS[habitat]+' 파견',false);
+    }
+    game.aiPokemonScoutWeek=clock;
+    return finished;
   }
   function resolvePlayer(){
     if(!game)return [];
@@ -367,35 +429,76 @@
       const item=resolveOne(trainer);
       if(item)results.push(item);
     }
+    resolveAI();
     return results;
   }
   function recruit(key,slot){
     const record=findTrainer(key);
     if(!record)return {ok:false,error:'트레이너가 소속 구단에 없습니다.'};
-    if(window.MatchRegistration?.locked(myClub().id))return {ok:false,error:'경기 결과 확인 후 변경할 수 있습니다.'};
+    if(rosterLocked())return {ok:false,error:'경기 결과 확인 후 변경할 수 있습니다.'};
     const t=record.trainer,s=talent(t),candidate=s.candidate;
     if(!candidate)return {ok:false,error:'대기 중인 포획 후보가 없습니다.'};
-    if(!Number.isInteger(slot)||slot<0||slot>=6||t.pokemon.length!==6)
-      return {ok:false,error:'교체할 기존 포켓몬을 선택하세요.'};
-    if(!confirm(t.name+'의 '+t.pokemon[slot].name+'을(를) 팀에서 내보내고 '+candidate.name+
-      '을(를) 등록할까요?\n기존 포켓몬은 되돌릴 수 없습니다.'))return {ok:false,error:'등록 취소'};
-    const old=t.pokemon[slot];t.pokemon[slot]=candidate;delete s.candidate;
+    const held=collection(t);
+    if(held.count>=MAX_HELD)return {ok:false,error:'보유 12마리입니다. 후보를 등록하려면 먼저 보관 포켓몬을 방출하세요.'};
+    if(slot!==undefined&&slot!==null&&(!Number.isInteger(slot)||slot<0||slot>=held.active.length))
+      return {ok:false,error:'교체할 출전 포켓몬을 확인하세요.'};
+    if(candidate.ownerTrainerId!=null&&String(candidate.ownerTrainerId)!==String(t.uid))
+      return {ok:false,error:'포획한 트레이너가 일치하지 않습니다.'};
+    candidate.ownerTrainerId=String(t.uid);
+    let replaced=null;
+    if(held.active.length<6)held.active.push(candidate);
+    else if(slot!==undefined&&slot!==null){
+      replaced=held.active[slot];held.active[slot]=candidate;held.reserve.push(replaced);
+    }else held.reserve.push(candidate);
+    delete s.candidate;
+    game.scout=(Number(game.scout)||0)+1;
+    game.log.unshift(t.name+' 포켓몬 등록: '+candidate.name+
+      (replaced?' 출전 · '+replaced.name+' 보관':' 보유 명단 등록')+
+      ' · 보유 '+collection(t).count+'/'+MAX_HELD+'마리');
+    persist();renderOffice();
+    return {ok:true,replaced,registered:candidate};
+  }
+  function swap(key,reserveIndex,slot){
+    const record=findTrainer(key);
+    if(!record)return {ok:false,error:'트레이너를 찾을 수 없습니다.'};
+    if(rosterLocked())return {ok:false,error:'경기 결과 확인 후 편성을 변경할 수 있습니다.'};
+    const {active,reserve}=collection(record.trainer);
+    if(!Number.isInteger(reserveIndex)||reserveIndex<0||reserveIndex>=reserve.length||
+      !Number.isInteger(slot)||slot<0||slot>=6)return {ok:false,error:'교체할 포켓몬을 선택하세요.'};
+    const replacement=reserve[reserveIndex];
+    if(String(replacement.ownerTrainerId)!==String(record.trainer.uid))
+      return {ok:false,error:'다른 트레이너의 포켓몬은 출전시킬 수 없습니다.'};
+    if(slot<active.length)[active[slot],reserve[reserveIndex]]=[replacement,active[slot]];
+    else if(slot===active.length){active.push(replacement);reserve.splice(reserveIndex,1);}
+    else return {ok:false,error:'출전 순서를 건너뛸 수 없습니다.'};
+    game.log.unshift(record.trainer.name+' 출전 편성 변경 · '+replacement.name+' 출전');
+    persist();renderOffice();return {ok:true};
+  }
+  function releaseReserve(key,index){
+    const record=findTrainer(key);
+    if(!record)return {ok:false,error:'트레이너를 찾을 수 없습니다.'};
+    if(rosterLocked())return {ok:false,error:'경기 결과 확인 후 변경할 수 있습니다.'};
+    const {reserve}=collection(record.trainer),state=data();
+    if(!Number.isInteger(index)||index<0||index>=reserve.length)return {ok:false,error:'보관 포켓몬을 선택하세요.'};
+    const mon=reserve[index],token=key+':'+String(mon.uid??index);
+    if(state.pendingRelease!==token){state.pendingRelease=token;persist();renderOffice();return {ok:true,pending:true};}
+    state.pendingRelease=null;
+    reserve.splice(index,1);
     game.releasedPokemon ||= [];
     game.releasedPokemon.unshift({season:game.season,week:game.week,
-      club:myClub().name,trainer:t.name,name:old.name,
-      statCA:old.statCA,statPA:old.statPA,careerSeasons:old.careerSeasons,reason:'탐색 포켓몬 등록'});
+      club:myClub().name,trainer:record.trainer.name,name:mon.name,uid:mon.uid,
+      statCA:mon.statCA,statPA:mon.statPA,careerSeasons:mon.careerSeasons,reason:'감독 승인 방출'});
     game.releasedPokemon.length=Math.min(game.releasedPokemon.length,80);
-    game.scout=(Number(game.scout)||0)+1;
-    game.log.unshift(t.name+' 포켓몬 등록: '+old.name+' → '+candidate.name+' · 6마리 유지');
-    persist();renderOffice();
-    return {ok:true,replaced:old,registered:candidate};
+    game.log.unshift(record.trainer.name+' 보관 포켓몬 '+mon.name+' 방출');
+    persist();renderOffice();return {ok:true,released:mon};
   }
   function dismiss(key){
     const record=findTrainer(key);
     if(!record)return {ok:false,error:'트레이너를 찾을 수 없습니다.'};
     const s=talent(record.trainer);
     if(!s.candidate)return {ok:false,error:'후보 포켓몬이 없습니다.'};
-    if(!confirm(s.candidate.name+' 포켓몬을 포획 후보에서 제외할까요?'))return {ok:false,error:'취소'};
+    if(data().pendingDismiss!==key){data().pendingDismiss=key;persist();renderOffice();return {ok:true,pending:true};}
+    data().pendingDismiss=null;
     const removed=s.candidate;delete s.candidate;
     game.log.unshift(record.trainer.name+' · '+removed.name+' 포획 후보 제외');
     persist();renderOffice();
@@ -404,6 +507,7 @@
   function missionDone(m){return m&&m.status!=='travel';}
   function display(trainer){
     const scout=talent(trainer),m=scout.mission,cand=scout.candidate;
+    const held=collection(trainer);
     const key=keyOf(trainer);
     const state=m?.status==='travel'?'탐색 중 · 다음 주 결과':
       cand?'포획 성공 · 등록 대기':missionDone(m)&&m.season===game.season&&m.week===game.week?
@@ -414,24 +518,48 @@
       FOCUSES[m?.focus||'balanced'].label+'</p>'+
       '<div class="ps-stats">'+Object.entries({hp:'체력',atk:'공격',def:'방어',
         spa:'특수공격',spd:'특수방어',spe:'스피드'}).map(([stat,label])=>
-        '<span>'+label+' <b>'+cand.statCA[stat]+'/'+cand.statPA[stat]+'</b></span>').join('')+
+        '<span>'+label+' <b>'+esc(cand.statCA?.[stat]??'?')+'/'+esc(cand.statPA?.[stat]??'?')+'</b></span>').join('')+
       '</div>'+
-      '<p>트레이너의 추천: '+(suggestion.gain>0?'교체를 긍정적으로 검토':
-        '현재 선수단을 유지하는 편이 유리할 수 있음')+
-      ' · 추천 교체 대상 '+esc(trainer.pokemon[suggestion.slot].name)+
-      ' (평가차 '+(suggestion.gain>=0?'+':'')+suggestion.gain+')</p>'+
-      '<label>등록 시 팀에서 제외할 포켓몬<select id="ps-slot-'+esc(key)+'">'+
-      trainer.pokemon.map((p,i)=>'<option value="'+i+'" '+(i===suggestion.slot?'selected':'')+'>'+
-        esc(p.name)+' · 평균 CA '+esc(p.statCA?Math.round(Object.values(p.statCA).reduce((a,b)=>a+b,0)/6):p.power)+
-        ' · 활동 '+esc(p.careerSeasons||1)+'/8시즌</option>').join('')+
-      '</select></label><div class="ps-actions"><button data-ps-recruit="'+esc(key)+'" type="button">확인 후 팀 등록</button>'+
-      '<button data-ps-dismiss="'+esc(key)+'" type="button">후보 보내기</button></div></section>':'';
+      (held.active.length===6?'<p>출전 교체 평가: '+(suggestion.gain>0?'전력 상승 가능':
+        '현 출전 명단 유지 고려')+' · '+esc(held.active[suggestion.slot].name)+
+        ' 대비 '+(suggestion.gain>=0?'+':'')+suggestion.gain+'</p>':'<p>빈 출전 자리에 등록할 수 있습니다.</p>')+
+      (held.count>=MAX_HELD?'<p class="ps-warning">보유 12/12마리입니다. 아래 보관 명단에서 직접 방출하거나 후보를 포기해야 합니다.</p>':
+      '<label>포획 개체 등록 방식<select class="ps-register-slot">'+
+      (held.active.length<6?'<option value="reserve">빈 출전 자리로 등록</option>':
+      '<option value="reserve">보관 명단에 추가 · 기존 선수 유지</option>'+
+      held.active.map((p,i)=>'<option value="'+i+'">'+esc(p.name)+'과 출전 교체 · 기존 선수는 보관</option>').join(''))+
+      '</select></label>')+
+      '<div class="ps-actions">'+(held.count<MAX_HELD?'<button data-ps-recruit="'+esc(key)+'" type="button">보유 명단 등록</button>':'')+
+      '<button data-ps-dismiss="'+esc(key)+'" type="button">'+
+      (data().pendingDismiss===key?'후보 포기 확정':'후보 포기')+'</button></div></section>':'';
     return '<div class="ps-trainer"><div><b>'+esc(trainer.name)+'</b>'+
-      '<small>탐색·포획 '+scout.skill+'/20 · 개체 감별 '+scout.appraisalSkill+'/20 · 경험 '+scout.experience+'/4 · 출전 6마리</small>'+
+      '<small>탐색·포획 '+scout.skill+'/20 · 개체 감별 '+scout.appraisalSkill+'/20 · 보유 '+held.count+'/'+MAX_HELD+'마리</small>'+
       '</div><span>'+state+'</span></div>'+
       (m?'<p class="ps-mission">최근 탐색: '+esc(m.region)+' · '+esc(HABITATS[m.habitat||'grass'])+
       ' · '+esc(TIMES[m.time||'day'])+' · '+esc(FOCUSES[m.focus]?.label||'균형 탐색')+
       ' · '+(m.status==='travel'?'다음 주 완료 예정':esc(m.result||'결과 없음'))+'</p>':'')+rows;
+  }
+  function collectionPanel(entry){
+    if(!entry)return '';
+    const t=entry.trainer,held=collection(t),key=keyOf(t),locked=rosterLocked();
+    const summary=p=>esc(p.name)+' · CA '+esc(p.statCA?
+      Math.round(Object.values(p.statCA).reduce((a,b)=>a+b,0)/6):p.power??'?')+
+      ' · PA '+esc(p.statPA?Math.round(Object.values(p.statPA).reduce((a,b)=>a+b,0)/6):p.pa??'?');
+    const active=held.active.map((p,i)=>'<div class="ps-mon"><b>출전 '+(i+1)+'</b><span>'+summary(p)+'</span></div>').join('');
+    const reserves=held.reserve.map((p,i)=>{
+      const token=key+':'+String(p.uid??i);
+      return '<div class="ps-mon ps-bench"><b>보관 '+(i+1)+'</b><span>'+summary(p)+'</span>'+
+        '<select aria-label="'+esc(p.name)+' 출전 교체 대상" class="ps-swap-slot">'+
+        Array.from({length:6},(_,slot)=>'<option value="'+slot+'">'+
+          (held.active[slot]?'출전 '+(slot+1)+' · '+esc(held.active[slot].name):'빈 출전 '+(slot+1))+'</option>').join('')+
+        '</select><button type="button" data-ps-swap="'+esc(key)+'" data-ps-index="'+i+'" '+(locked?'disabled':'')+'>출전 교체</button>'+
+        '<button type="button" data-ps-release="'+esc(key)+'" data-ps-index="'+i+'" '+(locked?'disabled':'')+'>'+
+        (data().pendingRelease===token?'방출 확정':'방출')+'</button></div>';
+    }).join('');
+    return '<section class="ps-collection"><h3>보유 포켓몬 · '+esc(t.name)+'</h3>'+
+      '<p class="ps-info">출전 '+held.active.length+'/6 · 보관 '+held.reserve.length+'/6 · 총 '+held.count+'/'+MAX_HELD+
+      '마리 · 출전 6마리만 공식 경기에 참가합니다. 보관 개체는 원래 포획한 트레이너에게 남습니다.</p>'+
+      '<div class="ps-roster">'+active+(reserves||'<div class="ps-info">보관 포켓몬이 없습니다.</div>')+'</div></section>';
   }
   function render(){
     if(!game)return '';
@@ -442,6 +570,7 @@
     if(!Object.hasOwn(HABITATS,cfg.habitat))cfg.habitat='grass';
     if(!Object.hasOwn(TIMES,cfg.time))cfg.time='day';
     const current=findTrainer(cfg.selectedTrainer);
+    const held=current?collection(current.trainer):null;
     const skills=current?talent(current.trainer):{skill:10,appraisalSkill:10};
     const probability=encounterTable(cfg.region,cfg.habitat,cfg.time,cfg.focus,
       skills);
@@ -460,8 +589,10 @@
       selectedMission.week===game.week;
     const atLimit=weekCount()>=MAX_WEEKLY;
     const noMoney=game.coins<cost(cfg.region);
-    const blocked=!current||atLimit||noMoney||isWaiting||isTraveling||dispatchedThisWeek;
+    const blocked=!current||atLimit||noMoney||isWaiting||isTraveling||dispatchedThisWeek||
+      (held?.count??0)>=MAX_HELD;
     const reason=isWaiting?'먼저 포획한 포켓몬의 등록 여부를 결정하세요.':
+      held?.count>=MAX_HELD?'보유 12마리입니다. 보관 포켓몬을 방출한 뒤 탐색할 수 있습니다.':
       isTraveling?'이 트레이너는 탐색 중입니다. 다음 주에 결과가 도착합니다.':
       dispatchedThisWeek?'이 트레이너는 이번 주 탐색을 완료했습니다.':
       atLimit?'이번 주 파견 가능 인원 2명을 모두 사용했습니다.':
@@ -499,6 +630,7 @@
       '</strong> · 탐색·포획 <b>'+esc(skills.skill)+'/20</b> · 개체 감별 <b>'+
       esc(skills.appraisalSkill)+'/20</b> <span>탐색·포획은 발견과 포획 확률, 개체 감별은 포획한 6개 능력치의 성장 잠재력에 영향을 줍니다.</span></p>'+
       '<p class="ps-info">'+esc(FOCUSES[cfg.focus].description)+'</p></section>'+
+      collectionPanel(current)+
       '<section class="ps-chances" aria-label="포켓몬 출현 확률표">'+
       '<div class="ps-chances-heading"><h3>포켓몬 출현 목록</h3><span>'+
       probability.pokemon.length+'종</span></div>'+
@@ -540,17 +672,27 @@
     panel.querySelectorAll('[data-ps-recruit]').forEach(button=>{
       button.addEventListener('click',()=>{
         const key=button.getAttribute('data-ps-recruit');
-        const slot=Number(panel.querySelector('#ps-slot-'+CSS.escape(key))?.value);
+        const choice=button.closest('.ps-candidate')?.querySelector('.ps-register-slot')?.value;
+        const slot=choice==='reserve'?undefined:Number(choice);
         const result=recruit(key,slot);
-        if(!result.ok&&result.error!=='등록 취소')alert(result.error);
+        if(!result.ok)alert(result.error);
       });
     });
     panel.querySelectorAll('[data-ps-dismiss]').forEach(button=>{
       button.addEventListener('click',()=>{
         const result=dismiss(button.getAttribute('data-ps-dismiss'));
-        if(!result.ok&&result.error!=='취소')alert(result.error);
+        if(!result.ok)alert(result.error);
       });
     });
+    panel.querySelectorAll('[data-ps-swap]').forEach(button=>button.addEventListener('click',()=>{
+      const slot=Number(button.closest('.ps-bench')?.querySelector('.ps-swap-slot')?.value);
+      const result=swap(button.dataset.psSwap,Number(button.dataset.psIndex),slot);
+      if(!result.ok)alert(result.error);
+    }));
+    panel.querySelectorAll('[data-ps-release]').forEach(button=>button.addEventListener('click',()=>{
+      const result=releaseReserve(button.dataset.psRelease,Number(button.dataset.psIndex));
+      if(!result.ok)alert(result.error);
+    }));
   }
   const previousRender=renderOffice;
   renderOffice=function(){
@@ -567,7 +709,8 @@
   };
   const style=document.createElement('style');
   style.textContent=[
-    '#dashpanel .ps-selection,#dashpanel .ps-chances,#dashpanel .ps-results{background:#182e43;border:1px solid #365268;border-radius:9px;padding:15px;margin:13px 0}',
+    '#dashpanel .ps-selection,#dashpanel .ps-chances,#dashpanel .ps-results,#dashpanel .ps-collection{background:#182e43;border:1px solid #365268;border-radius:9px;padding:15px;margin:13px 0}',
+    '#dashpanel .ps-roster{display:grid;gap:5px}#dashpanel .ps-mon{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 10px;background:#213a4f;border-radius:6px;font-size:12px}#dashpanel .ps-mon b{min-width:55px;color:#a8e7d1}#dashpanel .ps-mon span{flex:1;min-width:140px}#dashpanel .ps-mon button,#dashpanel .ps-mon select{background:#29495e;color:#f3fafc;border:1px solid #58788e;border-radius:5px;padding:6px}#dashpanel .ps-warning{color:#ffd38a}',
     '#dashpanel .ps-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0}',
     '#dashpanel .ps-form label,#dashpanel .ps-candidate label{display:grid;gap:6px;color:#b7d2df;font-size:12px}',
     '#dashpanel .ps-form select,#dashpanel .ps-candidate select{padding:9px;min-width:0;width:100%;color:#f4fafc;background:#234257;border:1px solid #5d7c91;border-radius:6px}',
@@ -617,9 +760,9 @@
   ].join('');
   document.head.append(style);
   window.PokemonExpedition={
-    REGIONS,FOCUSES,HABITATS,TIMES,BIOMES,MAX_WEEKLY,tier,talent,outcome,optionStats,
+    REGIONS,FOCUSES,HABITATS,TIMES,BIOMES,MAX_WEEKLY,MAX_HELD,tier,talent,outcome,optionStats,
     encounterTable,pickEncounter,candidatePokemon,suggestedSlot,
-    keyOf,findTrainer,dispatch,recruit,dismiss,resolvePlayer,render,data,weekCount,cost,
+    keyOf,findTrainer,dispatch,recruit,swap,releaseReserve,dismiss,resolvePlayer,resolveAI,render,data,weekCount,cost,collection,
   };
   if(game)renderOffice();
 })();

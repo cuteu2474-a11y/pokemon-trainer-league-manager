@@ -25,17 +25,16 @@ function setup(){
   let writes=0,renders=0;
   const doc={head:{append(){}},createElement(){return {textContent:''}},
     querySelectorAll(){return []},getElementById(){return null}};
-  let confirmation=true;
   const globals={window:{},document:doc,game:g,
     tab:'home',renderOffice(){renders++},nextWeek(){g.week++},
     myClub(){return g.clubs[0]},worldClubRegion(){return '관동'},
+    clubIdentity(c){return c.identity ||= {budget:1000000}},aiRecord(){},
     wonReadable(n){return '₩'+n},persist(){writes++},alert(){},
-    confirm(){return confirmation},CSS:{escape:value=>value}};
+    CSS:{escape:value=>value}};
   runInNewContext(module,globals);
   const api=globals.window.PokemonExpedition;
   assert.ok(api);
-  return {api,game:g,globals,report:()=>({writes,renders}),
-    confirm:value=>{confirmation=value}};
+  return {api,game:g,globals,report:()=>({writes,renders})};
 }
 test('nine region encounter lists contain real Korean Pokémon species only',()=>{
   const {api}=setup();
@@ -91,8 +90,8 @@ test('outcomes: unsuccessful searches leave all Pokémon and budget unchanged af
   assert.equal(JSON.stringify(game.clubs[0].trainers[0].pokemon),original);
   assert.equal(game.scout,0);
 });
-test('capture is retained with the original trainer until approval and cannot overwrite slot 7',()=>{
-  const {api,game,globals,confirm}=setup();
+test('capture is retained until approval; lineup swaps retain the original Pokémon in reserve',()=>{
+  const {api,game,globals}=setup();
   const t=game.clubs[0].trainers[0],initial=JSON.stringify(t.pokemon);
   const m=api.dispatch('1','호연','growth');
   assert.ok(m.ok);
@@ -109,11 +108,8 @@ test('capture is retained with the original trainer until approval and cannot ov
   assert.equal(JSON.stringify(t.pokemon),initial,'no silent Pokémon replacement');
   assert.equal(t.pokemon.length,6);
   assert.equal(api.recruit('1',6).ok,false);
-  confirm(false);
-  assert.equal(api.recruit('1',1).ok,false);
-  assert.equal(JSON.stringify(t.pokemon),initial);
-  confirm(true);
   const newPokemon=t.pokemonScouting.candidate;
+  const original=t.pokemon[1];
   const result=api.recruit('1',1);
   assert.equal(result.ok,true);
   assert.equal(t.pokemon.length,6);
@@ -121,7 +117,8 @@ test('capture is retained with the original trainer until approval and cannot ov
   assert.equal(t.pokemon[1].careerSeasons,1);
   for(const stat of ['hp','atk','def','spa','spd','spe'])
     assert.ok(t.pokemon[1].statPA[stat]>=t.pokemon[1].statCA[stat],stat);
-  assert.equal(game.releasedPokemon[0].name,'피카츄');
+  assert.equal(t.pokemonReserve[0],original,'swapped-out Pokémon must remain owned');
+  assert.equal(game.releasedPokemon,undefined,'registration never silently releases a Pokémon');
   assert.equal(game.scout,1);
   assert.equal(t.pokemonScouting.candidate,undefined);
   assert.equal(api.recruit('1',0).ok,false,'no duplicate registration');
@@ -390,4 +387,74 @@ test('old talent values migrate once and pending legacy expeditions retain their
   migrated.candidate=candidate;
   assert.equal(api.talent(t).candidate,candidate,'a waiting capture is never rerolled');
   assert.equal(game.clubs[0].trainers[0].pokemon.length,6);
+});
+
+test('trainer holds up to twelve without silent release and independently selects the six starters',()=>{
+  const {api,game}=setup(),t=game.clubs[0].trainers[0];
+  const original=t.pokemon.slice();
+  for(let i=0;i<6;i++){
+    t.pokemonScouting ||= {};
+    t.pokemonScouting.candidate={...mon('이브이',70+i),uid:'pokemon:extra-'+i,
+      ownerTrainerId:'1'};
+    assert.equal(api.recruit('1').ok,true);
+  }
+  assert.equal(t.pokemon.length,6);
+  assert.deepEqual(t.pokemon,original);
+  assert.equal(t.pokemonReserve.length,6);
+  assert.equal(api.collection(t).count,12);
+  t.pokemonScouting.candidate={...mon('고오스'),uid:'pokemon:pending',ownerTrainerId:'1'};
+  assert.match(api.recruit('1').error,/12마리/);
+  assert.equal(t.pokemonScouting.candidate.name,'고오스');
+  assert.match(api.render(),/보유 12\/12마리/);
+  const before=t.pokemon[2],bench=t.pokemonReserve[0];
+  assert.equal(api.swap('1',0,2).ok,true);
+  assert.equal(t.pokemon[2],bench);
+  assert.equal(t.pokemonReserve[0],before);
+  const first=api.releaseReserve('1',0);
+  assert.equal(first.pending,true);
+  assert.equal(t.pokemonReserve.length,6,'first click never deletes');
+  const second=api.releaseReserve('1',0);
+  assert.equal(second.ok,true);
+  assert.equal(t.pokemonReserve.length,5);
+  assert.equal(game.releasedPokemon[0].uid,before.uid);
+  assert.equal(api.recruit('1').ok,true,'the pending capture can fill the freed slot');
+  assert.equal(api.collection(t).count,12);
+  assert.deepEqual(t.pokemon.map(x=>x.uid),[...original.slice(0,2),bench,...original.slice(3)].map(x=>x.uid));
+});
+
+test('AI reserve trainers scout deterministically on the club budget and register owned captures',()=>{
+  const {api,game}=setup();
+  const rival=game.clubs[1],trainer={uid:75,name:'AI 후보',tactics:18,switching:15,
+    pokemon:Array.from({length:6},()=>mon('거북왕',55))};
+  rival.reserveTrainers.push(trainer);
+  const userCoins=game.coins,original=rival.identity?.budget??1000000;
+  let mission;
+  for(let week=1;week<=30;week++){
+    game.week=week;api.resolveAI();
+    if(trainer.pokemonScouting?.mission?.status==='travel'){
+      mission=trainer.pokemonScouting.mission;break;
+    }
+  }
+  assert.ok(mission,'the AI eventually chooses a deterministic expedition week');
+  assert.equal(mission.rulesVersion,'expedition-v2');
+  assert.equal(rival.identity.budget,original-mission.cost);
+  assert.equal(game.coins,userCoins);
+  assert.equal(rival.trainers[0].pokemonScouting,undefined,'match starters were not dispatched');
+  assert.equal(api.resolveAI().length,0,'the same week never double-charges');
+  for(let seed=1;seed<2000;seed++)if(api.outcome({...mission,seed},api.talent(trainer),1).status==='captured'){
+    mission.seed=seed;break;
+  }
+  const initial=trainer.pokemon.slice(),budget=rival.identity.budget;
+  game.week++;const finished=api.resolveAI();
+  assert.equal(finished.length,1);
+  assert.equal(finished[0].status,'captured');
+  assert.equal(api.collection(trainer).count,7);
+  assert.equal(trainer.pokemonScouting.candidate,undefined);
+  const newMon=[...trainer.pokemon,...trainer.pokemonReserve].find(x=>x.source==='wild-scout');
+  assert.ok(newMon);
+  assert.equal(newMon.ownerTrainerId,'75');
+  assert.match(String(newMon.uid),/^pokemon:/);
+  assert.equal(trainer.pokemon.some(x=>initial.includes(x))||trainer.pokemonReserve.some(x=>initial.includes(x)),true);
+  assert.equal(game.coins,userCoins);
+  assert.ok(rival.identity.budget<=budget,'the AI never receives free scouting credits');
 });

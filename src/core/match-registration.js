@@ -20,13 +20,20 @@ export function ensureRosterIds(g){
  g.nextPokemonUID=Number.isSafeInteger(g.nextPokemonUID)?g.nextPokemonUID:0;
  const seen=new Set(),mons=new Set();
  const trainers=g.clubs.flatMap(c=>[...(c.trainers||[]),...(c.reserveTrainers||[]),...(c.trainerAcademy||[])]).concat((g.freeAgents||[]).map(x=>x.trainer)).filter(Boolean);
+ for(const t of trainers){
+  if(!Array.isArray(t.pokemon))t.pokemon=[];
+  if(!Array.isArray(t.pokemonReserve))t.pokemonReserve=[];
+  // Preserve every Pokémon from old or imported saves without changing
+  // the six-member lineup consumed by the battle engine.
+  if(t.pokemon.length>6)t.pokemonReserve.unshift(...t.pokemon.splice(6));
+ }
  let next=Math.max(0,...trainers.map(t=>Number(t.uid)||0));
- const oldIds=trainers.flatMap(t=>[...(t.pokemon||[]),...(t.pokemonScouting?.candidate?[t.pokemonScouting.candidate]:[])].map(p=>Number(String(p.uid||'').match(/^pokemon:(\d+)$/)?.[1])||0));
+ const oldIds=trainers.flatMap(t=>[...t.pokemon,...t.pokemonReserve,...(t.pokemonScouting?.candidate?[t.pokemonScouting.candidate]:[])].map(p=>Number(String(p.uid||'').match(/^pokemon:(\d+)$/)?.[1])||0));
  g.nextPokemonUID=Math.max(g.nextPokemonUID,...oldIds,0);
  for(const t of trainers){
   if(!Number.isInteger(t.uid))t.uid=++next;
   if(seen.has(t.uid))throw Error('중복된 트레이너 ID가 있습니다.');seen.add(t.uid);
-  for(const mon of [...(t.pokemon||[]),...(t.pokemonScouting?.candidate?[t.pokemonScouting.candidate]:[])]){
+  for(const mon of [...t.pokemon,...t.pokemonReserve,...(t.pokemonScouting?.candidate?[t.pokemonScouting.candidate]:[])]){
    if(mon.uid===undefined||mon.uid===null)mon.uid='pokemon:'+ ++g.nextPokemonUID;
    if(mons.has(String(mon.uid)))throw Error('중복된 포켓몬 ID가 있습니다.');mons.add(String(mon.uid));
    mon.ownerTrainerId ??= String(t.uid);
@@ -39,7 +46,8 @@ export function lineupState(g,p){
  return {order:p.order,plans:p.plans,behaviors:p.behaviors,enhancements:p.enhancements,clubs:[p.home,p.away].map(id=>{
   const c=g.clubs.find(c=>String(c.id)===String(id));if(!c)throw Error('경기 구단이 없습니다.');
   return {...keys(c,['id','fatigue','morale']),trainers:c.trainers.map(t=>t&&({...keys(t,['uid','id','name','tactics','switching','battleAnalysis','analysis','resourceManagement','management','moveJudgment','switchJudgment','autonomyAI','skills','preferredPlay','playStyle','preferredPlays','enhancement','fatigue','pokemonScouting']),
-   pokemon:(t.pokemon||[]).map(mon=>keys(mon,['uid','ownerTrainerId','name','species','formId','statCA','statPA','power','ca','pa','potential','gp','nature','ability','item','moves','teraType','fatigue']))}))};
+   pokemon:(t.pokemon||[]).map(mon=>keys(mon,['uid','ownerTrainerId','name','species','formId','statCA','statPA','power','ca','pa','potential','gp','nature','ability','item','moves','teraType','fatigue'])),
+   pokemonReserve:(t.pokemonReserve||[]).map(mon=>keys(mon,['uid','ownerTrainerId','name','species','formId','statCA','statPA','power','ca','pa','potential','gp','nature','ability','item','moves','teraType','fatigue']))}))};
  })};
 }
 export function validateRoster(request,at){
