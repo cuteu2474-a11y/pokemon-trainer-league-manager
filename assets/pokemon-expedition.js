@@ -277,12 +277,13 @@
     if(s.mission?.season===game.season&&s.mission.week===game.week)
       return {ok:false,error:'이 트레이너는 이번 주에 이미 탐색했습니다.'};
     if(weekCount()>=MAX_WEEKLY)return {ok:false,error:'이번 주 탐색은 2명까지 파견할 수 있습니다.'};
+    if(window.ClubFinance){const checked=ClubFinance.canSpend(due);if(!checked.ok)return {ok:false,error:checked.reason};}
     if(game.coins<due)return {ok:false,error:'파견 운영비가 부족합니다.'};
     // Record the expedition and deduct costs atomically. No instant rerolls.
     s.mission={status:'travel',season:game.season,week:game.week,region,focus,
       habitat,time,cost:due,scoutSkill:s.skill,captureSkill:s.captureSkill,
       seed:hash([game.seed,game.season,game.week,keyOf(t),region,habitat,time,focus].join(':'))};
-    game.coins-=due;
+    if(window.ClubFinance)ClubFinance.spend(due,'expedition:'+game.season+':'+game.week+':'+keyOf(t),'포켓몬 탐색 파견');else game.coins-=due;
     data().missions++;
     game.log.unshift(t.name+' '+region+' · '+HABITATS[habitat]+' · '+TIMES[time]+' 포켓몬 탐색 출발 · '+FOCUSES[focus].label);
     persist();renderOffice();

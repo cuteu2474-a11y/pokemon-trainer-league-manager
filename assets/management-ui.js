@@ -6,7 +6,7 @@
   const identity=t=>String(t.uid??('legacy:'+t.id+':'+t.name));
   const state=()=>game.management ||= {program:'tactics',target:null,autoRecovery:true,views:{},history:[]};
   let busy=false,stopRequested=false;
-  const groups={home:['홈','home'],squad:['선수단','team'],league:['리그','fixtures'],recruit:['영입','transfer'],club:['구단','ai']};
+  const groups={home:['홈','home'],squad:['선수단','team'],league:['리그','fixtures'],recruit:['영입','transfer'],club:['구단','finance']};
   const tabGroup=t=>['team','pokemon','profile','weekly','academy','tactics','scout'].includes(t)?'squad':
     ['league','fixtures','calendar','retirement'].includes(t)?'league':t==='transfer'?'recruit':t==='home'?'home':'club';
   function blocker(){
@@ -16,7 +16,7 @@
     if(roster().some(t=>t.pokemonScouting?.candidate))return {text:'포획한 포켓몬의 등록 여부를 결정해 주세요.',tab:'scout'};
     if(myClub().trainers.filter(t=>t&&t.pokemon?.length===6).length!==5)
       return {text:'출전 선수단의 공석을 먼저 채워 주세요.',tab:'team'};
-    if(roster().some(t=>t.contractDecision?.status==='pending'))return {text:'계약 결정을 확인해 주세요.',tab:'transfer'};
+    if([...roster(),...(myClub().trainerAcademy||[])].some(t=>t.contractDecision?.status==='pending'))return {text:'계약 결정을 확인해 주세요.',tab:'transfer'};
     return null;
   }
   function targetSelection(){
@@ -115,7 +115,7 @@
       (s.running?'<button class="g-btn alt" onclick="ManagementUI.stop()">진행 중단</button>':'')+
       '<button class="g-btn alt" onclick="ManagementUI.retryResearch()">기술 연구 재시도</button></div>'+
       '<p role="status">'+esc(s.notice||'진행 중에는 경기 준비·이적 제안·포획 후보·선수단 공석·시장 마감에서 멈춥니다.')+'</p>'+
-      (summary?'<details><summary>'+summary.from+'→'+summary.to+'주차 · 자금 증감 '+wonReadable(summary.balance)+'</summary>'+summary.programs.map(p=>'<p>'+p.week+'주 · '+esc(p.title)+' · '+esc(p.detail)+'</p>').join('')+'<p>훈련·탐색·AI 구단 처리는 기존 주간 절차를 따릅니다. 급여·계약 정산은 아직 구현 예정입니다.</p></details>':'')+'</section>';
+      (summary?'<details><summary>'+summary.from+'→'+summary.to+'주차 · 자금 증감 '+wonReadable(summary.balance)+'</summary>'+summary.programs.map(p=>'<p>'+p.week+'주 · '+esc(p.title)+' · '+esc(p.detail)+'</p>').join('')+'<p>훈련·탐색·AI 구단 처리는 기존 주간 절차를 따릅니다. 급여는 각 주차에 정산하며, 재정·계약 화면에서 지급 내역을 확인할 수 있습니다.</p></details>':'')+'</section>';
   }
   const previousRender=renderOffice;
   window.renderOffice=function(){

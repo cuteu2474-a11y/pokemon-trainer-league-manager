@@ -913,7 +913,7 @@ function nextFixture(){if(game.round>=18)return null;return game.fixtures[myClub
 function clubPower(c,order){let base=c.skill+Math.round(c.trainers.filter(Boolean).reduce((sum,t)=>sum+t.tactics+t.switching,0)/15);let best=c.trainers.filter(Boolean).reduce((a,t)=>a+Math.round(t.pokemon.reduce((v,p)=>v+p.power,0)/6),0)/5;let orderBonus=order?(((c.trainers[order[0]]?.tactics||0)-(c.trainers[order[4]]?.tactics||0))*.35):0;return base*.55+best*.45+orderBonus}
 function matchSim(a,b){const mine=myClub();const aPower=clubPower(a,a.id===mine.id?game.order:null),bPower=clubPower(b,b.id===mine.id?game.order:null);let difference=aPower-bPower+2+(rng(game)-.5)*24;let aScore=0,bScore=0;for(let k=0;k<5;k++){const v=difference+(rng(game)-.5)*32;if(v>7)aScore++;else if(v< -7)bScore++;else if(rng(game)>.5)aScore++;else bScore++}return {aScore,bScore,home:a.id,away:b.id}}
 function applyMatch(m){const a=game.clubs[m.home],b=game.clubs[m.away];a.gf+=m.aScore;a.ga+=m.bScore;b.gf+=m.bScore;b.ga+=m.aScore;if(m.aScore>m.bScore){a.w++;a.points+=3;b.l++}else if(m.aScore<m.bScore){b.w++;b.points+=3;a.l++}else{a.d++;b.d++;a.points++;b.points++}}
-function playNext(){if(game.round>=18)return;const r=game.round;const matches=[];for(let d=0;d<4;d++)for(const [a,b] of game.fixtures[d][r]){const m=matchSim(game.clubs[a],game.clubs[b]);applyMatch(m);matches.push(m)}game.results.push(matches);game.lastMatch=matches.find(m=>m.home===myClub().id||m.away===myClub().id);game.round++;const result=game.lastMatch;const win=result.aScore===result.bScore?'무승부':(result.home===myClub().id?result.aScore>result.bScore:result.bScore>result.aScore)?'승리':'패배';game.coins+=win==='승리'?5000000:win==='무승부'?2500000:1000000;game.log.unshift('시즌 '+game.season+' · '+game.round+'라운드 '+win+' · '+result.aScore+':'+result.bScore);persist();renderOffice()}
+function playNext(){if(game.round>=18)return;const r=game.round;const matches=[];for(let d=0;d<4;d++)for(const [a,b] of game.fixtures[d][r]){const m=matchSim(game.clubs[a],game.clubs[b]);applyMatch(m);matches.push(m)}game.results.push(matches);game.lastMatch=matches.find(m=>m.home===myClub().id||m.away===myClub().id);game.round++;const result=game.lastMatch;const win=result.aScore===result.bScore?'무승부':(result.home===myClub().id?result.aScore>result.bScore:result.bScore>result.aScore)?'승리':'패배';if(window.ClubFinance)ClubFinance.income(win==='승리'?5000000:win==='무승부'?2500000:1000000,'match-income:'+game.season+':'+game.round,'리그 경기 보상');else game.coins+=win==='승리'?5000000:win==='무승부'?2500000:1000000;game.log.unshift('시즌 '+game.season+' · '+game.round+'라운드 '+win+' · '+result.aScore+':'+result.bScore);persist();renderOffice()}
 function sortedDivision(){return game.clubs.filter(c=>c.division===myClub().division).sort((a,b)=>b.points-a.points||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf)}
 function preparePokemonCareers(){if(!game)return;for(const c of game.clubs)for(const t of c.trainers.concat(c.reserveTrainers||[]).filter(Boolean))for(const p of t.pokemon){if(!Number.isInteger(p.careerSeasons))p.careerSeasons=1;if(!Number.isInteger(p.debutSeason))p.debutSeason=game.season-p.careerSeasons+1;}if(!Array.isArray(game.hallOfFame))game.hallOfFame=[];}
 function pokemonRetirements(){preparePokemonCareers();let retired=0;for(const c of game.clubs){for(const t of c.trainers.concat(c.reserveTrainers||[]).filter(Boolean)){for(let i=0;i<t.pokemon.length;i++){const p=t.pokemon[i];p.careerSeasons++;if(p.careerSeasons>=8){const record={name:p.name,level:p.level,power:p.power,careerSeasons:8,trainer:t.name,club:c.name,season:game.season};if(c.name===game.club)game.hallOfFame.unshift(record);t.pokemon[i]=newPokemonProspect(c,t);retired++;if(c.name===game.club)game.log.unshift('은퇴: '+p.name+' ('+t.name+') · 아카데미 신예 영입');}}}}game.log.unshift('시즌 '+game.season+' 은퇴 정산: 전체 '+retired+'마리');return retired;}
@@ -1013,7 +1013,7 @@ function trainerListHTML(c){
  const chooser=columnChooserOpen?'<div class="trainer-columns" role="group" aria-label="표시할 열 선택"><strong>표시할 항목</strong><div class="trainer-columns-grid">'+TRAINER_COLS.map(([k,label])=>'<label><input type="checkbox" '+(trainerColumns.includes(k)?'checked':'')+' '+(k==='name'?'disabled':'')+' onchange="toggleTrainerColumn(\''+k+'\',this.checked)"> '+label+'</label>').join('')+'</div><button class="row-btn" onclick="resetTrainerColumns()">기본값 복원</button></div>':'';
  return '<div class="trainer-list-header"><div><div class="eyebrow">TEAM / ALL TRAINERS</div><h2>트레이너 목록</h2><p class="g-muted">윈도우 자세히 보기 방식 · 열 정렬 · 표시 항목 사용자 지정</p></div><button class="g-btn" onclick="setTab(\'transfer\')">트레이너 영입 · 이적 시장 →</button></div>'+
  '<div class="trainer-explorer"><div class="trainer-toolbar"><div class="group"><strong>트레이너</strong><span class="trainer-count">전체 '+allTrainers(c).length+'명 / 출전 5명 / 후보 '+(c.reserveTrainers||[]).length+'명</span></div><div class="group"><select aria-label="명단 필터" onchange="setTrainerFilter(this.value)"><option value="all" '+(trainerListFilter==='all'?'selected':'')+'>전체 보기</option><option value="active" '+(trainerListFilter==='active'?'selected':'')+'>출전 트레이너</option><option value="reserve" '+(trainerListFilter==='reserve'?'selected':'')+'>후보 트레이너</option></select><input aria-label="트레이너 검색" placeholder="이름 검색" value="'+escapeHTML(trainerListQuery)+'" oninput="setTrainerQuery(this.value)"><button class="row-btn" onclick="toggleColumnChooser()">⚙ 열 설정</button></div></div>'+chooser+
- '<div class="trainer-explorer-scroll"><table class="trainer-detail-table"><thead><tr>'+th+'<th scope="col">관리</th></tr></thead><tbody>'+(rows||'<tr><td colspan="'+(trainerColumns.length+1)+'" class="trainer-empty">표시할 트레이너가 없습니다.</td></tr>')+'</tbody></table></div></div><p class="g-muted" style="margin-top:12px">출전 인원은 항상 5명입니다. 계약·연봉·나이·지역·CA/PA는 현재 생성된 프로필 데이터이며, 계약 갱신·급여 차감은 아직 구현되지 않았습니다.</p>';
+ '<div class="trainer-explorer-scroll"><table class="trainer-detail-table"><thead><tr>'+th+'<th scope="col">관리</th></tr></thead><tbody>'+(rows||'<tr><td colspan="'+(trainerColumns.length+1)+'" class="trainer-empty">표시할 트레이너가 없습니다.</td></tr>')+'</tbody></table></div></div><p class="g-muted" style="margin-top:12px">출전 인원은 5명입니다. 시즌 연봉은 30주에 나눠 지급하며, 재정·계약에서 재계약과 지급 내역을 확인할 수 있습니다.</p>';
 }
 function toggleColumnChooser(){columnChooserOpen=!columnChooserOpen;renderOffice()}
 function toggleTrainerColumn(k,on){
@@ -1412,14 +1412,15 @@ function seasonSettlement(){
 function startNewSeason(){
  initCalendar();
  if(game.week!==30||!game.seasonSettled)return;
+ window.ClubFinance?.beforeAdvance();window.ClubFinance?.closeSeason();
  const divisions=[0,1,2,3].map(d=>game.clubs.filter(c=>c.division===d).sort((a,b)=>b.points-a.points||(b.gf-b.ga)-(a.gf-a.ga)));
  const changes=[];
  for(let d=0;d<3;d++){for(const c of divisions[d].slice(-2))changes.push([c,d+1]);for(const c of divisions[d+1].slice(0,2))changes.push([c,d]);}
  for(const [c,d] of changes)c.division=d;
- for(const c of game.clubs){c.points=c.w=c.d=c.l=c.gf=c.ga=0;if(c.id!==myClub().id)clubIdentity(c).budget+=200000;}
+ for(const c of game.clubs){c.points=c.w=c.d=c.l=c.gf=c.ga=0;if(c.id!==myClub().id&&!window.ClubFinance)clubIdentity(c).budget+=200000;}
  game.fixtures=ALL_CLUBS.map((_,d)=>mkSchedule(game.clubs.filter(c=>c.division===d).map(c=>c.id)));
  game.round=0;game.season++;game.week=1;game.results=[];game.lastMatch=null;
- game.seasonSettled=false;game.academyGenerated=false;game.coins+=180000;
+ game.seasonSettled=false;game.academyGenerated=false;if(!window.ClubFinance)game.coins+=180000;
  game.calendarHistory.push({season:game.season,week:1,round:0,event:'새 시즌 개막'});
  game.log.unshift('시즌 '+game.season+' 개막 · 1주차 프리시즌 / 여름 이적시장 · 승강 결과 반영');
  persist();renderOffice();
@@ -1702,7 +1703,9 @@ function aiStartingBudget(c){
  const h=hashTrainer('ai:budget:'+c.id);return startingClubBudget(c.division)+((h>>>10)%7-3)*10000000;
 }
 function normalizeTrainerSalary(t){
- if(t&&t.profile&&Number.isFinite(t.profile.salary)&&t.profile.salary<1500000){t.profile.salary*=15;}
+ if(!t?.profile||t.profile.salaryVersion===1)return;
+ if(Number.isFinite(t.profile.salary)&&t.profile.salary<1500000)t.profile.salary*=15;
+ t.profile.salaryVersion=1;
 }
 const prevDetailsForEconomy=ensureTrainerDetails;
 ensureTrainerDetails=function(c){prevDetailsForEconomy(c);for(const t of c.trainers.concat(c.reserveTrainers||[]).filter(Boolean))normalizeTrainerSalary(t)};
@@ -1762,9 +1765,9 @@ startNewSeason=function(){
  if(!game||game.season===old)return;
  // Prior engine already added 18만원; replace with a modest 6천만원 allowance.
  const grant=60000000+(3-myClub().division)*10000000;
- game.coins+=grant-180000;
+ if(window.ClubFinance)ClubFinance.income(grant,'season-grant:'+game.season,'시즌 운영 지원금');else game.coins+=grant-180000;
  // Each other club receives 7천만원 in place of its old 20만원 credit.
- for(const c of game.clubs){if(c.id===myClub().id)continue;const id=clubIdentity(c);id.budget=Math.min(1000000000,id.budget+70000000-200000);}
+ for(const c of game.clubs){if(c.id===myClub().id)continue;const id=clubIdentity(c);if(window.ClubFinance)ClubFinance.income(70000000,'season-grant:'+game.season+':'+c.id,'시즌 운영 지원금',c.id);else id.budget=Math.min(1000000000,id.budget+70000000-200000);}
  game.log.unshift('시즌 운영 지원금 지급 · '+wonReadable(grant)+' (이적료는 자동 상승하지 않음)');
  persist();renderOffice();
 };
@@ -2023,7 +2026,7 @@ function aiExecuteBid(buyer,target,price){
  if(target.e.kind==='active')seller.trainers[target.e.slot]=null;
  else seller.reserveTrainers.splice(target.e.slot,1);
  if(!aiAcquire(buyer,t,'스카우트 분석')){if(target.e.kind==='active')seller.trainers[target.e.slot]=t;else seller.reserveTrainers.splice(target.e.slot,0,t);return false;}
- clubIdentity(buyer).budget-=price;clubIdentity(seller).budget=Math.min(1000000000,clubIdentity(seller).budget+price);
+ clubIdentity(buyer).budget-=price;clubIdentity(seller).budget+=price;
  aiManager(buyer).transfers++;
  game.transferHistory.unshift({season:game.season,week:game.week,type:'AI 구단 이적',name:t.name,from:seller.name,to:buyer.name,fee:price});
  aiRecord(buyer,'트레이너 영입',t.name+' · 포켓몬 6마리 동반 · '+shortTransfer(price),true);
@@ -2129,6 +2132,7 @@ const aiPreviousNextWeek=nextWeek;
 nextWeek=function(){
  if(!game)return;initCalendar();aiInit();
  const prevSeason=game.season,prevWeek=game.week;
+ if(prevWeek<30||game.seasonSettled)window.ClubFinance?.beforeAdvance();
  if(prevWeek<30)aiWeeklyPlan(prevWeek+1);
  aiPreviousNextWeek();
  if(game.season===prevSeason&&game.week===prevWeek)return;

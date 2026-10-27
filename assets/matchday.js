@@ -1985,8 +1985,9 @@
     const key=candidateKey(x.t),s=state(),existing=s.intel[key];
     if(existing?.season===game.season)return {ok:false,message:'이번 시즌의 스카우트 보고서가 있습니다.'};
     const cost=3000000;
+    if(window.ClubFinance){const checked=ClubFinance.canSpend(cost);if(!checked.ok){alert(checked.reason);return {ok:false,message:checked.reason};}}
     if(game.coins<cost)return {ok:false,message:'스카우트 비용이 부족합니다.'};
-    game.coins-=cost;
+    if(window.ClubFinance)ClubFinance.spend(cost,'scout:'+game.season+':'+key,'트레이너 정밀 조사');else game.coins-=cost;
     s.intel[key]={season:game.season,week:game.week??0,source:x.c.id};
     game.log.unshift(x.t.name+' 스카우트 조사 완료 · 비용 '+wonReadable(cost));
     persist();renderOffice();
@@ -2001,20 +2002,21 @@
     if(!transferOpen()){alert('이적시장이 열려 있지 않습니다.');return;}
     if(s.attempts[key]===token){alert('이 트레이너와는 이번 주 이미 협상했습니다. 다음 주 다시 제안할 수 있습니다.');return;}
     const base=transferValuation(x.t,x.c);
-    const fee=quote(base).offered;
+    const fee=quote(base).offered,contractOffer=window.ClubFinance?.proposal(x.t,base);
+    if(contractOffer){const budgetCheck=ClubFinance.canSpend(contractOffer.total);if(!budgetCheck.ok){alert(budgetCheck.reason);return;}}
     const checked=checkTransfer({buyer:own,seller:x.c,trainer:x.t,
       sourceKind:x.kind,slot:x.slot,fee,budget:game.coins});
     if(!checked.ok){alert(checked.reason);return;}
     const assessment=transferAcceptance(x.t,x.c,own,base,fee);
     const fit=compatible(x.t,s.style);
     const clubChance=clamp(value(assessment.clubChance,.2),.05,.95);
-    const trainerChance=clamp(value(assessment.trainerChance,.4)+(fit-50)/350,.03,.97);
+    const trainerChance=clamp(value(assessment.trainerChance,.4)+(fit-50)/350+(window.ClubFinance?.chanceAdjustment(x.t,base)||0),.03,.97);
     const combined=clubChance*trainerChance;
     if(!confirm(x.t.name+' 및 보유 포켓몬 6마리 영입\n'+
-      '기본 평가액: '+wonReadable(base)+'\n제안 금액: '+wonReadable(fee)+'\n영입 후 잔액: '+wonReadable(game.coins-fee)+'\n'+
+      '기본 평가액: '+wonReadable(base)+'\n제안 금액: '+wonReadable(fee)+'\n영입 후 잔액: '+wonReadable(game.coins-(contractOffer?.total??fee))+'\n'+
       '구단 수락 약 '+Math.round(clubChance*100)+'% · 트레이너 동의 약 '+
       Math.round(trainerChance*100)+'% · 종합 약 '+Math.round(combined*100)+
-      '%\n협상을 진행하시겠습니까?'))return;
+      '%'+(contractOffer?'\n시즌 연봉 '+wonReadable(contractOffer.salary)+' · '+contractOffer.years+'시즌\n계약금 '+wonReadable(contractOffer.bonus)+' · 즉시 지출 '+wonReadable(contractOffer.total):'')+'\n협상을 진행하시겠습니까?'))return;
     s.attempts[key]=token;
     const accepted=rng(game)<clubChance&&rng(game)<trainerChance;
     game.transferHistory ||= [];
@@ -2024,13 +2026,14 @@
       game.log.unshift(x.t.name+' 영입 협상 결렬 · 이적료 차감 없음');
       persist();renderOffice();alert('이적 협상이 결렬됐습니다. 비용은 차감되지 않았습니다.');return;
     }
-    const transferred=executeTransfer({buyer:own,seller:x.c,trainer:x.t,
-      sourceKind:x.kind,slot:x.slot,fee,budget:game.coins});
-    if(!transferred.ok){alert(transferred.reason);return;}
-    game.coins-=fee;
-    // AI seller receives the real fee; a reserve or academy replacement fills the vacancy.
-    const sellerBudget=clubIdentity(x.c);
-    sellerBudget.budget=Math.min(1000000000,sellerBudget.budget+fee);
+    if(window.ClubFinance){
+      try{ClubFinance.transfer(x,base);}catch(error){alert(error.message);return;}
+    }else{
+      const transferred=executeTransfer({buyer:own,seller:x.c,trainer:x.t,sourceKind:x.kind,slot:x.slot,fee,budget:game.coins});
+      if(!transferred.ok){alert(transferred.reason);return;}
+      game.coins-=fee;
+      const sellerBudget=clubIdentity(x.c);sellerBudget.budget=Math.min(1000000000,sellerBudget.budget+fee);
+    }
     if(typeof aiMaintainSquad==='function')aiMaintainSquad(x.c);
     game.transferHistory.unshift({season:game.season,week:game.week,type:'영입',
       name:x.t.name,from:x.c.name,to:own.name,fee});
@@ -2045,7 +2048,7 @@
     const search=String(s.search||'').trim().toLowerCase();
     const list=all.filter(x=>(!search||(x.trainer.name+' '+x.club.name).toLowerCase().includes(search))&&
       (!s.division||s.division==='all'||String(x.club.division)===s.division));
-    const available=x=>transferOpen()&&checkTransfer({buyer:own,seller:x.club,trainer:x.trainer,
+    const available=x=>transferOpen()&&(!window.ClubFinance||ClubFinance.canSpend(ClubFinance.proposal(x.trainer,x.report.fee).total).ok)&&checkTransfer({buyer:own,seller:x.club,trainer:x.trainer,
       sourceKind:x.kind,slot:x.slot,fee:quote(x.report.fee).offered,budget:game.coins}).ok;
     const pageSize=12,page=Math.max(0,Math.min(Number(s.page)||0,Math.max(0,Math.ceil(list.length/pageSize)-1)));
     s.page=page;
@@ -2076,8 +2079,9 @@
       const traits=x.t.autonomyAI?.playTraits||[];
       const weakest=own.trainers.filter(Boolean).sort((a,b)=>score(a).strength-score(b).strength)[0];
       const guard=checkTransfer({buyer:own,seller:x.c,trainer:x.t,sourceKind:x.kind,slot:x.slot,fee:q.offered,budget:game.coins});
+      if(guard.ok&&window.ClubFinance)Object.assign(guard,ClubFinance.canSpend(ClubFinance.proposal(x.t,r.fee).total));
       const assessment=transferAcceptance(x.t,x.c,own,q.base,q.offered);
-      const chance=clamp(value(assessment.clubChance,.2),.05,.95)*clamp(value(assessment.trainerChance,.4)+(r.fit-50)/350,.03,.97);
+      const chance=clamp(value(assessment.clubChance,.2),.05,.95)*clamp(value(assessment.trainerChance,.4)+(r.fit-50)/350+(window.ClubFinance?.chanceAdjustment(x.t,r.fee)||0),.03,.97);
       detail='<section class="tm2-detail" id="tm2-detail"><h3>'+esc(x.t.name)+' · 영입 분석</h3><div class="tm2-stats">'+
         '<div>현재 전력 <b>'+(known?r.strength:band(r.strength)+' 추정')+'</b></div>'+
         '<div>포켓몬 평균 성장 여유 <b>'+(known?r.pokemonGrowth:band(r.pokemonGrowth,200)+' 추정')+' CA</b></div>'+
@@ -2092,8 +2096,9 @@
         }).join('')+'</details>'+
         (known?'<p class="tm2-scouted">이번 시즌 정밀 조사 완료</p>':'<div class="tm2-scouted">추정 범위를 표시하고 있습니다. <button class="row-btn" onclick="TrainerMarketV2.scout()">정밀 조사 '+money(3000000)+'</button></div>')+
         '<div class="tm2-offer"><label>제안 배율 <select onchange="TrainerMarketV2.setPremium(this.value)">'+options({'1':'100%','1.15':'115%','1.3':'130%','1.4':'140%'},String(q.premium))+'</select></label>'+
-        '<div>기본 평가액 '+money(q.base)+' → 제안액 <b>'+money(q.offered)+'</b><small>영입 후 잔액 '+money(game.coins-q.offered)+' · 예상 성사 '+Math.round(chance*100)+'%</small></div></div>'+
-        '<p>현재 연봉 '+money(p.salary||0)+' · 계약 만료 '+esc(p.contract)+'시즌 (급여 정산·신규 계약 조건 협상은 후속 작업)</p>'+
+        '<div>기본 평가액 '+money(q.base)+' → 제안액 <b>'+money(q.offered)+'</b><small>영입 후 잔액 '+money(game.coins-(window.ClubFinance?.proposal(x.t,r.fee).total??q.offered))+' · 예상 성사 '+Math.round(chance*100)+'%</small></div></div>'+
+        (window.ClubFinance?.offerHTML(x.t,r.fee)||'')+
+        '<p>현재 연봉 '+money(p.salary||0)+' · 계약 만료 '+esc(p.contract)+'시즌 · 시즌 총액</p>'+
         '<button class="g-btn" onclick="marketOffer()" '+(!transferOpen()||!guard.ok?'disabled':'')+'>표시한 제안액으로 협상</button>'+
         (!guard.ok?'<p>'+esc(guard.reason)+'</p>':'')+'</section>';
     }
