@@ -154,3 +154,57 @@ test('past saves without identified Pokémon cannot retroactively invent individ
  assert.equal(s.api.pokemonStats(g,1).length,0);
  assert.match(s.api.html(g,1,0),/개체 ID가 확인된 전투 기록 없음/);
 });
+test('trainer and Pokémon careers combine verified seasons by stable identity, not names',()=>{
+ const g=fixture(),s=setup(g),first=pokemonMatch();
+ s.api.capture(g,{season:1,result:first},realReport());
+ g.season=2;g.round=1;g.results=[[{home:0,away:1,aScore:5,bScore:3,engine:'fast'}]];g.lastMatch=null;
+ const second=pokemonMatch(),secondReport=realReport(2,1);
+ second.teams.home[0].name='새 담당자';
+ second.teams.home[0].team[0].displayName='라이츄(진화)';
+ secondReport.participants[0].name='트레이너 개명';
+ assert.equal(s.api.capture(g,{season:2,result:second},secondReport),true);
+ const trainer=s.api.trainerCareer(g,'trainer:one');
+ assert.equal(trainer.recordedSeasons,2);
+ assert.deepEqual([trainer.totals.matches,trainer.totals.duels,trainer.totals.wins,trainer.totals.allKills],[2,10,10,2]);
+ assert.deepEqual(Array.from(trainer.rows,row=>row.season),[2,1]);
+ assert.deepEqual(Array.from(trainer.rows,row=>row.name),['트레이너 개명','동명이인']);
+ const firstMon=s.api.pokemonCareer(g,'mon:first');
+ assert.equal(firstMon.recordedSeasons,2);
+ assert.deepEqual([firstMon.totals.matches,firstMon.totals.entries,firstMon.totals.damage,firstMon.totals.knockouts],[2,2,80,0]);
+ assert.deepEqual(Array.from(firstMon.rows,row=>row.name),['라이츄(진화)','피카츄']);
+ assert.equal(s.api.pokemonCareer(g,'mon:second').totals.knockouts,2);
+ assert.equal(s.api.pokemonCareer(g,'mon:unknown').recordedSeasons,0);
+ assert.equal(s.api.trainerCareer(g,null),null);
+ assert.equal(s.api.pokemonCareer(g,''),null);
+ assert.match(s.api.careerHTML(g,'pokemon','mon:first'),/새 담당자/);
+ assert.match(s.api.careerHTML(g,'trainer','trainer:one'),/올킬/);
+});
+test('career pages preserve historical club and trainer names after transfer or retirement',()=>{
+ const g=fixture(),s=setup(g),first=pokemonMatch();
+ s.api.capture(g,{season:1,result:first},realReport());
+ const snapshot=JSON.parse(JSON.stringify(g));
+ snapshot.clubs[0].name='이적 뒤 변경된 구단';
+ snapshot.clubs[0].trainers=[];
+ snapshot.club='이적 뒤 변경된 구단';
+ const r=setup(snapshot).api;
+ assert.equal(r.trainerCareer(snapshot,'trainer:one').rows[0].clubName,'내 구단');
+ assert.match(r.careerHTML(snapshot,'pokemon','mon:first'),/내 구단/);
+ assert.match(r.careerHTML(snapshot,'pokemon','mon:first'),/같은 이름/);
+ assert.match(r.careerHTML(snapshot,'trainer',null),/고유 ID가 없어/);
+});
+test('career markup safely escapes historical names and only shows recorded achievements',()=>{
+ const g=fixture(),s=setup(g);s.api.capture(g,{season:1,result:pokemonMatch()},realReport());
+ const p=s.api.season(g,1).matches[0].pokemon.find(entry=>entry.id==='mon:first');p.trainerName='<img onerror=evil()> ';
+ const page=s.api.careerHTML(g,'pokemon','mon:first','<script>alert(1)</script>');
+ assert.doesNotMatch(page,/<script>|<img/);
+ assert.match(page,/&lt;script&gt;/);assert.match(page,/&lt;img/);
+ assert.match(s.api.careerHTML(g,'trainer','missing'),/실제 출전 기록 없음/);
+});
+test('full-page career navigation supports returning to the records without opening a popup',()=>{
+ const g=fixture(),s=setup(g,true);s.api.capture(g,{season:1,result:pokemonMatch()},realReport());
+ s.api.showCareer('pokemon','mon:first');
+ assert.equal(s.context.tab,'career');
+ assert.match(s.html,/통산 실전 경력/);
+ assert.match(s.html,/data-tlm-career-back/);
+ assert.doesNotMatch(s.html,/role="dialog"/);
+});
