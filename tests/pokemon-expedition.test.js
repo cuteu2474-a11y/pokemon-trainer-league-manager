@@ -458,3 +458,25 @@ test('AI reserve trainers scout deterministically on the club budget and registe
   assert.equal(game.coins,userCoins);
   assert.ok(rival.identity.budget<=budget,'the AI never receives free scouting credits');
 });
+
+test('AI starters short of six Pokémon can scout for their own replacement instead of waiting for an empty bench',()=>{
+  const {api,game}=setup(),rival=game.clubs[1],t=rival.trainers[0];
+  t.pokemon.pop();
+  const previous=t.pokemon.slice(),userCoins=game.coins;
+  api.resolveAI();
+  const mission=t.pokemonScouting?.mission;
+  assert.equal(mission?.status,'travel');
+  const firstBudget=rival.identity.budget;
+  assert.equal(api.resolveAI().length,0,'only one recovery expedition per week');
+  for(let seed=1;seed<3000;seed++)if(api.outcome({...mission,seed},api.talent(t),1).status==='captured'){
+    mission.seed=seed;break;
+  }
+  game.week++;
+  const result=api.resolveAI().find(entry=>entry.trainer===t.name);
+  assert.equal(result?.status,'captured');
+  assert.equal(t.pokemon.length,6);
+  assert.equal(t.pokemon.every(p=>previous.includes(p)||p.source==='wild-scout'),true);
+  assert.equal(t.pokemonReserve.length,0);
+  assert.equal(game.coins,userCoins);
+  assert.equal(rival.identity.budget,firstBudget);
+});

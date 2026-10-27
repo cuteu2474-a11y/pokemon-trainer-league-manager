@@ -2283,3 +2283,12 @@
   script.async=false;
   document.body.append(script);
 })();
+
+/* Recover AI club vacancies without generating replacement Pokémon. */
+(function loadAIRosterRecovery(){
+  if(typeof document==='undefined'||!document.body?.append||window.AIRosterRecovery)return;
+  const script=document.createElement('script');
+  script.src='assets/ai-roster-recovery.js';
+  script.async=false;
+  document.body.append(script);
+})();

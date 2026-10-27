@@ -374,7 +374,7 @@
     }
     return item;
   }
-  /** AI clubs spend their own budgets and use reserve trainers, never match starters. */
+  /** AI clubs spend their own budgets and scout with reserve or currently ineligible trainers. */
   function resolveAI(){
     if(!game)return [];
     const clock=game.season+':'+game.week;
@@ -382,7 +382,9 @@
     const finished=[];
     for(const club of game.clubs){
       if(club.id===myClub().id)continue;
-      const staff=teamMembers(club).filter(entry=>entry.kind==='reserve');
+      // A starter missing Pokémon cannot enter an official match; let that
+      // trainer search for replacements instead of waiting for a bench opening.
+      const staff=teamMembers(club).filter(entry=>entry.kind==='reserve'||entry.trainer.pokemon.length<6);
       for(const {trainer} of staff){
         const report=resolveOne(trainer,false);
         if(!report)continue;
@@ -398,16 +400,18 @@
       const region=worldClubRegion(club);
       if(!Object.hasOwn(BIOMES,region)||!staff.length)continue;
       const h=hash([game.seed,clock,club.id,'AI-expedition'].join(':'));
-      if(h%3!==0)continue;
       const eligible=staff.filter(({trainer})=>{
         const s=talent(trainer),held=collection(trainer);
         return held.count<MAX_HELD&&!s.candidate&&s.mission?.status!=='travel'&&
           !(s.mission?.season===game.season&&s.mission?.week===game.week);
       });
       if(!eligible.length)continue;
+      const recovery=eligible.filter(({trainer})=>trainer.pokemon.length<6);
+      if(!recovery.length&&h%3!==0)continue;
       const wallet=typeof clubIdentity==='function'?clubIdentity(club):null;
       if(!wallet||!Number.isFinite(wallet.budget)||wallet.budget<BASE_COST)continue;
-      const trainer=eligible[h%eligible.length].trainer,s=talent(trainer);
+      const pool=recovery.length?recovery:eligible;
+      const trainer=pool[h%pool.length].trainer,s=talent(trainer);
       const habitat=Object.keys(HABITATS)[(h>>>8)%Object.keys(HABITATS).length];
       const time=Object.keys(TIMES)[(h>>>13)%Object.keys(TIMES).length];
       const focus=s.skill>=16?'rare':'balanced';

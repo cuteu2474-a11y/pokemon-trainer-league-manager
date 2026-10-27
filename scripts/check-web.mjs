@@ -19,7 +19,7 @@ for (const asset of assets) {
 }
 for (const path of ['src/battle/showdown.js', 'src/battle/club-match.js', 'src/league/season.js',
   'src/scouting/opponent-report.js', 'api/opponent-scout.js',
-  'assets/opponent-scout-ui.js', 'assets/pokemon-expedition.js','assets/pokemon-career-roster.js','assets/management-ui.js','assets/match-feedback.js','assets/finance-ui.js','src/finance/club-finance.js','assets/match-registration-ui.js','src/core/match-registration.js','src/core/league-rules.js','src/battle/relay-state.js','src/battle/enhancement.js','src/core/team-specialty.js','src/battle/team-specialty.js','src/core/standings.js','src/league/web-standings.js','assets/league-ui.js','assets/condition-ui.js','src/core/squad-condition.js']) {
+  'assets/opponent-scout-ui.js', 'assets/pokemon-expedition.js','assets/pokemon-career-roster.js','assets/ai-roster-recovery.js','assets/management-ui.js','assets/match-feedback.js','assets/finance-ui.js','src/finance/club-finance.js','assets/match-registration-ui.js','src/core/match-registration.js','src/core/league-rules.js','src/battle/relay-state.js','src/battle/enhancement.js','src/core/team-specialty.js','src/battle/team-specialty.js','src/core/standings.js','src/league/web-standings.js','assets/league-ui.js','assets/condition-ui.js','src/core/squad-condition.js']) {
   if (!existsSync(new URL(path, root))) throw new Error(`엔진 파일 누락: ${path}`);
   if (path.startsWith('assets/')&&path!=='assets/finance-ui.js'&&path!=='assets/match-registration-ui.js'&&path!=='assets/league-ui.js'&&path!=='assets/condition-ui.js')
     new Script(readFileSync(new URL(path,root),'utf8'),{filename:path});
