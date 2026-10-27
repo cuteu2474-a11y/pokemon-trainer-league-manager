@@ -2310,3 +2310,12 @@
   script.async=false;
   document.body.append(script);
 })();
+
+/* Readable archive of saved league seasons and actual player appearances. */
+(function loadSeasonRecords(){
+  if(typeof document==='undefined'||!document.body?.append||window.SeasonRecords)return;
+  const script=document.createElement('script');
+  script.src='assets/season-records.js';
+  script.async=false;
+  document.body.append(script);
+})();
