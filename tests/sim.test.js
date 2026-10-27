@@ -17,8 +17,8 @@ test('6v6 Showdown uses individual CA, never an old level or aggregate budget',
     const r=await simulateSixVsSix(team(20,1),team(160,100),{seed:[1,2,3,4]});
     assert.match(r.log,/\|turn\|/);
     assert.equal(r.initialStats.p1[0].hp,144);
-    assert.equal(r.initialStats.p1[0].spa,104);
-    assert.equal(r.initialStats.p2[0].spa,202);
+    assert.equal(r.initialStats.p1[0].spa,109); // Six Psychic types: floor(104 × 1.05).
+    assert.equal(r.initialStats.p2[0].spa,212);
     assert.ok(r.initialStats.p2[0].spe>r.initialStats.p1[0].spe);
     assert.equal(LEVEL_FREE_DAMAGE_FACTOR,28);
     assert.equal(LEVEL_FREE_FIXED_DAMAGE,50);

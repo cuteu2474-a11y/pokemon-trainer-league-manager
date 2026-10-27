@@ -1,3 +1,4 @@
+import {specialtyStats} from '../core/team-specialty.js';
 import {STATS} from '../core/stats.js';
 import {calculateLevelFreeStats, normalizeStatPairs} from '../core/stat-potential.js';
 
@@ -5,7 +6,7 @@ import {calculateLevelFreeStats, normalizeStatPairs} from '../core/stat-potentia
 export function convertPokemon(pokemon, speciesData) {
   if (!pokemon || !speciesData?.baseStats) throw new TypeError('Pokemon and species baseStats required');
   const {statCA,statPA}=normalizeStatPairs(pokemon);
-  const stats=calculateLevelFreeStats(speciesData.baseStats,statCA,pokemon.natureModifiers||{});
+  const stats=specialtyStats(calculateLevelFreeStats(speciesData.baseStats,statCA,pokemon.natureModifiers||{}),pokemon.leagueSpecialty);
   if(speciesData.id==='shedinja'||speciesData.name==='Shedinja')stats.hp=1;
   return {id:pokemon.id,species:speciesData.name??pokemon.species,statCA,statPA,stats};
 }

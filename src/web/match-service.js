@@ -1,3 +1,4 @@
+import {teamSpecialty} from '../battle/team-specialty.js';
 import {enhancementPlan,automaticEnhancement} from '../battle/enhancement.js';
 import {LEAGUE_RULES} from '../core/league-rules.js';
 import {validateRequest} from '../core/match-registration.js';
@@ -42,7 +43,7 @@ export function prepareClub(club, order) {
     const counts=team.reduce((map,mon)=>(map[mon.name]=(map[mon.name]||0)+1,map),{});
     team.forEach((mon,slot)=>{mon.pokemonId ??= String(club.id)+':'+String(trainer.uid??i)+':'+slot;mon.displayName=mon.name;if(counts[mon.name]>1)mon.name=mon.name+'·'+(slot+1);});
     const enhancement=trainer.enhancement===undefined?automaticEnhancement(team):enhancementPlan(team,trainer.enhancement);
-    return {enhancement,name:trainer.name,tactics:trainer.tactics,switching:trainer.switching,
+    return {specialty:teamSpecialty(team),enhancement,name:trainer.name,tactics:trainer.tactics,switching:trainer.switching,
       battleAnalysis:trainer.battleAnalysis??trainer.analysis,
       resourceManagement:trainer.resourceManagement??trainer.management,
       moveJudgment:trainer.moveJudgment,switchJudgment:trainer.switchJudgment,
@@ -78,5 +79,5 @@ export async function runMatch(body) {
     coaching:Object.fromEntries([['home',home],['away',away]].map(([side,group])=>[side,group.map(t=>({name:t.name,
       ...t.aiProfile,plan:t.battlePlan}))])), home:body.home.id, away:body.away.id, aScore:result.trainersDefeated.B, bScore:result.trainersDefeated.A,
     teams:{home,away}, rounds:result.rounds.map(r => ({trainerA:r.trainerA, trainerB:r.trainerB, winner:r.winner,exhausted:r.exhausted||null,endReason:r.result.endReason,turns:r.result.turns,turnLimit:r.result.turnLimit,rulesVersion:r.result.rulesVersion,aiDecisions:r.result.aiDecisions,
-      enhancements:r.result.enhancements,initialEnhancements:r.result.initialEnhancements,final:r.result.finalState, initial:Object.fromEntries(['p1','p2'].map(side=>[side,r.result.initialStats[side].map((state,i)=>({name:r.pokemonOrder[side][i],hp:state.hp,maxhp:state.maxhp,status:state.status,statusData:state.statusData,item:state.item,lastItem:state.lastItem,form:state.form,protectionBusted:state.protectionBusted,pokemonId:state.pokemonId,pp:state.pp,maxpp:state.maxpp}))])), log:r.result.log}))};
+      specialties:r.result.specialties,enhancements:r.result.enhancements,initialEnhancements:r.result.initialEnhancements,final:r.result.finalState, initial:Object.fromEntries(['p1','p2'].map(side=>[side,r.result.initialStats[side].map((state,i)=>({name:r.pokemonOrder[side][i],hp:state.hp,maxhp:state.maxhp,status:state.status,statusData:state.statusData,item:state.item,lastItem:state.lastItem,form:state.form,protectionBusted:state.protectionBusted,pokemonId:state.pokemonId,pp:state.pp,maxpp:state.maxpp}))])), log:r.result.log}))};
 }

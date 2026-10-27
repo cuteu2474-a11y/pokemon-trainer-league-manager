@@ -1,6 +1,6 @@
 /** Implemented rules only. Remaining league-v1 features stay in DEVELOPMENT_TODO. */
 export const LEAGUE_RULES=Object.freeze({
- version:'relay-enhancement-v3-20261027',maxTurns:300,maxDuels:9,relayRecovery:0.1,
+ version:'relay-specialty-v4-20261027',maxTurns:300,maxDuels:9,relayRecovery:0.1,
  draw:'both-eliminated',points:Object.freeze({win:3,draw:1,loss:0}),
  descriptions:Object.freeze([
   '주자 대결은 최대 300턴입니다. 마지막 턴을 모두 마치면 양쪽 주자가 탈락합니다.',
@@ -9,6 +9,7 @@ export const LEAGUE_RULES=Object.freeze({
   '승자는 기절·HP·PP·일반 상태·남은 수면·현재 도구를 이어받습니다. 생존 포켓몬만 최대 HP의 10%를 회복합니다.',
   '맹독 단계·능력치 랭크·날씨·설치기·대타출동·일시 변신은 새 대결에서 초기화합니다. 소모된 탈·아이스페이스는 원본 복원 조건을 따라 유지합니다.',
   '메가진화·Z기술·다이맥스·테라스탈은 등록한 방식·대상으로 주자당 단체전 전체 1회입니다. 다이맥스는 대결이 끝나면 해제하고, 생존 메가·테라는 이어집니다.',
+  '원래 등록한 6마리가 같은 타입을 공유하면 공격·방어·특공·특방에 5%를 한 번 적용합니다. HP·스피드는 바뀌지 않고, 변신은 상대의 실제 스탯을 그대로 복사합니다.',
   '통신·계산 실패는 패배가 아닙니다. 같은 확정 선수단과 시드로 재시도합니다.'
  ])
 });

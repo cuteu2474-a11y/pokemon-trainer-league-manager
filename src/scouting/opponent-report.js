@@ -1,3 +1,4 @@
+import {teamSpecialty} from '../battle/team-specialty.js';
 import {readFileSync} from 'node:fs';
 import {Dex} from '@pkmn/sim';
 import {meanStatCA} from '../core/stat-potential.js';
@@ -52,7 +53,7 @@ function profile(trainer,index){
     switch:traits.includes('적극적인 교체')||traits.includes('상성 교체 전문가'),
     preserve:traits.includes('에이스 보존')||traits.includes('PP 관리자')
   };
-  return {index,name:String(trainer.name||'트레이너 '+(index+1)),skills,team,
+  return {specialty:teamSpecialty(team),index,name:String(trainer.name||'트레이너 '+(index+1)),skills,team,
     traits,play,types:byType,patterns,averagePower:Math.round(team.reduce((s,m)=>s+m.strength,0)/6),
 
     knownMoveCount:team.reduce((n,m)=>n+m.knownMoves.length+m.statusMoves.length,0)};
@@ -200,14 +201,14 @@ export function analyzeOpponent({home,away,playerClubId,season=1,round=1}={}){
     switch:theirs.filter(x=>x.patterns.switch).length,
     preserve:theirs.filter(x=>x.patterns.preserve).length
   };
-  return {engine:'showdown-scout',season,round,playerClubId:own.id,
+  return {engine:'showdown-scout',specialtySchema:1,season,round,playerClubId:own.id,
     opponentId:rival.id,opponentName:rival.name,
     opponents:theirs.map(({index,name,skills,traits,play,types,patterns,
-      averagePower,team})=>({index,name,skills,traits,play,types,
+      averagePower,team,specialty})=>({specialty,index,name,skills,traits,play,types,
       patterns,averagePower,
       // Existing public rosters are visible, but exact unknown moves are not invented.
       pokemon:team.map(({name,types,movesKnown})=>({name,types,movesKnown}))})),
-    ownTrainers:ours.map(t=>({index:t.index,name:t.name,traits:t.traits,play:t.play})),
+    ownTrainers:ours.map(t=>({index:t.index,name:t.name,traits:t.traits,play:t.play,specialty:t.specialty})),
     typeDistribution:types,tendency,matrix,recommendedOrder,matches,
     note:'실제 대전 결과나 확정 승률이 아니라 현재 공개된 포켓몬과 전술 성향에 따른 비교 분석입니다. KOF 연승전에서는 추천된 순서대로 1:1 대결이 일어나는 것은 아닙니다.'};
 }

@@ -84,6 +84,8 @@ test('a last-Pokémon self-KO keeps the engine ruling and does not hang on faint
 
 test('a winning trainer with no survivors exits before another duel without replacing the engine winner',async()=>{
  const a=Array.from({length:5},()=>({team:team('Electrode',['explosion'])})),b=Array.from({length:5},()=>({team:team('Magikarp',['splash'])}));
+ // Guarantee a self-KO double knockout, independently of small stat-rule rounding changes.
+ for(const trainer of b)for(const mon of trainer.team)mon.statCA.hp=1;
  const r=await simulateClubMatch(a,b,{seed:[1,2,3,4]});
  assert.ok(r.rounds.length<=9);assert.ok(r.rounds.some(round=>round.exhausted));
  for(const round of r.rounds){const actual=round.result.winner==='Club A'?'A':round.result.winner==='Club B'?'B':'tie';assert.equal(round.winner,actual);}

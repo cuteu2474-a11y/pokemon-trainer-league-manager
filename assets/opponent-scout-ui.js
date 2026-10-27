@@ -19,7 +19,7 @@
   const repaint=()=>window.MatchdayPreparation?.render?.();
   function valid(p,opponent){
     const r=p?.scoutReport;
-    return r?.engine==='showdown-scout'&&r.opponentId===opponent.id&&
+    return r?.engine==='showdown-scout'&&r.specialtySchema===1&&r.opponentId===opponent.id&&
       r.round===p.round&&r.season===p.season&&
       Array.isArray(r.matches)&&r.matches.length===5&&
       Array.isArray(r.recommendedOrder)&&r.recommendedOrder.length===5;
@@ -42,9 +42,11 @@
       '<th>상대 예상 순서</th><th>추천 트레이너</th><th>추천 행동</th><th>개별 적용</th>'+
       '</tr></thead><tbody>'+rows+'</tbody></table></div>';
   }
+  function specialtyText(value){return value?.active?'전문 편성 '+value.types.map(type=>typeNames[type]||type).join('/')+' · 공격·방어·특공·특방 +5% (1회)':'혼합 편성 · 전문 보너스 없음';}
   function detailHTML(report){
     return report.opponents.map(t=>'<div class="md-scout-trainer">'+
       '<strong>'+safe((t.index+1)+'. '+t.name)+'</strong>'+
+      '<p>'+safe(specialtyText(t.specialty))+'</p>'+
       '<p>성향 '+safe(planLabels[t.play]||t.play)+
       ' · 평균 전력 '+safe(t.averagePower)+
       ' · 선플 '+(t.traits?.length?t.traits.map(safe).join(', '):'현재 확인된 선플 없음')+'</p>'+
@@ -69,6 +71,7 @@
       '<p>주요 타입 '+types+'</p><p>공격 지향 '+(t.offense??0)+
       '명 · 견제 성향 '+(t.status??0)+'명 · 교체 성향 '+(t.switch??0)+'명</p>'+
       '</div><button type="button" id="md-scout-request"'+disabled+'>다시 분석</button></div>'+
+      '<details class="md-scout-info"><summary>우리 팀 전문 편성 확인</summary>'+report.ownTrainers.map(t=>'<p>'+safe(t.name)+' · '+safe(specialtyText(t.specialty))+'</p>').join('')+'<p>현재 분석 시점의 편성입니다. 선수단이 바뀌면 다시 분석해 주세요. 출전 확정 명단을 기준으로 실제 보너스를 계산합니다.</p></details>'+
       '<details class="md-scout-info" open><summary>추천 출전 순서와 맞춤형 전술 지시</summary>'+
       '<div class="md-scout-actions"><button type="button" id="md-scout-order"'+disabled+
       '>추천 순서만 적용</button><button type="button" id="md-scout-all"'+disabled+

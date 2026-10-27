@@ -35,7 +35,7 @@ export async function simulateSixVsSix(teamA, teamB, {formatid = 'gen9customgame
     endTemporaryEnhancement(stream.battle);
     log+='\n'+stream.battle.log.slice(cleanupStart).join('\n');
     const finalState=Object.fromEntries(['p1','p2'].map(key=>[key,(stream.originalPokemon?.[key]||stream.battle[key].pokemon).map(mon=>captureRelayState(mon,mon.leagueMeta))]));
-    return {winner, log,rulesVersion:LEAGUE_RULES.version,endReason:stream.battle.leagueEndReason||(winner==='tie'?'engine-tie':'engine-win'),turns:stream.battle.turn,turnLimit:maxTurns, initialEnhancements:stream.initialEnhancements,enhancements:structuredClone(stream.battle.leagueEnhancements),initialStats: stream.initialStats, finalState, aiDecisions:{p1:p1.decisions,p2:p2.decisions}, formEvents: [...stream.formEvents]};
+    return {winner, log,specialties:Object.fromEntries(['p1','p2'].map((side,i)=>[side,stream.specialties[i]])),rulesVersion:LEAGUE_RULES.version,endReason:stream.battle.leagueEndReason||(winner==='tie'?'engine-tie':'engine-win'),turns:stream.battle.turn,turnLimit:maxTurns, initialEnhancements:stream.initialEnhancements,enhancements:structuredClone(stream.battle.leagueEnhancements),initialStats: stream.initialStats, finalState, aiDecisions:{p1:p1.decisions,p2:p2.decisions}, formEvents: [...stream.formEvents]};
   } finally {
     await stream.writeEnd();
     await Promise.allSettled(tasks);

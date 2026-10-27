@@ -1,3 +1,4 @@
+import {teamSpecialty} from './team-specialty.js';
 import {initialEnhancement,installEnhancementRules} from './enhancement.js';
 import {installLeagueRules} from '../core/league-rules.js';
 import {captureRelayState,restoreRelayState} from './relay-state.js';
@@ -18,7 +19,7 @@ export function packGPTeam(team) {
       throw new TypeError(`Invalid species or moves at slot ${i}`);
     }
     normalizeStatPairs(entry);
-    const {statCA,statPA,ca,pa,gp,level,power,natureModifiers,...showdownSet}=entry;
+    const {statCA,statPA,ca,pa,gp,level,power,natureModifiers,leagueSpecialty,...showdownSet}=entry;
     // The upstream simulator may internally default a protocol level, but our
     // battle damage, confusion, and fixed-damage moves never use that field.
     return {...showdownSet,ivs:{...neutralIVs},evs:{...zeroEVs}};
@@ -57,7 +58,11 @@ export function installFormHooks(battle, teams=null, formEvents = []) {
       const meta={...input,natureModifiers:natureModifiers(battle.dex,input.nature)};mon.leagueMeta=meta;
       Object.defineProperty(mon,'__leagueFormHook',{value:true});
       const originalSetSpecies = mon.setSpecies;
-      mon.updateMaxHp=function(){return applyFormChange(this,meta,this.species);};
+      mon.updateMaxHp=function(){
+        // Transform retains its own HP and copies target stats verbatim.
+        if(this.transformed)return {stats:{hp:this.baseMaxhp,...this.storedStats}};
+        return applyFormChange(this,meta,this.species);
+      };
       mon.setSpecies = function (...args) {
         const prior = {hp: this.hp, maxhp: this.maxhp, speciesId: this.species.id};
         const result = originalSetSpecies.apply(this, args);
@@ -78,7 +83,8 @@ export function installFormHooks(battle, teams=null, formEvents = []) {
 export class GPBattleStream extends BattleStreams.BattleStream {
   constructor(teamA, teamB, carry = {}, options = {}) {
     super({noCatch: true});
-    this.gpTeams = [teamA, teamB];
+    this.specialties=[teamA,teamB].map(team=>teamSpecialty(team));
+    this.gpTeams = [teamA, teamB].map((team,i)=>team.map(mon=>({...mon,leagueSpecialty:this.specialties[i]})));
     this.carry = carry;this.options=options;
     this.initialStats = null;
     this.formEvents = [];
