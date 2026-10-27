@@ -1,6 +1,6 @@
 /** Implemented rules only. Remaining league-v1 features stay in DEVELOPMENT_TODO. */
 export const LEAGUE_RULES=Object.freeze({
- version:'relay-specialty-v4-20261027',maxTurns:300,maxDuels:9,relayRecovery:0.1,
+ version:'relay-condition-v5-20261027',maxTurns:300,maxDuels:9,relayRecovery:0.1,
  draw:'both-eliminated',points:Object.freeze({win:3,draw:1,loss:0}),
  descriptions:Object.freeze([
   '주자 대결은 최대 300턴입니다. 마지막 턴을 모두 마치면 양쪽 주자가 탈락합니다.',

@@ -272,6 +272,7 @@
     const record=findTrainer(trainerKey);
     if(!record)return {ok:false,error:'해당 트레이너가 현재 구단에 없습니다.'};
     if(window.MatchRegistration?.locked(myClub().id))return {ok:false,error:'경기 결과 확인 후 변경할 수 있습니다.'};
+    const allowed=window.SquadCondition?.canDispatch(record.trainer,record.kind);if(allowed&&!allowed.ok)return allowed;
     const t=record.trainer,s=talent(t),due=cost(region);
     if(s.candidate)return {ok:false,error:'이미 포획한 후보가 있습니다. 먼저 등록하거나 보내 주세요.'};
     if(s.mission?.status==='travel')return {ok:false,error:'이미 해당 트레이너가 탐색 중입니다.'};

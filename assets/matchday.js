@@ -81,7 +81,7 @@
     const c=myClub(), opponent=game.clubs[p.home === c.id ? p.away : p.home];
     const root=screen(), busy=['research','running'].includes(p.phase),frozen=!!p.frozen;
     root.innerHTML=`<div class="md-muted">${p.week}주차 · 리그 ${p.round}라운드</div><h1>${esc(c.name)} vs ${esc(opponent.name)}</h1><div class="md-top"><strong>경기 전 미팅 · 출전 순서와 플레이 방식 권고</strong><span>구단 피로 ${c.fatigue??0}/100 · 사기 ${c.morale??50}/100</span></div><p class="md-muted">감독의 제안은 명령이 아닙니다. 트레이너가 수용·절충·거부하며, 실제 경기에서 좋은 결과를 경험한 행동은 다음 경기의 자율 선택에도 영향을 줍니다.</p>`+
-      p.order.map((index,slot)=>{const t=c.trainers[index];return `<div class="md-row"><div><strong>${slot+1}. ${esc(t?.name||'출전 불가')}</strong><small>개별 컨디션 미측정 · 전술 분석 ${t?.tactics??'—'} · 교체 판단 ${t?.switching??'—'}<br>${(t?.pokemon||[]).map(mon=>esc(mon.name)).join(' · ')}</small>${enhancementControls(p,t,index,busy||frozen)}</div><div><div class="md-meeting-controls"><select data-plan="${index}" aria-label="${esc(t?.name)} 전술 방향" ${busy||frozen?'disabled':''}><option value="" ${!p.plans[index]?'selected':''}>전술 방향: AI 자율</option>${Object.entries(planLabels).map(([key,label])=>`<option value="${key}" ${p.plans[index]===key?'selected':''}>${label}</option>`).join('')}</select><select data-behavior="${index}" aria-label="${esc(t?.name)} 플레이 방식 권고" ${busy||frozen?'disabled':''}><option value="" ${!p.behaviors[index]?'selected':''}>플레이 방식: 권고 없음</option>${Object.entries(behaviorLabels).map(([key,label])=>`<option value="${key}" ${p.behaviors[index]===key?'selected':''}>${label}</option>`).join('')}</select></div> <button data-up="${slot}" aria-label="${slot+1}번 트레이너 위로" ${busy||frozen||slot===0?'disabled':''}>↑</button> <button data-down="${slot}" aria-label="${slot+1}번 트레이너 아래로" ${busy||frozen||slot===4?'disabled':''}>↓</button></div></div>`}).join('')+
+      p.order.map((index,slot)=>{const t=c.trainers[index];return `<div class="md-row"><div><strong>${slot+1}. ${esc(t?.name||'출전 불가')}</strong><small>${esc(window.SquadCondition?.description(t,{season:p.season,week:p.week})||'컨디션 확인 중')} · 전술 분석 ${t?.tactics??'—'} · 교체 판단 ${t?.switching??'—'}<br>${(t?.pokemon||[]).map(mon=>esc(mon.name)+' (컨디션 '+(window.SquadCondition?.fitness(mon,t,{season:p.season,week:p.week})??(100-(Number(mon.fatigue)||0)))+')').join(' · ')}</small>${enhancementControls(p,t,index,busy||frozen)}</div><div><div class="md-meeting-controls"><select data-plan="${index}" aria-label="${esc(t?.name)} 전술 방향" ${busy||frozen?'disabled':''}><option value="" ${!p.plans[index]?'selected':''}>전술 방향: AI 자율</option>${Object.entries(planLabels).map(([key,label])=>`<option value="${key}" ${p.plans[index]===key?'selected':''}>${label}</option>`).join('')}</select><select data-behavior="${index}" aria-label="${esc(t?.name)} 플레이 방식 권고" ${busy||frozen?'disabled':''}><option value="" ${!p.behaviors[index]?'selected':''}>플레이 방식: 권고 없음</option>${Object.entries(behaviorLabels).map(([key,label])=>`<option value="${key}" ${p.behaviors[index]===key?'selected':''}>${label}</option>`).join('')}</select></div> <button data-up="${slot}" aria-label="${slot+1}번 트레이너 위로" ${busy||frozen||slot===0?'disabled':''}>↑</button> <button data-down="${slot}" aria-label="${slot+1}번 트레이너 아래로" ${busy||frozen||slot===4?'disabled':''}>↓</button></div></div>`}).join('')+
       '<details class="md-report"><summary>대회 규정</summary>'+((window.MatchRegistration?.rules?.descriptions||[]).map(text=>'<p class="md-muted">'+esc(text)+'</p>').join(''))+'</details>'+
       '<p class="md-muted">이미 등록된 기술과 능력치는 변경하지 않습니다. 권고가 효과적이었다고 확인된 경기만 트레이너의 플레이 성향 학습에 반영됩니다.</p>'+
       `<p class="md-muted">원래 출전 6마리가 같은 타입을 공유하면 공격·방어·특공·특방이 5% 올라갑니다. HP·스피드는 그대로이며, 복합 타입도 한 번만 적용합니다.</p><p class="md-muted">강화는 주자당 단체전 전체 1회입니다. 메가는 맞는 메가스톤, Z기술은 맞는 크리스탈·기술이 필요합니다. 테라는 등록 타입(미지정 시 기본 타입)을 사용하며, 대상이 기절해도 변경할 수 없습니다. 사용 시점은 트레이너가 결정합니다.</p><div class="md-error" role="alert">${esc(p.error)}</div>${frozen?'<p class="md-muted">출전 선수단 확정 · 기술·능력치·난수 시드 고정</p><button id="md-unlock" '+(busy?'disabled':'')+'>확정 해제 · 다시 준비</button>':''}<div class="md-actions"><button id="md-cancel" ${busy?'disabled':''}>${frozen?'확정 유지 · 구단 화면으로':'구단 화면으로'}</button><button id="md-confirm" class="primary" ${busy?'disabled':''}>${busy?'경기 준비·계산 중…':frozen?'같은 선수단으로 재시도':'출전 순서 확정 · 경기 시작'}</button></div>`;
@@ -109,7 +109,7 @@
         p.phase='research';delete p.error;persist();render();
         if(window.TrainerMoveAI&&!await window.TrainerMoveAI.queue()&&game.trainerAI?.movesProcessedWeek!==p.season+':'+game.week)throw Error('이번 주 기술 연구를 완료한 뒤 경기를 시작해 주세요.');
         if(game!==g||pending()!==p)throw Error('준비 중인 경기가 변경됐습니다.');
-        window.PokemonAbilities?.ensureAll();MatchRegistration.ensureRosterIds(game);
+        window.PokemonExpedition?.resolvePlayer();window.PokemonAbilities?.ensureAll();MatchRegistration.ensureRosterIds(game);
         const order=[...p.order],mine=myClub().id,identity=[0,1,2,3,4];
         const request={home:copy(game.clubs[p.home]),away:copy(game.clubs[p.away]),homeOrder:p.home===mine?order:identity,awayOrder:p.away===mine?order:identity,seed:[game.seed>>>0,p.season,p.round,7919]};
         request[p.home===mine?'home':'away'].trainers.forEach((t,i)=>{
@@ -118,6 +118,7 @@
           const tid=window.TrainerCareer?.trainerId?.(t,mine,i)??String(t.uid);
           t.directorTrust=game.trainerAI?.trust?.[tid]??50;
         });
+        window.SquadCondition?.project(request,{season:p.season,week:p.week});
         const live=MatchRegistration.lineupState(game,p);
         p.frozen=await MatchRegistration.freezeMatch(request,p,live);
         if(game!==g||pending()!==p)throw Error('준비 중인 경기가 변경됐습니다.');
@@ -1057,7 +1058,7 @@
     const seed=String(period)+':'+identifier(trainer,clubId,index);
     // Trainers allocate a limited three-pokemon session, not direct 6-pokemon manager upgrades.
     const candidates=roster.map((mon,i)=>({mon,i,ca:mon?.statCA?STATS.reduce((v,k)=>v+mon.statCA[k],0)/6:number(mon?.ca??mon?.power),pa:mon?.statPA?STATS.reduce((v,k)=>v+mon.statPA[k],0)/6:number(mon?.pa??mon?.potential)}))
-      .filter(x=>x.ca!==null&&x.pa!==null&&x.ca<x.pa)
+      .filter(x=>x.ca!==null&&x.pa!==null&&x.ca<x.pa&&!(window.SquadCondition?.resting(x.mon)))
       .sort((a,b)=>{
         if(traits.style==='balanced')return (a.ca/a.pa)-(b.ca/b.pa)||a.i-b.i;
         if(traits.style==='physical'||traits.style==='special')return b.ca-a.ca||a.i-b.i;
@@ -1069,6 +1070,7 @@
       const outcome=trainMon(slot.mon,focus,trainer,seed+':'+slot.i);
       if(outcome)changes.push(outcome);
     }
+    window.SquadCondition?.trainingLoad(trainer,candidates.map(x=>x.mon),period);
     return {id:identifier(trainer,clubId,index),name:trainer.name||'트레이너',skill:teachingSkill(trainer),
       profile:{...traits},decision:decision.decision,focus:decision.focus,reason:decision.reason,
       offered:request?.focus||null,trained:candidates.length,changes};
@@ -1085,7 +1087,7 @@
       const clubId=String(club.id??clubIndex),mine=clubId===String(playerId);
       const group=(club.trainers||[]).concat(club.reserveTrainers||[]);
       for(let i=0;i<group.length;i++){
-        const trainer=group[i];if(!trainer)continue;
+        const trainer=group[i];if(!trainer||window.SquadCondition?.away(trainer,previous)||window.SquadCondition?.resting(trainer))continue;
         const id=identifier(trainer,clubId,i);
         const request=mine&&state.advice[id]?.issuedAt===previous?state.advice[id]:null;
         const trust=state.trust[id]??50;
@@ -1280,7 +1282,7 @@
       if(!c)return [];
       const cid=String(c.id??ci),isMine=cid===String(mine.id);
       return (c.trainers||[]).concat(c.reserveTrainers||[]).flatMap((t,i)=>{
-        if(!t)return [];
+        if(!t||window.SquadCondition?.away(t))return [];
         const id=ident(t,cid,i),offer=isMine&&s.moveAdvice[id]?.issuedAt===s.movePriorWeek?s.moveAdvice[id]:null;
         const trust=s.trust[id]??50,choice=judgement(t,cid,i,offer,trust);
         const pokemon=(t.pokemon||[]).slice(0,6).map(mon=>({name:mon.name||mon.species,species:mon.species,
@@ -1296,7 +1298,7 @@
     const s=state(),contexts=new Map(rows.map(x=>[x.input.key,x.context]));
     const report={week:current,initialised:0,learned:0,accepted:0,compromised:0,refused:0,trainers:[]};
     for(const entry of payload.results||[]){
-      const ctx=contexts.get(entry.key);if(!ctx)continue;
+      const ctx=contexts.get(entry.key);if(!ctx||window.SquadCondition?.away(ctx.trainer))continue;
       const validSlots=new Set();
       for(const item of entry.updates||[]){
         const slot=Number(item.slot),snapshot=ctx.snapshots[slot],mon=ctx.trainer.pokemon?.[slot];
@@ -1335,7 +1337,7 @@
     if(pending?.week===current)return pending.promise;
     if((s.moveAttempts[current]||0)>=2)return Promise.resolve(false);
     const data=roster();
-    if(!data.length)return;
+    if(!data.length){s.movesProcessedWeek=current;if(typeof persist==='function')persist();return Promise.resolve(true);}
     s.moveAttempts[current]=(s.moveAttempts[current]||0)+1;
     const target=game;pending={week:current};
     const job=fetch('/api/trainer-moves',{method:'POST',headers:{'Content-Type':'application/json'},

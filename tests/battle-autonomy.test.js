@@ -107,8 +107,8 @@ test('actual Showdown turn policy records analysis and choice reasons without ch
   });
 test('match UI uses recommendations, not mandatory battlePlan overrides',()=>{
   const html=readFileSync(new URL('../assets/matchday.js',import.meta.url),'utf8');
-  assert.match(html,/trainer\.directorAdvice=p\.plans/);
-  assert.match(html,/trainer\.directorTrust=game\.trainerAI/);
+  assert.match(html,/(?:trainer|t)\.directorAdvice=p\.plans/);
+  assert.match(html,/(?:trainer|t)\.directorTrust=game\.trainerAI/);
   assert.match(html,/감독 권고 및 트레이너 AI 판단/);
-  assert.doesNotMatch(html,/trainer\.battlePlan=p\.plans/);
+  assert.doesNotMatch(html,/(?:trainer|t)\.battlePlan=p\.plans/);
 });

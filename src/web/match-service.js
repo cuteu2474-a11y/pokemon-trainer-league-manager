@@ -1,3 +1,4 @@
+import {awayAt,condition,conditionedTrainer,fatigue} from '../core/squad-condition.js';
 import {teamSpecialty} from '../battle/team-specialty.js';
 import {enhancementPlan,automaticEnhancement} from '../battle/enhancement.js';
 import {LEAGUE_RULES} from '../core/league-rules.js';
@@ -30,23 +31,24 @@ export function battlePokemon(p, plan='balanced') {
   if (!Dex.abilities.get(ability).exists) throw new RangeError('특성 데이터 오류');
   if (p.item && !Dex.items.get(p.item).exists) throw new RangeError('도구 데이터 오류');
   return {name:p.name,pokemonId:p.uid??p.id,ownerTrainerId:p.ownerTrainerId,species:species.name,statCA,statPA,
-    teraType:p.teraType,nature:p.nature||'Hardy',ability,item:p.item||'',moves};
+    fatigue:fatigue(p),teraType:p.teraType,nature:p.nature||'Hardy',ability,item:p.item||'',moves};
 }
-export function prepareClub(club, order) {
+export function prepareClub(club, order,at) {
   if (!club || !Array.isArray(club.trainers) || club.trainers.length !== 5 || club.trainers.some(t => !t || !Array.isArray(t.pokemon) || t.pokemon.length !== 6)) throw new RangeError('트레이너 5명과 각 포켓몬 6마리가 필요합니다.');
   if (!Array.isArray(order) || order.length !== 5 || new Set(order).size !== 5 || order.some(i => !Number.isInteger(i) || i < 0 || i > 4)) throw new RangeError('출전 순서 오류');
   return order.map(i => {
     const trainer=club.trainers[i];
-    const aiProfile=resolveBattleAutonomy(trainer,trainer.directorTrust??50);
+    if(awayAt(trainer,at))throw Error(trainer.name+'은 경기 주차에 파견 중입니다.');
+    const effective=conditionedTrainer(trainer),aiProfile=resolveBattleAutonomy(effective,trainer.directorTrust??50);
     const plan=aiProfile.plan;
     const team=trainer.pokemon.map(p=>battlePokemon(p,plan));
     const counts=team.reduce((map,mon)=>(map[mon.name]=(map[mon.name]||0)+1,map),{});
     team.forEach((mon,slot)=>{mon.pokemonId ??= String(club.id)+':'+String(trainer.uid??i)+':'+slot;mon.displayName=mon.name;if(counts[mon.name]>1)mon.name=mon.name+'·'+(slot+1);});
     const enhancement=trainer.enhancement===undefined?automaticEnhancement(team):enhancementPlan(team,trainer.enhancement);
-    return {specialty:teamSpecialty(team),enhancement,name:trainer.name,tactics:trainer.tactics,switching:trainer.switching,
-      battleAnalysis:trainer.battleAnalysis??trainer.analysis,
+    return {uid:trainer.uid,condition:condition(trainer),specialty:teamSpecialty(team),enhancement,name:trainer.name,tactics:effective.tactics,switching:effective.switching,
+      battleAnalysis:effective.battleAnalysis,
       resourceManagement:trainer.resourceManagement??trainer.management,
-      moveJudgment:trainer.moveJudgment,switchJudgment:trainer.switchJudgment,
+      moveJudgment:effective.moveJudgment,switchJudgment:effective.switchJudgment,
       battlePlan:plan,aiProfile,team};
   });
 }
@@ -55,7 +57,7 @@ export async function runMatch(body) {
   if (!body || body.home?.id === body.away?.id) throw new RangeError('경기 상대 오류');
   const seed = body.seed;
   if (!Array.isArray(seed) || seed.length !== 4 || seed.some(n => !Number.isInteger(n) || n < 0 || n > 0xffffffff)) throw new RangeError('경기 시드 오류');
-  const home = prepareClub(body.home, body.homeOrder), away = prepareClub(body.away, body.awayOrder);
+  const home = prepareClub(body.home, body.homeOrder,registration), away = prepareClub(body.away, body.awayOrder,registration);
   const result = await simulateClubMatch(home, away, {seed});
   const visuals = {}, moveVisuals = {};
   const moveInfo=move=>({id:move.id,type:move.type,category:move.category,power:move.basePower,accuracy:move.accuracy,label:koreanMoves[move.id]||move.name});

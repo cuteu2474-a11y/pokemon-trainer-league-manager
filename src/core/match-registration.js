@@ -1,3 +1,4 @@
+import {awayAt} from './squad-condition.js';
 import {LEAGUE_RULES} from './league-rules.js';
 /** Shared browser/API contract for immutable official-match inputs. */
 export const RULES_VERSION=LEAGUE_RULES.version;
@@ -37,16 +38,17 @@ const keys=(obj,names)=>Object.fromEntries(names.filter(k=>obj[k]!==undefined).m
 export function lineupState(g,p){
  return {order:p.order,plans:p.plans,behaviors:p.behaviors,enhancements:p.enhancements,clubs:[p.home,p.away].map(id=>{
   const c=g.clubs.find(c=>String(c.id)===String(id));if(!c)throw Error('경기 구단이 없습니다.');
-  return {...keys(c,['id','fatigue','morale']),trainers:c.trainers.map(t=>t&&({...keys(t,['uid','id','name','tactics','switching','battleAnalysis','analysis','resourceManagement','management','moveJudgment','switchJudgment','autonomyAI','skills','preferredPlay','playStyle','preferredPlays','enhancement']),
-   pokemon:(t.pokemon||[]).map(mon=>keys(mon,['uid','ownerTrainerId','name','species','formId','statCA','statPA','power','ca','pa','potential','gp','nature','ability','item','moves','teraType']))}))};
+  return {...keys(c,['id','fatigue','morale']),trainers:c.trainers.map(t=>t&&({...keys(t,['uid','id','name','tactics','switching','battleAnalysis','analysis','resourceManagement','management','moveJudgment','switchJudgment','autonomyAI','skills','preferredPlay','playStyle','preferredPlays','enhancement','fatigue','pokemonScouting']),
+   pokemon:(t.pokemon||[]).map(mon=>keys(mon,['uid','ownerTrainerId','name','species','formId','statCA','statPA','power','ca','pa','potential','gp','nature','ability','item','moves','teraType','fatigue']))}))};
  })};
 }
-export function validateRoster(request){
+export function validateRoster(request,at){
  const ids=new Set(),pokemonIds=new Set();
  for(const c of [request.home,request.away]){
   if(c?.trainers?.length!==5)throw Error('트레이너 5명의 출전 명단이 필요합니다.');
   for(const t of c.trainers){
    if(!t||!Number.isInteger(t.uid)||ids.has(String(t.uid)))throw Error('트레이너 출전 ID가 올바르지 않습니다.');ids.add(String(t.uid));
+   if(awayAt(t,at))throw Error(t.name+'은 경기 주차에 파견 중이라 출전할 수 없습니다.');
    if(t.pokemon?.length!==6)throw Error('출전 포켓몬은 트레이너당 6마리입니다.');
    for(const mon of t.pokemon){
     if(mon.uid===undefined||mon.uid===null||pokemonIds.has(String(mon.uid)))throw Error('포켓몬 출전 ID가 올바르지 않습니다.');pokemonIds.add(String(mon.uid));
@@ -58,7 +60,7 @@ export function validateRoster(request){
  if(!Array.isArray(request.seed)||request.seed.length!==4||request.seed.some(n=>!Number.isInteger(n)||n<0||n>0xffffffff))throw Error('경기 시드가 올바르지 않습니다.');
 }
 export async function freezeMatch(request,p,live){
- const snapshot=copy(request);validateRoster(snapshot);
+ const snapshot=copy(request);validateRoster(snapshot,p);
  const registration={id:globalThis.crypto.randomUUID(),matchId:matchId(p),season:p.season,round:p.round,week:p.week,home:p.home,away:p.away,
   rulesVersion:RULES_VERSION,engineVersion:ENGINE_VERSION,liveHash:await digest(live)};
  registration.inputHash=await digest({request:snapshot,registration});
@@ -69,7 +71,7 @@ export async function validateRequest(body){
  if(!registration||registration.rulesVersion!==RULES_VERSION||registration.engineVersion!==ENGINE_VERSION)throw Error('경기 규정·엔진 버전이 변경됐습니다. 출전 확정을 다시 확인해 주세요.');
  const {inputHash,...identity}=registration;
  if(typeof identity.id!=='string'||identity.id.length>80||!Number.isInteger(identity.season)||identity.season<1||!Number.isInteger(identity.round)||identity.round<1||identity.round>18||!Number.isInteger(identity.week)||identity.week<1||identity.week>30||identity.home!==request.home?.id||identity.away!==request.away?.id||identity.home===identity.away||identity.matchId!==matchId(identity))throw Error('경기 식별 정보가 일치하지 않습니다.');
- validateRoster(request);
+ validateRoster(request,registration);
  if(await digest({request,registration:identity})!==inputHash)throw Error('출전 확정 이후 경기 입력이 변경됐습니다.');
  return registration;
 }

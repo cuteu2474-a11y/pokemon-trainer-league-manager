@@ -1,3 +1,4 @@
+import {conditionedTrainer} from '../core/squad-condition.js';
 import {battlePlan,planPreference} from './battle-plans.js';
 import {trainerPersonality} from './battle-autonomy.js';
 import {RandomPlayerAI,Dex} from '@pkmn/sim';
@@ -30,10 +31,11 @@ const sidename=(move)=>move?.id||move?.name||'unknown';
 /** Engine policy changes the preference among legal actions, never resolves damage. */
 export class TrainerAI extends RandomPlayerAI{
   constructor(stream,trainer={},options={}){
+    trainer=conditionedTrainer(trainer);
     const skill=trainerSkill(trainer);
     super(stream,{move:Math.min(1,.70+skill.tactics*.015),seed:options.seed});
     this.skill=skill;
-    this.profile=trainer.aiProfile||trainerPersonality(trainer);
+    this.profile=trainer.aiProfile?{...trainer.aiProfile,moveSkill:trainer.moveJudgment,switchSkill:trainer.switchJudgment,analysis:trainer.battleAnalysis}:trainerPersonality(trainer);
     this.plan=trainer.battlePlan?battlePlan(trainer):(this.profile.plan||'balanced');
     this.secondaryPlan=this.profile.secondaryPlan||null;
     this.adviceWeight=Number(this.profile.adviceWeight)||0;
@@ -252,7 +254,9 @@ export class TrainerAI extends RandomPlayerAI{
         Math.min(.25,(Number(state.spikes.layers)||1)*.0834):0;
       const traits=switchTraitBonus(this.profile,{currentThreat,nextThreat:threat,
         health,offense:attack,hazards:rock+spikes});
-      const score=(threat===0?32:30/(Math.max(.25,threat)))+
+      const candidate=this.team.find(mon=>mon.name===entry.pokemon.ident?.split(': ').slice(1).join(': '));
+      const fatiguePenalty=Math.max(0,Math.min(100,Number(candidate?.fatigue)||0))*.08;
+      const score=-fatiguePenalty+(threat===0?32:30/(Math.max(.25,threat)))+
         (attack===0?0:Math.min(4,attack)*15)+health*(preserve?34:20)+traits.bonus;
       return {entry,i,score,quality:traits.quality};
     }).sort((a,b)=>b.score-a.score||a.i-b.i);

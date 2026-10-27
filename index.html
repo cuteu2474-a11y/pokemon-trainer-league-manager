@@ -1388,8 +1388,9 @@ function nextWeek(){
  if(!game)return;initCalendar();
  if(game.week===30){startNewSeason();return;}
  const week=++game.week,round=calendarRoundForWeek(week);
+ if(round&&game.round!==round-1){console.warn('라운드 순서가 올바르지 않습니다',game.round,round);game.week--;return;}
+ window.SquadCondition?.advance();window.PokemonExpedition?.resolvePlayer();
  if(round){
-  if(game.round!==round-1){console.warn('라운드 순서가 올바르지 않습니다',game.round,round);game.week--;return;}
   playNext();
  }else if(week===25&&!game.seasonSettled){
   seasonSettlement();
@@ -1420,7 +1421,7 @@ function startNewSeason(){
  for(const [c,d] of changes)c.division=d;
  for(const c of game.clubs){c.points=c.w=c.d=c.l=c.gf=c.ga=0;if(c.id!==myClub().id&&!window.ClubFinance)clubIdentity(c).budget+=200000;}
  game.fixtures=ALL_CLUBS.map((_,d)=>mkSchedule(game.clubs.filter(c=>c.division===d).map(c=>c.id)));
- game.round=0;game.season++;game.week=1;game.results=[];game.lastMatch=null;
+ game.round=0;game.season++;game.week=1;game.results=[];game.lastMatch=null;window.SquadCondition?.advance();
  game.seasonSettled=false;game.academyGenerated=false;if(!window.ClubFinance)game.coins+=180000;
  game.calendarHistory.push({season:game.season,week:1,round:0,event:'새 시즌 개막'});
  game.log.unshift('시즌 '+game.season+' 개막 · 1주차 프리시즌 / 여름 이적시장 · 승강 결과 반영');
@@ -1515,6 +1516,7 @@ function applyWeeklyProgram(){
  if(game.coins<p.cost){alert('주간 활동의 소액 운영비가 부족합니다.');return false;}
  const c=myClub(),selection=p.target?trainerForWeeklyTarget():null;
  if(p.target&&!selection){alert('활동 대상 트레이너를 지정하세요.');return false;}
+ if(selection&&window.SquadCondition?.away(selection.trainer)){alert('파견 중인 트레이너는 이번 주 훈련에 참여할 수 없습니다.');return false;}
  let detail='';
  if(p.id==='tactics'){
   const t=selection.trainer,d=weeklyDevelopment(t);
@@ -1559,6 +1561,7 @@ function applyWeeklyProgram(){
  }
  game.coins-=p.cost;
  const record={season:game.season,week:game.week,id:p.id,title:p.title,target:selection?.trainer.name||'',cost:p.cost,detail};
+ window.SquadCondition?.program(p.id,selection?.trainer);
  game.weeklyPrograms.push(record);
  game.log.unshift(game.season+'시즌 '+game.week+'주차 · '+p.title+' · '+detail);
  persist();renderOffice();return true;
@@ -1586,7 +1589,7 @@ clubPower=function(c,order){
 };
 const weeklyPriorApplyMatch=applyMatch;
 applyMatch=function(m){
- weeklyPriorApplyMatch(m);
+ weeklyPriorApplyMatch(m);window.SquadCondition?.match(m);
  const a=game.clubs[m.home],b=game.clubs[m.away];
  for(const c of [a,b])c.fatigue=Math.min(100,(c.fatigue??0)+8);
  if(m.aScore>m.bScore){a.morale=Math.min(100,(a.morale??50)+3);b.morale=Math.max(0,(b.morale??50)-2)}
@@ -1623,6 +1626,7 @@ nextWeek=function(){
  const previousRecord=weeklyRecord();
  weeklyPriorNextWeek();
  if(game.season===previousSeason&&game.week===previousWeek)return;
+ window.SquadCondition?.advance();
  if(!previousRecord){game.weeklyPrograms.push({season:previousSeason,week:previousWeek,id:'skip',title:'프로그램 미실시',target:'',cost:0,detail:'이번 주 별도 운영 프로그램 없음'});}
  for(const c of game.clubs){
   c.fatigue=Math.max(0,c.fatigue-5);

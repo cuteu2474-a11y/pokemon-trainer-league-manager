@@ -1,3 +1,4 @@
+import {matchLoad} from '../src/core/squad-condition.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {battlePokemon, prepareClub, runMatch} from '../src/web/match-service.js';
@@ -40,6 +41,8 @@ test('web service returns actual relay battle logs and score', {timeout:120000},
  assert.equal(result.moveVisuals.Psychic.type,'Psychic');assert.equal(result.moveVisuals.Psychic.label,'사이코키네시스');
  assert.equal(result.typeChart.Electric.Ground,0);assert.equal(result.typeChart.Electric.Water,2);
  assert.ok(result.rounds[0].initial.p1[0].pp.length>0);assert.match(result.rounds[0].log,/\|league-state\|/);
+ matchLoad({season:1,week:5,clubs:[a,b]},{home:0,away:1},{id:'1:1:0:1',result});
+ assert.equal(a.trainers[4].fatigue,16);assert.equal(a.trainers[0].fatigue,0);assert.ok(a.trainers[4].pokemon.some(p=>p.fatigue>0));
 });
 test('API rejects invalid methods and invalid rosters with no result',async()=>{
  const response=()=>({statusCode:0,headers:{},setHeader(k,v){this.headers[k]=v;},end(body){this.body=JSON.parse(body);}});
