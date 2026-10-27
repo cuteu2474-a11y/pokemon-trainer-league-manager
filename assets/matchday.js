@@ -2266,3 +2266,9 @@
   script.src='assets/ability-ui.js';
   document.body.append(script);
 })();
+
+/* Approved Nimbasa City (club 9) lightning-vortex crest. */
+(function useApprovedNimbasaCrest(){
+  if(typeof CLUB_EMBLEM_IMAGES==='undefined'||CLUB_EMBLEM_IMAGES.length!==40)return;
+  CLUB_EMBLEM_IMAGES[9]='assets/ui/asset-60.webp';
+})();
