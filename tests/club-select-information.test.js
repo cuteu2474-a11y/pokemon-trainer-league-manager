@@ -23,3 +23,12 @@ test('club budget, league, facilities and reputation remain visible',()=>{
     assert.ok(detail.includes(label),label+' must remain');
   }
 });
+
+test('ready to take office does not show redundant season-start guidance',()=>{
+  const update=html.split('function clubSelectUpdateStart(){')[1]?.split('function clubSelectCommit(){')[0];
+  assert.ok(update,'club selection validation should exist');
+  assert.doesNotMatch(update,/취임하면 감독실로 이동하고 시즌 1이 시작됩니다/);
+  assert.ok(update.includes("'기존 저장 데이터 교체 여부를 확인해 주세요.':''"));
+  assert.ok(update.includes('f.hidden=!f.textContent'));
+  assert.ok(update.includes('감독 이름을 입력해 주세요.'));
+});

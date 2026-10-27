@@ -3159,7 +3159,8 @@ function clubSelectUpdateStart(){
  const btn=$('csConfirm'),f=$('csFeedback');if(!btn||!f)return;
  const manager=($('csManager')?.value||'').trim();
  btn.disabled=!manager||(!!game&&!clubSelectOverwrite);
- f.textContent=!manager?'감독 이름을 입력해 주세요.':game&&!clubSelectOverwrite?'기존 저장 데이터 교체 여부를 확인해 주세요.':'취임하면 감독실로 이동하고 시즌 1이 시작됩니다.';
+ f.textContent=!manager?'감독 이름을 입력해 주세요.':game&&!clubSelectOverwrite?'기존 저장 데이터 교체 여부를 확인해 주세요.':'';
+ f.hidden=!f.textContent;
 }
 function clubSelectCommit(){
  if(!clubSelectDraft)return;
