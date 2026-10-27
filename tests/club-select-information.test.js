@@ -12,10 +12,20 @@ test('club selection shows crest and name without descriptive tags',()=>{
   assert.doesNotMatch(detail,/cs-club-location|cs-badges|cs-chip|지방 연고/);
 });
 
-test('tactics average is explicitly out of 20 and still computed from trainers',()=>{
-  assert.match(detail,/const coaching=Math\.round\(team\.reduce\(\(sum,t\)=>sum\+t\.tactics,0\)\/Math\.max\(1,team\.length\)\)/);
-  assert.match(detail,/평균 전술 '\+coaching\+'\/20/);
+test('club selection displays trainer count but no tactics average',()=>{
+  assert.match(detail,/team\.length\+'명/);
+  assert.doesNotMatch(detail,/평균 전술|coaching/);
   assert.match(detail,/onclick="clubTrainerOpen\(\)"/);
+});
+
+test('club trainer preview shows only league and removes role and lineup badges',()=>{
+  const preview=html.split('function clubTrainerDetailHTML(t){')[1]?.split('function clubSelectUpdateStart(){')[0];
+  assert.ok(preview);
+  assert.match(preview,/ctSortedPokemon\(t\)/);
+  assert.match(preview,/ctTrainerPortrait\(t,true\)/);
+  assert.match(preview,/ct-mini-mons/);
+  assert.match(preview,/\(c\.division\+1\)\+'부 리그'/);
+  assert.doesNotMatch(preview,/worldClubRegion\(c\)|ct-pill-list|대표 트레이너|출전 '\+\(clubTrainerIndex/);
 });
 
 test('club budget, league, facilities and reputation remain visible',()=>{

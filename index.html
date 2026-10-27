@@ -852,6 +852,24 @@ button.cs-report-row:active{transform:translateY(2px);filter:brightness(1.2)}
 .cs-crest.logo-asset img{width:100%;height:100%;object-fit:contain;display:block;image-rendering:auto}
 .cs-card:has(.logo-asset){padding-top:9px;gap:9px}
 @media(max-width:650px){.cs-crest.logo-asset.small{width:70px!important}.cs-crest.logo-asset.large{width:98px!important}}
+
+/* Club preview compact lineup and headshot framing */
+.ct-portrait{position:relative;display:block;overflow:hidden;padding:0;line-height:0}
+.ct-portrait img{display:block;width:100%;height:100%;object-fit:cover;object-position:center top;transform:scale(1.55);transform-origin:center 20%;image-rendering:auto}
+.ct-portrait.large img{transform:scale(1.7);transform-origin:center 17%}
+.ct-trainer-body{flex:1;min-width:0}
+.ct-mini-mons{display:flex;align-items:center;gap:3px;margin-top:5px;flex-wrap:nowrap}
+.ct-mini-mon{width:26px;height:26px;flex:0 0 26px;display:flex;align-items:center;justify-content:center}
+.ct-mini-mon img{width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+.ct-mon-symbol{color:#8acbff;font-size:19px;line-height:1}
+.ct-pokemon{display:flex;gap:11px;align-items:center;min-width:0}
+.ct-pokemon-art{width:62px;height:62px;flex:none;display:grid;place-items:center}
+.ct-pokemon-art img{display:block;width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+.ct-pokemon-data{min-width:0}
+.ct-pokemon strong{margin-bottom:4px;white-space:normal}
+.ct-pokemon small,.ct-pokemon em{white-space:normal}
+@media(max-width:600px){.ct-mini-mon{width:23px;height:23px;flex-basis:23px}.ct-pokemon-art{width:49px;height:49px}}
+
 </style></head><body><div id="game"><div class="topline">MORE THAN A GAME, WRITE YOUR OWN LEAGUE.</div>
 <div id="mainmenu"><div class="hero"><div><img class="logo" id="logo" alt="TRAINER LEAGUE MANAGER 로고"><div class="slogan">나만의 트레이너 팀으로<br>최고의 리그를 만들어라.</div></div><nav class="menu" id="menu"></nav></div>
 <div class="tiles" id="tiles"></div><div class="footer"><span>TRAINER LEAGUE MANAGER · SAPPHIRE EDITION</span><span>트레이너, 또 하나의 리그를 만든다.</span></div></div>
@@ -3068,14 +3086,13 @@ function clubRecognitionGrade(value){
 function clubSelectDetailsHTML(){
  const c=clubSelectDraft?.clubs[clubSelectId];if(!c)return '';
  const identity=clubIdentity(c),fac=clubFacilityInfo(c),team=c.trainers.filter(Boolean);
- const coaching=Math.round(team.reduce((sum,t)=>sum+t.tactics,0)/Math.max(1,team.length));
  const starting=startingClubBudget(c.division);
  const money=typeof shortTransfer==='function'?shortTransfer(starting):(starting/100000000).toFixed(1)+'억 원';
  const row=(kind,label,value,extra='')=>'<div class="cs-report-row '+extra+'">'+csIcon(kind)+'<span class="cs-report-label">'+label+'</span><strong class="cs-report-value">'+value+'</strong></div>';
  return '<div class="cs-club-head">'+clubSelectBadge(c.id,'large')+
   '<div class="cs-club-headcopy"><h2 class="cs-club-name">'+escapeHTML(c.name)+'</h2></div></div>'+   '<div class="cs-report">'+row('trophy','소속 리그',(c.division+1)+'부 리그')+
   row('money','시작 이적 예산',money)+
-  '<button class="cs-report-row highlight" type="button" onclick="clubTrainerOpen()" aria-label="트레이너 정보 자세히 보기">'+csIcon('people')+'<span class="cs-report-label">트레이너 정보</span><strong class="cs-report-value">'+team.length+'명 / 평균 전술 '+coaching+'/20 <span class="cs-report-arrow">›</span></strong></button>'+
+  '<button class="cs-report-row highlight" type="button" onclick="clubTrainerOpen()" aria-label="트레이너 정보 자세히 보기">'+csIcon('people')+'<span class="cs-report-label">트레이너 정보</span><strong class="cs-report-value">'+team.length+'명 <span class="cs-report-arrow">›</span></strong></button>'+
   row('youth','유소년 시설',clubFacilityGrade(fac.youth),'highlight')+
   row('train','훈련 시설',clubFacilityGrade(fac.training),'highlight')+
   row('recognition','지역 인지도',clubRecognitionGrade(identity.reputation),'highlight')+'</div>';
@@ -3124,16 +3141,59 @@ function clubTrainerPick(i){
   btn.setAttribute('aria-pressed',String(selected));
  });
 }
+
+/* Club preview images and cards: images are view-only; combat roster order is unchanged. */
+const CT_SPECIES_DEX={
+ '피카츄':25,'리자몽':6,'이상해꽃':3,'거북왕':9,'팬텀':94,'망나뇽':149,'가디안':282,
+ '루카리오':448,'한카리아스':445,'에브이':196,'블래키':197,'메타그로스':376,'번치코':257,
+ '대짱이':260,'나무킹':254,'가디':58,'갸라도스':130,'킬가르도':681,'삼삼드래':635,
+ '마릴리':184,'님피아':700,'핫삼':212,'토게키스':468,'로즈레이드':407,'윈디':59,
+ '렌트라':405,'마스카나':908,'라우드본':911,'웨이니발':914,'에이스번':815,'고릴타':812,
+ '인텔리레온':818,'모아머':542,'샤로다':497,'염무왕':500,'대검귀':503,
+ '야나키':512,'바오키':514,'앗차키':516,'드레디어':549,'제브라이카':523,
+ '펜드라':545,'아케오스':567,'라프라스':131,'잠만보':143,'피죤투':18,
+ '꼬마돌':74,'롱스톤':95,'아쿠스타':121,'별가사리':120,'피죤':17,
+ '메로엣타':648,'레지기가스':486,'보만다':373,'바랜드':508,'몽얌나':518,
+ '후딘':65,'고우스트':93,'케이시':63,'괴력몬':68,'마기라스':248,
+ '보스로라':306,'밀로틱':350,'한바이트':444,'토대부기':389,'초염몽':392,'엠페르트':395
+};
+const CT_TRAINER_SPRITES={
+ '아티':'burgh','덴트':'cilan','팟':'chili','콘':'cress','알로에':'lenora',
+ '시즈':'marlon','카밀레':'elesa','야콘':'clay','풍란':'skyla',
+ '담죽':'brycen','아이리스':'iris','사간':'drayden','체렌':'cheren',
+ '벨':'bianca','휴이':'hugh','N':'n','게치스':'ghetsis','노간주':'alder',
+ '웅':'brock','이슬':'misty','마티스':'surge','민화':'erika','독수':'koga',
+ '초련':'sabrina','강연':'blaine','비주기':'giovanni',
+ '목호':'lance','레드':'red','그린':'blue','실버':'silver',
+ '난천':'cynthia','성호':'steven','윤진':'wallace','정인':'juan',
+ '카렌':'karen','강석':'roark','유채':'gardenia','멜리사':'fantina',
+ '맥실러':'crasherwake','동관':'byron','무청':'candice','전진':'volkner',
+ '금선':'whitney','규리':'jasmine','류옹':'pryce','이향':'clair',
+ '민진':'wally','코르니':'korrina','시트론':'clemont','카르네':'diantha'
+};
+function ctTrainerPortrait(t,large=false){
+ const slug=CT_TRAINER_SPRITES[t.name]||'acetrainer';
+ const url='https://play.pokemonshowdown.com/sprites/trainers/'+slug+'.png';
+ const fallback='https://play.pokemonshowdown.com/sprites/trainers/acetrainer.png';
+ return '<span class="ct-portrait'+(large?' large':'')+'"><img loading="lazy" src="'+url+
+  '" alt="'+escapeHTML(t.name)+' 트레이너 초상" onerror="this.onerror=null;this.src=\''+fallback+'\'"></span>';
+}
+function ctSortedPokemon(t){
+ return (t.pokemon||[]).slice().sort((a,b)=>(Number(b.power)||0)-(Number(a.power)||0));
+}
+function ctPokemonThumb(p){
+ const dex=CT_SPECIES_DEX[p.name];
+ return dex?'<img loading="lazy" alt="" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'+dex+'.png">':
+  '<span class="ct-mon-symbol" aria-hidden="true">◉</span>';
+}
 function clubTrainerDetailHTML(t){
- const average=Math.round(t.pokemon.reduce((sum,p)=>sum+p.power,0)/t.pokemon.length);
- const role=['대표 트레이너','전술 담당','선봉 담당','수비 담당','에이스'][clubTrainerIndex]||'트레이너';
- const pokemon=t.pokemon.map((p,i)=>'<div class="ct-pokemon">'+
-  '<strong>'+String(i+1).padStart(2,'0')+'　'+escapeHTML(p.name)+'</strong>'+
-  '<small>레벨 '+p.level+'　·　전투력 '+p.power+'</small>'+
-  '<em>활동 '+(p.careerSeasons||1)+' / 8시즌</em></div>').join('');
- return '<div class="ct-profile-head"><span class="ct-portrait large">'+escapeHTML(t.name.slice(0,2))+'</span>'+
-  '<div><div class="ct-profile-name">'+escapeHTML(t.name)+'</div><div class="ct-club-meta">'+role+' · '+escapeHTML(clubSelectDraft.clubs[clubSelectId].name)+'</div>'+
-  '<div class="ct-pill-list"><span class="ct-pill">포켓몬 6마리</span><span class="ct-pill">출전 '+(clubTrainerIndex+1)+'번</span></div></div></div>'+
+ const roster=ctSortedPokemon(t);
+ const average=roster.length?Math.round(roster.reduce((sum,p)=>sum+p.power,0)/roster.length):0;
+ const pokemon=roster.map((p,i)=>'<div class="ct-pokemon"><span class="ct-pokemon-art">'+ctPokemonThumb(p)+'</span><span class="ct-pokemon-data">'+
+  '<strong>'+String(i+1).padStart(2,'0')+' '+escapeHTML(p.name)+'</strong>'+
+  '<small>전투력 '+p.power+'</small><em>활동 '+(p.careerSeasons||1)+' / 8시즌</em></span></div>').join('');
+ return '<div class="ct-profile-head">'+ctTrainerPortrait(t,true)+
+  '<div><div class="ct-profile-name">'+escapeHTML(t.name)+'</div></div></div>'+
   '<div class="ct-section-title">트레이너 능력</div><div class="ct-attributes">'+
   '<div class="ct-attr">전술 지휘<strong>'+t.tactics+'</strong></div>'+
   '<div class="ct-attr">교체 판단<strong>'+t.switching+'</strong></div>'+
@@ -3143,15 +3203,16 @@ function clubTrainerDetailHTML(t){
 function renderClubTrainers(){
  const c=clubSelectDraft?.clubs[clubSelectId];if(!c)return;
  const items=c.trainers.map((t,i)=>{
-  const best=t.pokemon.slice().sort((a,b)=>b.power-a.power)[0];
+  const icons=ctSortedPokemon(t).map(p=>'<span class="ct-mini-mon" title="'+escapeHTML(p.name)+' · 전투력 '+p.power+'">'+ctPokemonThumb(p)+'</span>').join('');
   return '<button class="ct-trainer-card '+(clubTrainerIndex===i?'selected':'')+'" type="button" data-preview-index="'+i+'" aria-pressed="'+(clubTrainerIndex===i)+'" onclick="clubTrainerPick('+i+')">'+
-  '<span class="ct-portrait">'+escapeHTML(t.name.slice(0,2))+'</span><span><strong class="ct-name">'+escapeHTML(t.name)+'</strong>'+
-  '<small class="ct-sub">전술 '+t.tactics+' · 교체 '+t.switching+' · '+escapeHTML(best?.name||'정보 없음')+'</small></span></button>';
+   ctTrainerPortrait(t)+'<span class="ct-trainer-body"><strong class="ct-name">'+escapeHTML(t.name)+'</strong>'+
+   '<small class="ct-sub">전술 '+t.tactics+' · 교체 '+t.switching+'</small>'+
+   '<span class="ct-mini-mons" aria-label="보유 포켓몬 '+(t.pokemon||[]).length+'마리, 전투력 내림차순">'+icons+'</span></span></button>';
  }).join('');
  $('clubtrainers').innerHTML='<div class="ct-shell">'+
   '<header class="ct-topbar"><h1>트레이너 정보</h1><button class="ct-return" type="button" onclick="clubTrainerBack()">← 구단 선택으로</button></header>'+
   '<div class="ct-club-summary">'+clubSelectBadge(c.id,'small')+'<div><div class="ct-club-name">'+escapeHTML(c.name)+'</div>'+
-  '<div class="ct-club-meta">'+escapeHTML(worldClubRegion(c))+'지방 · '+(c.division+1)+'부 리그 · 트레이너 5명</div></div></div>'+
+  '<div class="ct-club-meta">'+(c.division+1)+'부 리그</div></div></div>'+
   '<main class="ct-main"><section class="ct-list"><div class="ct-list-title">출전 트레이너 5명</div>'+items+'</section>'+
   '<section class="ct-detail" id="ctInfo">'+clubTrainerDetailHTML(c.trainers[clubTrainerIndex])+'</section></main></div>';
 }
