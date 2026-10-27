@@ -568,6 +568,16 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
 .title-shell{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(290px,.9fr);align-items:center;gap:clamp(12px,3.8vw,70px);width:100%;max-width:1600px;min-height:100svh;margin:auto;padding:clamp(24px,5vw,84px)}
 .title-brand{display:flex;align-items:center;justify-content:center;min-width:0}
 .title-logo-only{display:block;width:min(100%,760px);height:auto;max-height:72svh;object-fit:contain;filter:drop-shadow(0 12px 26px #030b2077);user-select:none;-webkit-user-drag:none}
+/* Resolution-independent trainer title: real Hangul + an inline vector capture ball. */
+.title-creature-logo{position:relative;aspect-ratio:800/495;display:flex;flex-direction:column;align-items:center;justify-content:center;isolation:isolate;gap:clamp(0px,.55vw,7px);font-family:'Arial Rounded MT Bold','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;font-weight:1000;white-space:nowrap}
+.title-creature-logo::before{content:"";position:absolute;inset:21% 0 14%;z-index:-1;background:radial-gradient(ellipse at 50% 58%,#147bcf40,transparent 66%);pointer-events:none}
+.title-capture-ball{width:clamp(48px,8.8vw,108px);height:clamp(48px,8.8vw,108px);display:block;transform:rotate(-11deg);filter:drop-shadow(0 6px 1px #001129) drop-shadow(0 4px 13px #1a99df8a);margin-bottom:clamp(-8px,-.7vw,-2px);flex:none}
+.title-capture-ball svg{display:block;width:100%;height:100%}
+.title-logo-primary,.title-logo-secondary{display:block;line-height:1.17;letter-spacing:-.085em;text-align:center;font-weight:1000;-webkit-text-stroke:clamp(3px,.78vw,10px) #123b82;paint-order:stroke fill;filter:drop-shadow(0 5px 0 #001a45) drop-shadow(0 9px 6px #02091c87)}
+.title-logo-primary{font-size:clamp(42px,8.4vw,116px);color:#ffdb38;background:linear-gradient(180deg,#fff8a9 0%,#ffe74b 27%,#ffcb20 69%,#f79d0a 100%);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;transform:rotate(-2deg) skew(-2deg)}
+.title-logo-secondary{font-size:clamp(34px,6.9vw,94px);color:#fcffff;background:linear-gradient(180deg,#fff 10%,#e9f9ff 38%,#82e4ff 76%,#259adf 100%);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;transform:rotate(-2deg) skew(-2deg);margin-top:-.06em}
+.title-logo-star{position:absolute;z-index:2;left:10%;top:27%;font-size:clamp(14px,3vw,36px);color:#fef8a1;text-shadow:0 0 14px #d5edff;pointer-events:none}
+.title-logo-star:last-child{left:auto;right:8%;top:45%;font-size:clamp(11px,2.2vw,25px);color:#aeeeff}
 .title-actions{display:grid;gap:clamp(10px,1.4vh,18px);width:100%;max-width:435px;justify-self:center}
 .title-real-button{position:relative;display:flex;align-items:center;gap:clamp(12px,1.4vw,18px);height:clamp(64px,8.4vh,89px);width:100%;padding:0 clamp(15px,2vw,24px);border:1px solid #5d83af;border-top-color:#a5cbea;border-radius:11px;color:#f5faff;text-align:left;font-size:clamp(16px,1.5vw,22px);font-weight:850;letter-spacing:-.035em;background:linear-gradient(180deg,#325a7e 0%,#1b3658 45%,#112b4c 49%,#0c1f3e 100%);box-shadow:inset 0 1px 0 #fff5,inset 0 -2px 0 #07152c,0 3px 0 #071528,0 12px 22px #0003;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;transition:transform .10s,filter .1s,box-shadow .1s,border-color .1s;overflow:hidden;isolation:isolate}
 .title-real-button::before{content:"";position:absolute;inset:0 0 47% 0;border-radius:10px 10px 40% 40%;background:linear-gradient(#b5dbf528,transparent);pointer-events:none}
@@ -2908,8 +2918,7 @@ renderOffice=function(){
 };
 
 
-/* Responsive title menu: one logo image and five real HTML buttons. */
-const KOREAN_TITLE_LOGO='assets/ui/asset-12.webp';
+/* Responsive title menu: sharp real Korean lettering and five real HTML buttons. */
 const EXACT_MENU_ACTIONS=[['new','새 게임 시작'],['continue','이어하기'],['settings','환경 설정'],['records','기록실'],['quit','게임 종료']];
 function titleMenuSVG(action){
  const paths={
@@ -2926,7 +2935,17 @@ function exactTitleMenu(){
  if(!root.querySelector('.title-shell')){
   const shell=document.createElement('div');shell.className='title-shell';
   const brand=document.createElement('div');brand.className='title-brand';
-  const logo=document.createElement('img');logo.src=KOREAN_TITLE_LOGO;logo.className='title-logo-only';logo.alt='트레이너 리그 매니저';logo.draggable=false;
+  const logo=document.createElement('div');logo.className='title-logo-only title-creature-logo';
+  logo.setAttribute('role','img');logo.setAttribute('aria-label','트레이너 리그 매니저');
+  logo.innerHTML='<span class="title-logo-star" aria-hidden="true">✦</span>'+
+    '<span class="title-capture-ball" aria-hidden="true"><svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">'+
+    '<circle cx="60" cy="60" r="52" fill="#ffffff" stroke="#0e3162" stroke-width="8"/>'+
+    '<path d="M8 60a52 52 0 0 1 104 0Z" fill="#ff4553"/>'+
+    '<path d="M8 60h104" stroke="#14345d" stroke-width="12"/>'+
+    '<circle cx="60" cy="60" r="19" fill="#fff" stroke="#14345d" stroke-width="9"/>'+
+    '<circle cx="60" cy="60" r="9" fill="#e7f7ff" stroke="#9cc3d6" stroke-width="2"/>'+
+    '<path d="M23 39a44 44 0 0 1 31-27" stroke="#ffd9e0" stroke-width="7" stroke-linecap="round" fill="none"/>'+
+    '</svg></span><span class="title-logo-primary">트레이너</span><span class="title-logo-secondary">리그 매니저</span><span class="title-logo-star" aria-hidden="true">✧</span>';
   brand.appendChild(logo);
   const nav=document.createElement('nav');nav.className='title-actions';nav.setAttribute('aria-label','메인 메뉴');
   for(const [action,label] of EXACT_MENU_ACTIONS){
