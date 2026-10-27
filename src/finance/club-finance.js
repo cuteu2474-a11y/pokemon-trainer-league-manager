@@ -92,7 +92,7 @@ export function forecast(g,id,{extraAnnual=0,immediate=0}={}){
  const additional=Math.round(extraAnnual*(31-g.week)/30);
  return {cash:cash(g,id),annual,next,remaining,arrears:book(g,id).arrears,projected:cash(g,id)-immediate-remaining-additional-book(g,id).arrears};
 }
-export function locked(g,clubId){const p=g.pendingMatch;return !!(p&&['running','watch'].includes(p.phase)&&[p.home,p.away].some(id=>String(id)===String(clubId)));}
+export function locked(g,clubId){const p=g.pendingMatch;return !!(p&&(p.frozen||['running','watch'].includes(p.phase))&&[p.home,p.away].some(id=>String(id)===String(clubId)));}
 export function moveTrainer(g,{buyerId,sellerId=null,trainer:t,sourceKind,slot,fee=0,salary,years=2,bonus=0,freeIndex=null}){
  const buyer=clubOf(g,buyerId),seller=sellerId===null?null:clubOf(g,sellerId);
  if(!buyer||!t||seller===buyer)throw Error('영입 대상을 확인해 주세요.');

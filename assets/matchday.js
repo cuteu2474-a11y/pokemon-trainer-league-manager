@@ -59,46 +59,61 @@
     p.plans ||= myClub().trainers.map(()=>null);
     p.behaviors ||= myClub().trainers.map(()=>null);
     const c=myClub(), opponent=game.clubs[p.home === c.id ? p.away : p.home];
-    const root=screen(), busy=p.phase==='running';
+    const root=screen(), busy=['research','running'].includes(p.phase),frozen=!!p.frozen;
     root.innerHTML=`<div class="md-muted">${p.week}주차 · 리그 ${p.round}라운드</div><h1>${esc(c.name)} vs ${esc(opponent.name)}</h1><div class="md-top"><strong>경기 전 미팅 · 출전 순서와 플레이 방식 권고</strong><span>구단 피로 ${c.fatigue??0}/100 · 사기 ${c.morale??50}/100</span></div><p class="md-muted">감독의 제안은 명령이 아닙니다. 트레이너가 수용·절충·거부하며, 실제 경기에서 좋은 결과를 경험한 행동은 다음 경기의 자율 선택에도 영향을 줍니다.</p>`+
-      p.order.map((index,slot)=>{const t=c.trainers[index];return `<div class="md-row"><div><strong>${slot+1}. ${esc(t?.name||'출전 불가')}</strong><small>개별 컨디션 미측정 · 전술 분석 ${t?.tactics??'—'} · 교체 판단 ${t?.switching??'—'}<br>${(t?.pokemon||[]).map(mon=>esc(mon.name)+' Lv.'+mon.level).join(' · ')}</small></div><div><div class="md-meeting-controls"><select data-plan="${index}" aria-label="${esc(t?.name)} 전술 방향" ${busy?'disabled':''}><option value="" ${!p.plans[index]?'selected':''}>전술 방향: AI 자율</option>${Object.entries(planLabels).map(([key,label])=>`<option value="${key}" ${p.plans[index]===key?'selected':''}>${label}</option>`).join('')}</select><select data-behavior="${index}" aria-label="${esc(t?.name)} 플레이 방식 권고" ${busy?'disabled':''}><option value="" ${!p.behaviors[index]?'selected':''}>플레이 방식: 권고 없음</option>${Object.entries(behaviorLabels).map(([key,label])=>`<option value="${key}" ${p.behaviors[index]===key?'selected':''}>${label}</option>`).join('')}</select></div> <button data-up="${slot}" aria-label="${slot+1}번 트레이너 위로" ${busy||slot===0?'disabled':''}>↑</button> <button data-down="${slot}" aria-label="${slot+1}번 트레이너 아래로" ${busy||slot===4?'disabled':''}>↓</button></div></div>`}).join('')+
+      p.order.map((index,slot)=>{const t=c.trainers[index];return `<div class="md-row"><div><strong>${slot+1}. ${esc(t?.name||'출전 불가')}</strong><small>개별 컨디션 미측정 · 전술 분석 ${t?.tactics??'—'} · 교체 판단 ${t?.switching??'—'}<br>${(t?.pokemon||[]).map(mon=>esc(mon.name)).join(' · ')}</small></div><div><div class="md-meeting-controls"><select data-plan="${index}" aria-label="${esc(t?.name)} 전술 방향" ${busy||frozen?'disabled':''}><option value="" ${!p.plans[index]?'selected':''}>전술 방향: AI 자율</option>${Object.entries(planLabels).map(([key,label])=>`<option value="${key}" ${p.plans[index]===key?'selected':''}>${label}</option>`).join('')}</select><select data-behavior="${index}" aria-label="${esc(t?.name)} 플레이 방식 권고" ${busy||frozen?'disabled':''}><option value="" ${!p.behaviors[index]?'selected':''}>플레이 방식: 권고 없음</option>${Object.entries(behaviorLabels).map(([key,label])=>`<option value="${key}" ${p.behaviors[index]===key?'selected':''}>${label}</option>`).join('')}</select></div> <button data-up="${slot}" aria-label="${slot+1}번 트레이너 위로" ${busy||frozen||slot===0?'disabled':''}>↑</button> <button data-down="${slot}" aria-label="${slot+1}번 트레이너 아래로" ${busy||frozen||slot===4?'disabled':''}>↓</button></div></div>`}).join('')+
       '<p class="md-muted">이미 등록된 기술과 능력치는 변경하지 않습니다. 권고가 효과적이었다고 확인된 경기만 트레이너의 플레이 성향 학습에 반영됩니다.</p>'+
-      `<div class="md-error" role="alert">${esc(p.error)}</div><div class="md-actions"><button id="md-cancel" ${busy?'disabled':''}>구단 화면으로</button><button id="md-confirm" class="primary" ${busy?'disabled':''}>${busy?'Showdown 경기 계산 중…':'출전 순서 확정 · 경기 시작'}</button></div>`;
+      `<div class="md-error" role="alert">${esc(p.error)}</div>${frozen?'<p class="md-muted">출전 선수단 확정 · 기술·능력치·난수 시드 고정</p><button id="md-unlock" '+(busy?'disabled':'')+'>확정 해제 · 다시 준비</button>':''}<div class="md-actions"><button id="md-cancel" ${busy?'disabled':''}>${frozen?'확정 유지 · 구단 화면으로':'구단 화면으로'}</button><button id="md-confirm" class="primary" ${busy?'disabled':''}>${busy?'경기 준비·계산 중…':frozen?'같은 선수단으로 재시도':'출전 순서 확정 · 경기 시작'}</button></div>`;
     for (const button of root.querySelectorAll('[data-up],[data-down]')) button.onclick=()=>{
       const slot=Number(button.dataset.up??button.dataset.down), target=slot+(button.dataset.up!==undefined?-1:1);
       [p.order[slot],p.order[target]]=[p.order[target],p.order[slot]];persist();render();
     };
     for(const select of root.querySelectorAll('[data-plan]'))select.onchange=()=>{p.plans[Number(select.dataset.plan)]=select.value||null;persist();};
     for(const select of root.querySelectorAll('[data-behavior]'))select.onchange=()=>{p.behaviors[Number(select.dataset.behavior)]=select.value||null;persist();};
-    root.querySelector('#md-cancel').onclick=()=>{delete game.pendingMatch;persist();root.remove();};
+    root.querySelector('#md-cancel').onclick=()=>{if(!frozen)delete game.pendingMatch;persist();root.remove();};
+    root.querySelector('#md-unlock')?.addEventListener('click',()=>{if(busy)return;delete p.frozen;delete p.result;delete p.error;p.phase='prepare';persist();render();});
     root.querySelector('#md-confirm').onclick=run;
     window.OpponentScoutUI?.attach?.(root,p,c,opponent);
   }
   async function run() {
-    const p=pending();if (!p || p.phase==='running') return;
-    p.phase='running';delete p.error;persist();render();
-    if(window.TrainerMoveAI&&!await window.TrainerMoveAI.queue()){
-      if(game.trainerAI?.movesProcessedWeek!==p.season+':'+game.week){p.phase='prepare';p.error='이번 주 기술 연구를 완료한 뒤 경기를 시작해 주세요.';persist();render();return;}
-    }
-    const order=[...p.order], mine=myClub().id;
-    const identity=[0,1,2,3,4];
-    const request={home:copy(game.clubs[p.home]),away:copy(game.clubs[p.away]),homeOrder:p.home===mine?order:identity,awayOrder:p.away===mine?order:identity,seed:[game.seed>>>0,p.season,p.round,7919]};
-    request[p.home===mine?'home':'away'].trainers.forEach((trainer,i)=>{
-      trainer.directorAdvice=p.plans?.[i]||null;
-      trainer.directorBehaviorAdvice=p.behaviors?.[i]||null;
-      const tid=window.TrainerCareer?.trainerId?.(trainer,mine,i)??String(trainer.uid??(String(mine)+':'+i+':'+trainer.name));
-      trainer.directorTrust=game.trainerAI?.trust?.[tid]??50;
-    });
-    p.matchId=[p.season,p.round,p.home,p.away].join(':');
-    p.meeting={matchId:p.matchId,order:[...order],plans:copy(p.plans),behaviors:copy(p.behaviors)};persist();
-    try {
-      if (!/^https?:$/.test(location.protocol)) throw new Error('경기는 웹 주소에서 실행해 주세요. HTML 파일만 열면 전투 서버에 연결할 수 없습니다.');
-      const response=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
-      let result;try {result=await response.json();} catch {throw new Error('전투 서버에 연결하지 못했습니다. 실행 주소를 확인해 주세요.');}
-      if (!response.ok) throw new Error(result.error||'경기 계산 실패');
-      if (result.engine!=='showdown'||result.home!==p.home||result.away!==p.away||!result.rounds?.length) throw new Error('전투 결과 형식 오류');
+    const p=pending();if(!p||['running','research'].includes(p.phase))return;
+    const g=game;
+    try{
+      if(!window.MatchRegistration)throw Error('출전 등록 모듈을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
+      if(!/^https?:$/.test(location.protocol))throw Error('경기는 웹 주소에서 실행해 주세요.');
+      if(!p.frozen){
+        p.phase='research';delete p.error;persist();render();
+        if(window.TrainerMoveAI&&!await window.TrainerMoveAI.queue()&&game.trainerAI?.movesProcessedWeek!==p.season+':'+game.week)throw Error('이번 주 기술 연구를 완료한 뒤 경기를 시작해 주세요.');
+        if(game!==g||pending()!==p)throw Error('준비 중인 경기가 변경됐습니다.');
+        window.PokemonAbilities?.ensureAll();MatchRegistration.ensureRosterIds(game);
+        const order=[...p.order],mine=myClub().id,identity=[0,1,2,3,4];
+        const request={home:copy(game.clubs[p.home]),away:copy(game.clubs[p.away]),homeOrder:p.home===mine?order:identity,awayOrder:p.away===mine?order:identity,seed:[game.seed>>>0,p.season,p.round,7919]};
+        request[p.home===mine?'home':'away'].trainers.forEach((t,i)=>{
+          t.directorAdvice=p.plans?.[i]||null;t.directorBehaviorAdvice=p.behaviors?.[i]||null;
+          const tid=window.TrainerCareer?.trainerId?.(t,mine,i)??String(t.uid);
+          t.directorTrust=game.trainerAI?.trust?.[tid]??50;
+        });
+        const live=MatchRegistration.lineupState(game,p);
+        p.frozen=await MatchRegistration.freezeMatch(request,p,live);
+        if(game!==g||pending()!==p)throw Error('준비 중인 경기가 변경됐습니다.');
+        p.matchId=p.frozen.registration.matchId;
+        p.meeting={matchId:p.matchId,order:[...order],plans:copy(p.plans),behaviors:copy(p.behaviors)};
+      }
+      p.phase='running';delete p.error;persist();render();
+      const frozen=p.frozen,id=frozen.registration.id;
+      if(p.result){await MatchRegistration.validateResult(frozen,p.result);if(game!==g||pending()!==p||p.frozen?.registration.id!==id)return;p.phase='watch';persist();startReplay();return;}
+      const response=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...frozen.request,registration:frozen.registration})});
+      let result;try{result=await response.json();}catch{throw Error('전투 서버 응답을 읽지 못했습니다. 같은 선수단으로 다시 시도해 주세요.');}
+      if(!response.ok)throw Error(result.error||'경기 계산 실패');
+      if(game!==g||pending()!==p||p.frozen?.registration.id!==id)return;
+      await MatchRegistration.validateResult(frozen,result);
       p.result=result;p.phase='watch';persist();startReplay();
-    } catch(error) {p.phase='prepare';p.error=error.message;persist();render();}
+    }catch(error){
+      if(game!==g||pending()!==p)return;
+      p.phase=p.frozen?'retry':'prepare';p.error=error.message;
+      try{persist();}catch(saveError){p.error=saveError.message;}
+      render();
+    }
   }
   const moveNames={BodySlam:'누르기',Flamethrower:'화염방사',Surf:'파도타기',Thunderbolt:'10만볼트',IceBeam:'냉동빔',EnergyBall:'에너지볼',CloseCombat:'인파이트',SludgeBomb:'오물폭탄',Earthquake:'지진',AirSlash:'에어슬래시',Psychic:'사이코키네시스',XScissor:'시저크로스',RockSlide:'스톤샤워',ShadowBall:'섀도볼',DragonPulse:'용의파동',Crunch:'깨물어부수기',IronHead:'아이언헤드',PlayRough:'치근거리기',Swift:'스피드스타'};
   let moveDictionary={}, replayRequest=0;
@@ -530,12 +545,12 @@
     timer=setTimeout(tick,Math.max(65,base/speed));
   }
   function complete(){const r=pending().result;announce('경기 종료 · '+r.aScore+' : '+r.bScore);document.getElementById('md-score').textContent=r.aScore+' : '+r.bScore;document.getElementById('md-stage').textContent='경기 종료';document.getElementById('md-summary').textContent=contributionSummary();renderContributions();document.getElementById('md-finish').disabled=false;document.getElementById('md-next-moment').disabled=true;if(window.MatchFeedback){const node=document.getElementById('md-summary');node.innerHTML=window.MatchFeedback.html(pending(),!!review);window.MatchFeedback.bind(node,pending());}if(r.report){document.getElementById('md-report-content').innerHTML=reportHTML(r);document.getElementById('md-report').hidden=false;}spotlight('경기 종료',r.aScore+' : '+r.bScore);document.getElementById('md-pause').disabled=true;document.getElementById('md-skip').disabled=true;}
-  function finish(){
+  async function finish(){
     if(review){closeReview();return;}
-    const p=pending();if(!p||!p.result||cursor<events.length)return;
-    if(game.season!==p.season||game.round!==p.round-1){alert('일정이 변경되어 결과를 적용할 수 없습니다.');return;}
-    const before=copy(game);
-    try {
+    const p=pending();if(!p?.result||cursor<events.length)return;
+    try{
+      if(!p.frozen||!window.MatchRegistration)throw Error('출전 확정 정보가 없습니다. 경기 준비를 다시 확인해 주세요.');
+      await MatchRegistration.commit(p,()=>{
       active=p.result;game.order=[...p.order];
       if(p.current)priorPlayNext();else priorNextWeek();
       if(game.round!==p.round)throw new Error('경기 결과 반영 실패');
@@ -567,9 +582,15 @@
       game.lastMatch.engine='showdown';game.lastMatch.replay=p.result;
       if(careerReport)game.lastMatch.learning=careerReport;
       game.lastMatch.meeting=copy(p.meeting||{});
+      game.lastMatch.registration=p.frozen;
       game.lastMatch.feedbackMatch={season:p.season,week:p.week,round:p.round,home:p.home,away:p.away,order:[...p.order],meeting:copy(p.meeting||{})};
-      delete game.pendingMatch;persist();clearTimeout(timer);document.getElementById('matchday')?.remove();for(const id of ['mainmenu','clubselect','clubtrainers']){const node=document.getElementById(id);if(node)node.hidden=true;}document.getElementById('dashboard').hidden=false;tab='fixtures';renderOffice();window.MatchFeedback?.show(game.lastMatch.feedbackMatch);
-    } catch(error){game=before;persist();alert(error.message);}finally{active=null;}
+        delete game.pendingMatch;
+      });
+      clearTimeout(timer);document.getElementById('matchday')?.remove();
+      for(const id of ['mainmenu','clubselect','clubtrainers']){const node=document.getElementById(id);if(node)node.hidden=true;}
+      document.getElementById('dashboard').hidden=false;tab='fixtures';renderOffice();window.MatchFeedback?.show(game.lastMatch?.feedbackMatch);
+    }catch(error){alert(error.message);}
+    finally{active=null;}
   }
   const priorReportRender=renderOffice;
   renderOffice=function(){priorReportRender();const panel=document.getElementById('dashpanel');if(panel&&game?.lastMatch?.replay?.report&&['home','fixtures'].includes(tab)){const button=document.createElement('button');button.className='g-btn alt';button.textContent='지난 경기 활약 보고서';button.onclick=()=>{const root=screen();root.innerHTML='<h1>지난 경기 활약 보고서</h1>'+reportHTML(game.lastMatch.replay)+'<button id="md-report-back">구단 화면으로</button>';root.querySelector('#md-report-back').onclick=()=>root.remove();};panel.append(button);}};
@@ -589,7 +610,7 @@
     document.getElementById('md-finish').textContent='관전 닫기';tick();
   }
   window.MatchdayPreparation={render,pending,review:openReview};
-  if(game?.pendingMatch){if(game.pendingMatch.phase==='running')game.pendingMatch.phase='prepare';render();}
+  if(game?.pendingMatch){if(!game.pendingMatch.frozen&&game.pendingMatch.phase==='watch'){game.pendingMatch.phase='prepare';delete game.pendingMatch.result;game.pendingMatch.error='업데이트 전 경기입니다. 출전 선수단을 다시 확정해 주세요.';}if(['running','research'].includes(game.pendingMatch.phase))game.pendingMatch.phase=game.pendingMatch.frozen?'retry':'prepare';render();}
 })();
 
 
@@ -1054,6 +1075,7 @@
     return report;
   }
   function observe(game,playerId){
+    if(game.pendingMatch?.frozen)return null;
     const state=init(game),now=clock(game);
     return state.lastClock===now?null:advance(game,playerId);
   }
@@ -1235,7 +1257,7 @@
     }).slice(0,240);
   }
   function integrate(payload,rows,current){
-    if(payload.period!==current||week()!==current)return false;
+    if(payload.period!==current||week()!==current||game.pendingMatch?.frozen)return false;
     const s=state(),contexts=new Map(rows.map(x=>[x.input.key,x.context]));
     const report={week:current,initialised:0,learned:0,accepted:0,compromised:0,refused:0,trainers:[]};
     for(const entry of payload.results||[]){
@@ -1273,6 +1295,7 @@
   function queue(){
     if(!game||!club())return;
     const s=state(),current=week();
+    if(game.pendingMatch?.frozen)return Promise.resolve(s.movesProcessedWeek===current);
     if(s.movesProcessedWeek===current)return Promise.resolve(true);
     if(pending?.week===current)return pending.promise;
     if((s.moveAttempts[current]||0)>=2)return Promise.resolve(false);
@@ -1985,6 +2008,7 @@
     const key=candidateKey(x.t),s=state(),existing=s.intel[key];
     if(existing?.season===game.season)return {ok:false,message:'이번 시즌의 스카우트 보고서가 있습니다.'};
     const cost=3000000;
+    if(window.MatchRegistration?.locked(myClub().id))return {ok:false,message:'경기 결과 확인 후 변경할 수 있습니다.'};
     if(window.ClubFinance){const checked=ClubFinance.canSpend(cost);if(!checked.ok){alert(checked.reason);return {ok:false,message:checked.reason};}}
     if(game.coins<cost)return {ok:false,message:'스카우트 비용이 부족합니다.'};
     if(window.ClubFinance)ClubFinance.spend(cost,'scout:'+game.season+':'+key,'트레이너 정밀 조사');else game.coins-=cost;

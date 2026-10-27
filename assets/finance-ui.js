@@ -141,7 +141,7 @@ window.marketFreeAgent=freeAgent;
 for(const name of ['aiExecuteBid','aiSignFreeAgent','aiRespondToOffer','academyPromote']){
  const previous=window[name];if(typeof previous!=='function')continue;
  window[name]=function(...args){return notify(()=>journal(name==='academyPromote'?'아카데미 승격':'구단 이적 거래',()=>{
-  if(game.pendingMatch&&['running','watch'].includes(game.pendingMatch.phase)){
+  if(game.pendingMatch&&(game.pendingMatch.frozen||['running','watch'].includes(game.pendingMatch.phase))){
    if(name==='aiRespondToOffer'||name==='academyPromote')throw Error('경기 결과 확인 후 변경할 수 있습니다.');
    const involved=[args[0]?.id,args[1]?.seller?.id];if(involved.some(id=>accounting.locked(game,id)))return false;
   }

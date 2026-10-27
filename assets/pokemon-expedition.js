@@ -271,6 +271,7 @@
       return {ok:false,error:'지역·생태계·시간대·탐색 목적을 확인하세요.'};
     const record=findTrainer(trainerKey);
     if(!record)return {ok:false,error:'해당 트레이너가 현재 구단에 없습니다.'};
+    if(window.MatchRegistration?.locked(myClub().id))return {ok:false,error:'경기 결과 확인 후 변경할 수 있습니다.'};
     const t=record.trainer,s=talent(t),due=cost(region);
     if(s.candidate)return {ok:false,error:'이미 포획한 후보가 있습니다. 먼저 등록하거나 보내 주세요.'};
     if(s.mission?.status==='travel')return {ok:false,error:'이미 해당 트레이너가 탐색 중입니다.'};
@@ -296,6 +297,7 @@
     const result=outcome(m,{skill:s.skill,captureSkill:s.captureSkill},game.season);
     m.status=result.status;m.result=result.reason;
     if(result.candidate){
+      if(Number.isInteger(t.uid)){result.candidate.ownerTrainerId=String(t.uid);game.nextPokemonUID=(game.nextPokemonUID||0)+1;result.candidate.uid='pokemon:'+game.nextPokemonUID;}
       s.candidate=result.candidate;
       const chosen=suggestedSlot(t,s.candidate);
       m.recommendation=chosen;
@@ -330,6 +332,7 @@
   function recruit(key,slot){
     const record=findTrainer(key);
     if(!record)return {ok:false,error:'트레이너가 소속 구단에 없습니다.'};
+    if(window.MatchRegistration?.locked(myClub().id))return {ok:false,error:'경기 결과 확인 후 변경할 수 있습니다.'};
     const t=record.trainer,s=talent(t),candidate=s.candidate;
     if(!candidate)return {ok:false,error:'대기 중인 포획 후보가 없습니다.'};
     if(!Number.isInteger(slot)||slot<0||slot>=6||t.pokemon.length!==6)

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {battlePokemon, prepareClub, runMatch} from '../src/web/match-service.js';
 import {normalizeStatPairs} from '../src/core/stat-potential.js';
 import handler from '../api/match.js';
+import {ensureRosterIds,freezeMatch,lineupState,validateResult} from '../src/core/match-registration.js';
 const pokemon=(name='피카츄',power=80)=>({name,level:50,power});
 const club=id=>({id,trainers:Array.from({length:5},(_,i)=>({name:'트레이너 '+i,tactics:10,switching:10,pokemon:Array.from({length:6},()=>pokemon())}))});
 test('legacy Korean roster maps to actual species and valid GP; explicit sets retained',()=>{
@@ -26,7 +27,9 @@ test('web service returns actual relay battle logs and score', {timeout:120000},
  const a=club(0),b=club(1);
  for(const t of a.trainers)for(const p of t.pokemon)Object.assign(p,{name:'뮤츠',level:70,power:160,moves:['psychic']});
  for(const t of b.trainers)for(const p of t.pokemon)Object.assign(p,{name:'잉어킹',level:10,power:10,moves:['splash']});
- const result=await runMatch({home:a,away:b,homeOrder:[4,3,2,1,0],awayOrder:[0,1,2,3,4],seed:[1,2,3,4]});
+ const fixture={season:1,round:1,week:5,home:0,away:1,order:[4,3,2,1,0]};const save={clubs:[a,b]};ensureRosterIds(save);
+ const frozen=await freezeMatch({home:a,away:b,homeOrder:fixture.order,awayOrder:[0,1,2,3,4],seed:[1,2,3,4]},fixture,lineupState(save,fixture));
+ const result=await runMatch({...frozen.request,registration:frozen.registration});await validateResult(frozen,result);
  assert.equal(result.engine,'showdown');assert.equal(result.aScore,5);assert.equal(result.bScore,0);assert.equal(result.rounds.length,5);
  assert.equal(result.rounds[0].initial.p1.length,6);
  assert.equal(new Set(result.rounds[0].initial.p1.map(m=>m.name)).size,6);

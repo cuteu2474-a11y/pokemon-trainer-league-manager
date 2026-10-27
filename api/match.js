@@ -5,6 +5,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {res.setHeader('Allow','POST'); res.statusCode=405; res.end(JSON.stringify({error:'POST 요청이 필요합니다.'})); return;}
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    if(!body?.registration)throw new Error('경기 준비에서 출전 선수단을 먼저 확정해 주세요.');
     const result = await runMatch(body);
     res.setHeader('Content-Type','application/json; charset=utf-8'); res.statusCode=200; res.end(JSON.stringify(result));
   } catch (error) {

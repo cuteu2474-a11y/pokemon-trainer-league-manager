@@ -1,3 +1,4 @@
+import {validateRequest} from '../core/match-registration.js';
 import {readFileSync} from 'node:fs';
 import {battlePlan, planMoves} from '../battle/battle-plans.js';
 import {resolveBattleAutonomy} from '../battle/battle-autonomy.js';
@@ -46,6 +47,7 @@ export function prepareClub(club, order) {
   });
 }
 export async function runMatch(body) {
+  const registration=body?.registration?await validateRequest(body):null;
   if (!body || body.home?.id === body.away?.id) throw new RangeError('경기 상대 오류');
   const seed = body.seed;
   if (!Array.isArray(seed) || seed.length !== 4 || seed.some(n => !Number.isInteger(n) || n < 0 || n > 0xffffffff)) throw new RangeError('경기 시드 오류');
@@ -69,7 +71,7 @@ export async function runMatch(body) {
       if (move.exists) moveVisuals[part[3]] = moveInfo(move);
     }
   }
-  return {engine:'showdown', visuals, moveVisuals, report:buildBattleReport(result.rounds,home,away), typeChart,
+  return {engine:'showdown', ...(registration?{registration}:{}),visuals, moveVisuals, report:buildBattleReport(result.rounds,home,away), typeChart,
     coaching:Object.fromEntries([['home',home],['away',away]].map(([side,group])=>[side,group.map(t=>({name:t.name,
       ...t.aiProfile,plan:t.battlePlan}))])), home:body.home.id, away:body.away.id, aScore:result.trainersDefeated.B, bScore:result.trainersDefeated.A,
     teams:{home,away}, rounds:result.rounds.map(r => ({trainerA:r.trainerA, trainerB:r.trainerB, winner:r.winner,aiDecisions:r.result.aiDecisions,
