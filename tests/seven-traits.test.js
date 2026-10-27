@@ -128,7 +128,7 @@ test('pre-match meeting UI permits all seven valid advice categories',()=>{
   for(const k of Object.keys(TRAITS)){
     assert.match(before,new RegExp(k+":"));
   }
-  assert.match(before,/trainer\.directorBehaviorAdvice=p\.behaviors/);
+  assert.match(before,/t\.directorBehaviorAdvice=p\.behaviors\?\.\[i\]\|\|null/);
 });
 test('battle simulation still uses legal Showdown damage and reports real decisive actions',
   {timeout:45000},async()=>{

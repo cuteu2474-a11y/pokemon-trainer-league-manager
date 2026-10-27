@@ -228,8 +228,8 @@ test('the pre-dispatch preview exposes species probabilities, habitat and time s
   assert.match(html,/ps-chances/);
   assert.match(html,/<th>발견<\/th>/);
   assert.match(html,/<th>포획<\/th>/);
-  assert.match(html,/탐색력 <b>\d+\/20<\/b>/);
-  assert.match(html,/포획력 <b>\d+\/20<\/b>/);
+  assert.match(html,/탐색·포획 <b>\d+\/20<\/b>/);
+  assert.match(html,/개체 감별 <b>\d+\/20<\/b>/);
   assert.equal((html.match(/id="ps-send"/g)||[]).length,1);
   assert.equal((html.match(/<button /g)||[]).length,1,'no secondary actions before scouting');
   assert.doesNotMatch(html,/ps-team|ps-timeline/);
@@ -261,7 +261,7 @@ test('observed deterministic 30k expeditions follow the published probabilities'
   let found=0,captured=0;
   const count=30000;
   for(let i=0;i<count;i++){
-    const result=api.outcome({seed:(i*2654435761)>>>0,
+    const result=api.outcome({seed:(i*2654435761)>>>0,rulesVersion:'expedition-v2',
       region:'관동',habitat:'cave',time:'night',focus:'rare'},14,1);
     if(result.status!=='not-found')found++;
     if(result.status==='captured')captured++;
@@ -274,60 +274,120 @@ test('observed deterministic 30k expeditions follow the published probabilities'
 });
 
 
-test('independent trainer exploration and capture abilities alter distinct real probabilities',()=>{
+test('exploration and capture share one talent, while appraisal only changes individual potential',()=>{
   const {api}=setup();
-  const weak={skill:3,captureSkill:3},finder={skill:19,captureSkill:3},
-    catcher={skill:3,captureSkill:19};
+  const weak={skill:3,appraisalSkill:3},finder={skill:19,appraisalSkill:3},
+    appraiser={skill:3,appraisalSkill:19};
   const query=stats=>api.encounterTable('관동','cave','night','balanced',stats);
-  const base=query(weak),find=query(finder),capture=query(catcher);
+  const base=query(weak),find=query(finder),appraise=query(appraiser);
   assert.ok(find.findChance>base.findChance,'higher search ability improves finding');
   assert.equal(find.totalCaptureChance>base.totalCaptureChance,true);
-  assert.equal(capture.findChance,base.findChance,'capture ability must not change discovery');
-  assert.ok(capture.totalCaptureChance>base.totalCaptureChance);
-  assert.equal(find.pokemon.find(x=>x.name==='고오스').encounterRate,
-    base.pokemon.find(x=>x.name==='고오스').encounterRate,
-    'skill must not alter fixed species mix');
-  for(const entry of [base,find,capture]){
+  assert.equal(appraise.findChance,base.findChance,'appraisal must not change discovery');
+  assert.equal(appraise.totalCaptureChance,base.totalCaptureChance,'appraisal must not change capture');
+  assert.ok(find.pokemon.find(x=>x.name==='코일').encounterRate>
+    base.pokemon.find(x=>x.name==='코일').encounterRate,
+    'high talent makes a high-BST species relatively more likely');
+  for(const entry of [base,find,appraise]){
     assert.ok(entry.totalCaptureChance<=entry.findChance);
   }
 });
-test('trainer selection displays that trainer exact scouting and capture rates',()=>{
+test('trainer selection displays the exact combined scouting talent and appraisal',()=>{
   const {api,game}=setup();
   const a=game.clubs[0].trainers[0],b=game.clubs[0].trainers[1];
-  a.pokemonScouting={skill:4,captureSkill:5};
-  b.pokemonScouting={skill:18,captureSkill:19};
+  a.pokemonScouting={skill:4,appraisalSkill:5};
+  b.pokemonScouting={skill:18,appraisalSkill:19};
   const cfg=api.data();
   cfg.region='관동';cfg.habitat='sea';cfg.time='morning';cfg.focus='balanced';
   cfg.selectedTrainer=api.keyOf(a);
   const weak=api.render();
   const expectedWeak=api.encounterTable('관동','sea','morning','balanced',a.pokemonScouting);
-  assert.match(weak,/탐색력 <b>4\/20<\/b>/);
-  assert.match(weak,/포획력 <b>5\/20<\/b>/);
+  assert.match(weak,/탐색·포획 <b>4\/20<\/b>/);
+  assert.match(weak,/개체 감별 <b>5\/20<\/b>/);
   assert.ok(weak.includes((expectedWeak.totalCaptureChance*100).toFixed(2)+'%'));
   cfg.selectedTrainer=api.keyOf(b);
   const strong=api.render();
   const expectedStrong=api.encounterTable('관동','sea','morning','balanced',b.pokemonScouting);
-  assert.match(strong,/탐색력 <b>18\/20<\/b>/);
-  assert.match(strong,/포획력 <b>19\/20<\/b>/);
+  assert.match(strong,/탐색·포획 <b>18\/20<\/b>/);
+  assert.match(strong,/개체 감별 <b>19\/20<\/b>/);
   assert.ok(strong.includes((expectedStrong.totalCaptureChance*100).toFixed(2)+'%'));
   assert.ok(expectedStrong.totalCaptureChance>expectedWeak.totalCaptureChance);
   assert.ok(expectedStrong.findChance>expectedWeak.findChance);
 });
-test('starting the expedition snapshots both skill values against later trainer changes',()=>{
+test('starting the expedition snapshots scouting and appraisal against later trainer changes',()=>{
   const {api,game}=setup();
   const t=game.clubs[0].trainers[0],scout=api.talent(t);
-  scout.skill=6;scout.captureSkill=8;
+  scout.skill=6;scout.appraisalSkill=8;
   const table=api.encounterTable('관동','cave','night','rare',scout);
   const started=api.dispatch('1','관동','rare','cave','night');
   assert.equal(started.ok,true);
   assert.equal(started.mission.scoutSkill,6);
-  assert.equal(started.mission.captureSkill,8);
+  assert.equal(started.mission.appraisalSkill,8);
+  assert.equal(started.mission.rulesVersion,'expedition-v2');
   const original=api.outcome(started.mission,scout,game.season);
-  scout.skill=20;scout.captureSkill=20;
+  scout.skill=20;scout.appraisalSkill=20;
   assert.deepEqual({...api.outcome(started.mission,scout,game.season)}, {...original},
     'future improvements must not change in-flight encounter probabilities');
   const shipped=api.encounterTable('관동','cave','night','rare',
-    {skill:started.mission.scoutSkill,captureSkill:started.mission.captureSkill});
+    {skill:started.mission.scoutSkill,appraisalSkill:started.mission.appraisalSkill});
   assert.equal(shipped.findChance,table.findChance);
   assert.equal(shipped.totalCaptureChance,table.totalCaptureChance);
+});
+
+test('the finalized species weighting changes only encounters, never the available biome pool',()=>{
+  const {api}=setup();
+  for(const region of Object.keys(api.REGIONS))for(const habitat of Object.keys(api.HABITATS)){
+    const low=api.encounterTable(region,habitat,'day','balanced',{skill:1,appraisalSkill:20});
+    const high=api.encounterTable(region,habitat,'day','balanced',{skill:20,appraisalSkill:1});
+    assert.deepEqual(low.pokemon.map(x=>x.name),high.pokemon.map(x=>x.name));
+    assert.ok(Math.abs(low.pokemon.reduce((v,x)=>v+x.encounterRate,0)-1)<1e-10);
+    assert.ok(Math.abs(high.pokemon.reduce((v,x)=>v+x.encounterRate,0)-1)<1e-10);
+    for(const p of high.pokemon)assert.ok(p.findRate>=0&&p.captureRate<=p.findRate);
+  }
+});
+test('appraisal produces the specified independent six-ability PA bands and CA ceilings',()=>{
+  const {api}=setup();
+  function sample(appraisalSkill){
+    let seed=72391;const rand=()=>((seed=Math.imul(seed,1664525)+1013904223>>>0)/4294967296);
+    const bands=[0,0,0];let totalCA=0;
+    for(let i=0;i<16000;i++){
+      const mon=api.candidatePokemon('미뇽',appraisalSkill,rand,1);
+      for(const stat of ['hp','atk','def','spa','spd','spe']){
+        const pa=mon.statPA[stat],ca=mon.statCA[stat];
+        assert.ok(Number.isInteger(pa)&&pa>=50&&pa<=200);
+        assert.ok(Number.isInteger(ca)&&ca>=1&&ca<=pa);
+        bands[pa<=110?0:pa<=160?1:2]++;
+        totalCA+=ca/pa;
+      }
+    }
+    return {bands:bands.map(x=>x/96000),meanCAFraction:totalCA/96000};
+  }
+  const novice=sample(1),expert=sample(20);
+  for(const [actual,target]of [[novice.bands,[.70,.25,.05]],
+    [expert.bands,[.50,.35,.15]]])for(let i=0;i<3;i++)
+    assert.ok(Math.abs(actual[i]-target[i])<.015,`band ${i}: ${actual[i]}`);
+  assert.ok(expert.meanCAFraction>novice.meanCAFraction+.08);
+  const rare=api.candidatePokemon('미뇽',20,()=>.6,1);
+  const common=api.candidatePokemon('구구',20,()=>.6,1);
+  assert.deepEqual({...rare.statCA},{...common.statCA},'species rarity cannot inflate CA');
+  assert.deepEqual({...rare.statPA},{...common.statPA},'species rarity cannot inflate PA');
+});
+test('old talent values migrate once and pending legacy expeditions retain their original results',()=>{
+  const {api,game}=setup();
+  const t=game.clubs[0].trainers[0];
+  t.pokemonScouting={skill:7,captureSkill:18,experience:2,captureExperience:3,
+    mission:{status:'travel',region:'관동',focus:'rare',habitat:'sea',time:'day',
+      scoutSkill:7,captureSkill:18,seed:1234567,season:1,week:1}};
+  const mission=t.pokemonScouting.mission;
+  const before=api.outcome(mission,{skill:7,captureSkill:18},1);
+  const migrated=api.talent(t);
+  assert.equal(migrated.skill,7);
+  assert.equal(migrated.appraisalSkill,18);
+  assert.equal(migrated.appraisalExperience,3);
+  assert.equal(migrated.captureSkill,undefined);
+  assert.equal(api.talent(t),migrated);
+  assert.deepEqual({...api.outcome(mission,migrated,1)}, {...before});
+  const candidate={name:'이브이',statCA:{hp:40,atk:42,def:43,spa:50,spd:50,spe:51}};
+  migrated.candidate=candidate;
+  assert.equal(api.talent(t).candidate,candidate,'a waiting capture is never rerolled');
+  assert.equal(game.clubs[0].trainers[0].pokemon.length,6);
 });

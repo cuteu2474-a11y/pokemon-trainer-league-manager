@@ -18,8 +18,8 @@
   const UNCOMMON=new Set(['이브이','가디','고오스','코일','쏘드라','마릴','깜지곰','델빌','랄토스','물짱이','아차모','나무지기','파비코','톱치','꼬링크','모부기','팽도리','불꽃숭이','곤율랭','코고미','불켜미','푸호꼬','개구마르','판짱','음뱃','나몰빼미','냐오불','누리공','암멍이','마빌크','카르본','나오하','뜨아거','꾸왁스']);
   const FOCUSES={
     balanced:{label:'균형 탐색',description:'전반적인 발견·포획 확률을 유지합니다.'},
-    growth:{label:'성장 잠재력',description:'즉시 전력보다 성장 가능성이 높은 개체를 노립니다.'},
-    power:{label:'즉시 전력',description:'현재 능력이 높은 개체를 중점적으로 찾습니다.'},
+    growth:{label:'성장 개체 관찰',description:'개체별 성장 잠재력은 포획 후 개체 감별로 결정됩니다. 높은 PA는 보장되지 않습니다.'},
+    power:{label:'전력 개체 관찰',description:'실제 전투력은 포획 후 개별 CA와 종족값으로 결정됩니다. 높은 CA는 보장되지 않습니다.'},
     rare:{label:'희귀 종 집중',description:'희귀 종 탐색 비중을 높이지만 발견·포획 난도가 상승합니다.'}
   };
   // Curated GAME encounter ecology; not Pokémon's official encounter tables.
@@ -110,6 +110,9 @@
     '짜랑꼬','암멍이','두랄루돈','맨돌핀'
   ]);
   const MAX_WEEKLY=2,BASE_COST=15000,REMOTE_COST=25000;
+  // National Pokédex base-stat totals for the curated encounter pools, derived
+  // from the pinned @pkmn/sim species data (not an extra per-individual bonus).
+  const BASE_STAT_TOTALS={"가디":350,"가보리":330,"갈모매":270,"개구마르":314,"거북손손":306,"고래왕자":400,"고오스":310,"곤율랭":348,"구구":251,"글라이거":430,"깜눈크":292,"깜지곰":330,"꼬링크":263,"꼬부기":314,"꼬지지":290,"꼴깍몬":302,"꾸왁스":310,"나몰빼미":320,"나무지기":310,"나오하":310,"냐스퍼":355,"냐오불":320,"누리공":320,"눈쓰개":334,"니드런♀":275,"달콤아":210,"대굴레오":290,"델빌":330,"도치마론":313,"돌헨진":470,"두더류":328,"두랄루돈":535,"두루지벌레":180,"드니차":320,"드라꼰":270,"딥상어동":300,"떨구새":485,"뚜꾸리":308,"뜨아거":310,"랄토스":198,"리아코":314,"리오르":285,"마디네":260,"마릴":250,"마빌크":270,"마이농":405,"맘복치":470,"맛보돈":254,"맨돌핀":315,"머드나기":385,"멍파치":270,"메리프":280,"메탕":300,"모노두":300,"모래꿍":320,"모래두지":300,"모부기":318,"모토마":501,"목도리키텔":289,"무우마":435,"물짱이":310,"미끄메라":300,"미뇽":300,"바다그다":245,"버섯꼬":295,"분이벌레":200,"불꽃숭이":309,"불켜미":275,"브이젤":330,"브케인":309,"비버니":250,"빠모":240,"사랑동이":330,"수댕이":308,"수레기":320,"스라크":500,"스콜피":330,"시마사리":305,"쏘드라":295,"아차모":310,"암멍이":280,"애버라스":300,"약어리":175,"어치르돈":505,"에이팜":360,"염버니":310,"영구스":253,"오기지게":338,"완철포":330,"우파":210,"울머기":310,"윽우지":475,"음뱃":245,"이브이":325,"이상해씨":318,"이어롤":350,"자마슈":285,"주리비얀":308,"줄뮤마":295,"짜랑꼬":300,"찌로꼬치":280,"찌르꼬":245,"치라미":300,"치코리타":318,"카르본":255,"캐스퐁":420,"코고미":305,"코일":325,"콕코구리":265,"콘팡":305,"콩둘기":264,"콩알뚜기":210,"크랩":325,"타랜툴라":210,"탐리스":275,"태우지네":305,"탱그릴":335,"터검니":320,"터벅고래":334,"턱지충이":300,"테일로":270,"톱치":290,"통통코":250,"티고라스":362,"파라꼬":245,"파르빗":237,"파비코":310,"파이리":309,"판짱":348,"팽도리":314,"포챠나":220,"푸호꼬":307,"프로토가":355,"플러시":405,"피카츄":320,"하랑우탄":490,"헤라크로스":500,"호바귀":335,"화살꼬빈":278,"흔들풍손":348,"흥나숭":310};
   const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
   const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -128,11 +131,19 @@
     if(!Number.isInteger(scout.skill))
       scout.skill=clamp(Math.round(4+Number(t.tactics||10)*.36+
         Number(t.switching||10)*.27+(hash(t.uid??t.name)%5)-2),1,20);
-    if(!Number.isInteger(scout.captureSkill))
-      scout.captureSkill=clamp(Math.round(3+Number(t.switching||10)*.47+
+    // Legacy captureSkill becomes the appraisal talent; discovery and catching
+    // both use skill. Migration never rerolls existing talent or candidates.
+    if(!Number.isInteger(scout.appraisalSkill))
+      scout.appraisalSkill=Number.isInteger(scout.captureSkill)?
+        clamp(scout.captureSkill,1,20):clamp(Math.round(3+Number(t.switching||10)*.47+
         Number(t.tactics||10)*.21+(hash(String(t.uid??t.name)+':capture')%5)-2),1,20);
     if(!Number.isInteger(scout.experience))scout.experience=0;
-    if(!Number.isInteger(scout.captureExperience))scout.captureExperience=0;
+    if(!Number.isInteger(scout.appraisalExperience))
+      scout.appraisalExperience=Math.max(0,Number(scout.captureExperience)||0);
+    if(scout.talentModelVersion!==2){
+      delete scout.captureSkill;delete scout.captureExperience;
+      scout.talentModelVersion=2;
+    }
     if(!Array.isArray(scout.history))scout.history=[];
     return scout;
   }
@@ -153,17 +164,17 @@
   }
   function skillsOf(skills=10){
     const n=Number(typeof skills==='object'&&skills!==null?skills.skill:skills);
-    const c=Number(typeof skills==='object'&&skills!==null?
-      (skills.captureSkill??skills.skill):skills);
+    const a=Number(typeof skills==='object'&&skills!==null?
+      (skills.appraisalSkill??skills.captureSkill??skills.skill):skills);
     return {skill:clamp(Number.isFinite(n)?n:10,1,20),
-      captureSkill:clamp(Number.isFinite(c)?c:10,1,20)};
+      appraisalSkill:clamp(Number.isFinite(a)?a:10,1,20)};
   }
   function optionStats(region,focus,skills=10,habitat='grass',time='day'){
-    const {skill,captureSkill}=skillsOf(skills);
+    const {skill}=skillsOf(skills);
     const rare=focus==='rare';
     const discovery=clamp(.89+skill*.004-(rare?.12:0)-
       (habitat==='sea'?.025:0)-(time==='night'?.02:0),.3,.98);
-    const capture=clamp(.66+captureSkill*.012-(rare?.09:0)-
+    const capture=clamp(.66+skill*.012-(rare?.09:0)-
       (habitat==='cave'?.02:0),.3,.94);
     return {discovery,capture};
   }
@@ -176,15 +187,18 @@
       return time==='evening'?2.5:time==='night'?1.2:.5;
     return time==='morning'?1.0:time==='day'?1.6:time==='evening'?.8:.4;
   }
-  function encounterWeights(region,focus,habitat='grass',time='day'){
+  function encounterWeights(region,focus,habitat='grass',time='day',skills=10,legacy=false){
     if(!Object.hasOwn(BIOMES,region)||!Object.hasOwn(HABITATS,habitat)||
       !Object.hasOwn(TIMES,time)||!Object.hasOwn(FOCUSES,focus))
       throw new RangeError('지역·생태계·시간·탐색 방향이 올바르지 않습니다.');
+    const ability=skillsOf(skills).skill;
     return BIOMES[region][habitat].map(name=>{
       const rarity=tier(name);
       const base=rarity==='희귀'?(focus==='rare'?14:3):
         rarity==='드묾'?(focus==='rare'?7:15):(focus==='rare'?3:26);
-      return {name,rarity,weight:base*timeWeight(name,time)};
+      const bst=BASE_STAT_TOTALS[name];
+      const boost=legacy?1:1+((ability-1)/19)*clamp((bst-300)/300,0,1);
+      return {name,rarity,weight:base*timeWeight(name,time)*boost};
     });
   }
   function captureChance(rarity,stats){
@@ -192,7 +206,7 @@
   }
   /** Exact unrounded probabilities used for both UI and the actual RNG draws. */
   function encounterTable(region,habitat='grass',time='day',focus='balanced',skills=10){
-    const entries=encounterWeights(region,focus,habitat,time);
+    const entries=encounterWeights(region,focus,habitat,time,skills);
     const total=entries.reduce((sum,x)=>sum+x.weight,0);
     const stats=optionStats(region,focus,skills,habitat,time);
     const pokemon=entries.map(x=>{
@@ -206,14 +220,14 @@
       noEncounterChance:1-stats.discovery,pokemon,
       totalCaptureChance:pokemon.reduce((sum,x)=>sum+x.captureRate,0)};
   }
-  function pickEncounter(region,focus,rand,habitat='grass',time='day'){
-    const weights=encounterWeights(region,focus,habitat,time);
+  function pickEncounter(region,focus,rand,habitat='grass',time='day',skills=10,legacy=false){
+    const weights=encounterWeights(region,focus,habitat,time,skills,legacy);
     const max=weights.reduce((sum,x)=>sum+x.weight,0);
     let roll=rand()*max;
     for(const entry of weights){roll-=entry.weight;if(roll<0)return entry.name;}
     return weights.at(-1).name;
   }
-  function candidatePokemon(name,focus,skill,rand,season){
+  function legacyCandidatePokemon(name,focus,skill,rand,season){
     const rarity=tier(name);
     let ca=(rarity==='희귀'?59:rarity==='드묾'?51:43)+Math.floor(rand()*21)+Math.round(skill*.35);
     const potential=19+Math.floor(rand()*36)+(focus==='growth'?18:0)+(rarity==='희귀'?8:0);
@@ -229,23 +243,47 @@
     return {name,statCA,statPA,careerSeasons:1,debutSeason:season,
       source:'wild-scout',scoutRarity:rarity};
   }
+  function candidatePokemon(name,appraisalSkill,rand,season){
+    const a=(clamp(appraisalSkill,1,20)-1)/19;
+    const statCA={},statPA={};
+    for(const stat of ['hp','atk','def','spa','spd','spe']){
+      const tierRoll=rand();
+      const [min,max]=tierRoll<.70-.20*a?[50,110]:
+        tierRoll<.95-.10*a?[111,160]:[161,200];
+      const pa=min+Math.floor(rand()*(max-min+1));
+      statPA[stat]=pa;
+      statCA[stat]=Math.max(1,Math.min(pa,Math.floor(pa*(.40+.30*rand()+.10*a))));
+    }
+    return {name,statCA,statPA,careerSeasons:1,debutSeason:season,
+      source:'wild-scout',scoutRarity:tier(name)};
+  }
   function outcome(mission,skills,season){
     const rand=localRng(mission.seed);
     const habitat=mission.habitat||'grass',time=mission.time||'day';
     // Snapshot dispatched abilities so an in-flight trainer's later growth cannot
     // silently change the probabilities shown when the manager approved this trip.
+    const legacy=mission.rulesVersion!=='expedition-v2';
     const used=mission.scoutSkill!=null?
-      skillsOf({skill:mission.scoutSkill,captureSkill:mission.captureSkill??mission.scoutSkill}):
+      skillsOf({skill:mission.scoutSkill,
+        appraisalSkill:mission.appraisalSkill??mission.captureSkill??mission.scoutSkill}):
       skillsOf(skills);
-    const odds=optionStats(mission.region,mission.focus,used,habitat,time);
+    const odds=optionStats(mission.region,mission.focus,
+      legacy?{skill:mission.scoutSkill??used.skill,
+        appraisalSkill:mission.captureSkill??used.appraisalSkill}:used,habitat,time);
+    if(legacy){
+      odds.capture=clamp(.66+(mission.captureSkill??used.appraisalSkill)*.012-
+        (mission.focus==='rare'?.09:0)-(habitat==='cave'?.02:0),.3,.94);
+    }
     if(rand()>=odds.discovery)
       return {status:'not-found',reason:'탐색했지만 포켓몬을 발견하지 못했습니다.'};
-    const name=pickEncounter(mission.region,mission.focus,rand,habitat,time);
+    const name=pickEncounter(mission.region,mission.focus,rand,habitat,time,used,legacy);
     const rarity=tier(name);
     const catchChance=captureChance(rarity,odds);
     if(rand()>=catchChance)return {status:'escaped',name,rarity,
       reason:name+' 발견에 성공했지만 포획에는 실패했습니다.'};
-    return {status:'captured',name,rarity,candidate:candidatePokemon(name,mission.focus,used.skill,rand,season),
+    return {status:'captured',name,rarity,candidate:legacy?
+      legacyCandidatePokemon(name,mission.focus,used.skill,rand,season):
+      candidatePokemon(name,used.appraisalSkill,rand,season),
       reason:name+' 포획 성공 · 트레이너가 교체 후보로 보관 중입니다.'};
   }
   function suggestedSlot(trainer,mon){
@@ -282,8 +320,9 @@
     if(window.ClubFinance){const checked=ClubFinance.canSpend(due);if(!checked.ok)return {ok:false,error:checked.reason};}
     if(game.coins<due)return {ok:false,error:'파견 운영비가 부족합니다.'};
     // Record the expedition and deduct costs atomically. No instant rerolls.
-    s.mission={status:'travel',season:game.season,week:game.week,region,focus,
-      habitat,time,cost:due,scoutSkill:s.skill,captureSkill:s.captureSkill,
+    s.mission={status:'travel',rulesVersion:'expedition-v2',
+      season:game.season,week:game.week,region,focus,
+      habitat,time,cost:due,scoutSkill:s.skill,appraisalSkill:s.appraisalSkill,
       seed:hash([game.seed,game.season,game.week,keyOf(t),region,habitat,time,focus].join(':'))};
     if(window.ClubFinance)ClubFinance.spend(due,'expedition:'+game.season+':'+game.week+':'+keyOf(t),'포켓몬 탐색 파견');else game.coins-=due;
     data().missions++;
@@ -295,7 +334,7 @@
     const s=talent(t),m=s.mission;
     if(!m||m.status!=='travel')return null;
     if(game.season<m.season||(game.season===m.season&&game.week<=m.week))return null;
-    const result=outcome(m,{skill:s.skill,captureSkill:s.captureSkill},game.season);
+    const result=outcome(m,{skill:s.skill,appraisalSkill:s.appraisalSkill},game.season);
     m.status=result.status;m.result=result.reason;
     if(result.candidate){
       if(Number.isInteger(t.uid)){result.candidate.ownerTrainerId=String(t.uid);game.nextPokemonUID=(game.nextPokemonUID||0)+1;result.candidate.uid='pokemon:'+game.nextPokemonUID;}
@@ -306,10 +345,10 @@
     s.experience++;
     if(s.experience>=4){s.experience=0;if(s.skill<20)s.skill++;}
     if(result.status==='captured'){
-      s.captureExperience++;
-      if(s.captureExperience>=4){
-        s.captureExperience=0;
-        if(s.captureSkill<20)s.captureSkill++;
+      s.appraisalExperience++;
+      if(s.appraisalExperience>=4){
+        s.appraisalExperience=0;
+        if(s.appraisalSkill<20)s.appraisalSkill++;
       }
     }
     const item={season:game.season,week:game.week,trainer:t.name,region:m.region,
@@ -388,7 +427,7 @@
       '</select></label><div class="ps-actions"><button data-ps-recruit="'+esc(key)+'" type="button">확인 후 팀 등록</button>'+
       '<button data-ps-dismiss="'+esc(key)+'" type="button">후보 보내기</button></div></section>':'';
     return '<div class="ps-trainer"><div><b>'+esc(trainer.name)+'</b>'+
-      '<small>탐색 능력 '+scout.skill+'/20 · 경험 '+scout.experience+'/4 · 포켓몬 6마리</small>'+
+      '<small>탐색·포획 '+scout.skill+'/20 · 개체 감별 '+scout.appraisalSkill+'/20 · 경험 '+scout.experience+'/4 · 출전 6마리</small>'+
       '</div><span>'+state+'</span></div>'+
       (m?'<p class="ps-mission">최근 탐색: '+esc(m.region)+' · '+esc(HABITATS[m.habitat||'grass'])+
       ' · '+esc(TIMES[m.time||'day'])+' · '+esc(FOCUSES[m.focus]?.label||'균형 탐색')+
@@ -403,9 +442,9 @@
     if(!Object.hasOwn(HABITATS,cfg.habitat))cfg.habitat='grass';
     if(!Object.hasOwn(TIMES,cfg.time))cfg.time='day';
     const current=findTrainer(cfg.selectedTrainer);
-    const skills=current?talent(current.trainer):{skill:10,captureSkill:10};
+    const skills=current?talent(current.trainer):{skill:10,appraisalSkill:10};
     const probability=encounterTable(cfg.region,cfg.habitat,cfg.time,cfg.focus,
-      {skill:skills.skill,captureSkill:skills.captureSkill});
+      skills);
     const percent=n=>(n*100).toFixed(2)+'%';
     const opts=(items,selected)=>Object.entries(items).map(([value,label])=>
       '<option value="'+esc(value)+'" '+(value===selected?'selected':'')+'>'+
@@ -447,7 +486,7 @@
       '<section class="ps-selection"><div class="ps-form">'+
       '<label class="ps-trainer-picker">파견 트레이너<select id="ps-trainer">'+
       opts(Object.fromEntries(members.map(({trainer})=>[keyOf(trainer),
-        trainer.name+' · 탐색 '+talent(trainer).skill+' / 포획 '+talent(trainer).captureSkill])),cfg.selectedTrainer)+
+        trainer.name+' · 탐색·포획 '+talent(trainer).skill+' / 감별 '+talent(trainer).appraisalSkill])),cfg.selectedTrainer)+
       '</select></label>'+
       '<label class="ps-region-picker">지역 및 세대<select id="ps-region">'+opts(
         Object.fromEntries(Object.keys(REGIONS).map((k,i)=>[k,(i+1)+'세대 · '+k])),cfg.region)+'</select></label>'+
@@ -457,8 +496,8 @@
         Object.fromEntries(Object.entries(FOCUSES).map(([k,v])=>[k,v.label])),cfg.focus)+'</select></label>'+
       '</div>'+
       '<p class="ps-trainer-skills"><strong>'+esc(current?.trainer.name||'트레이너 미선택')+
-      '</strong> · 탐색력 <b>'+esc(skills.skill)+'/20</b> · 포획력 <b>'+
-      esc(skills.captureSkill)+'/20</b> <span>트레이너를 바꾸면 아래 확률이 달라집니다.</span></p>'+
+      '</strong> · 탐색·포획 <b>'+esc(skills.skill)+'/20</b> · 개체 감별 <b>'+
+      esc(skills.appraisalSkill)+'/20</b> <span>탐색·포획은 발견과 포획 확률, 개체 감별은 포획한 6개 능력치의 성장 잠재력에 영향을 줍니다.</span></p>'+
       '<p class="ps-info">'+esc(FOCUSES[cfg.focus].description)+'</p></section>'+
       '<section class="ps-chances" aria-label="포켓몬 출현 확률표">'+
       '<div class="ps-chances-heading"><h3>포켓몬 출현 목록</h3><span>'+
@@ -579,7 +618,7 @@
   document.head.append(style);
   window.PokemonExpedition={
     REGIONS,FOCUSES,HABITATS,TIMES,BIOMES,MAX_WEEKLY,tier,talent,outcome,optionStats,
-    encounterTable,pickEncounter,suggestedSlot,
+    encounterTable,pickEncounter,candidatePokemon,suggestedSlot,
     keyOf,findTrainer,dispatch,recruit,dismiss,resolvePlayer,render,data,weekCount,cost,
   };
   if(game)renderOffice();
