@@ -3073,12 +3073,9 @@ function clubSelectDetailsHTML(){
  const money=typeof shortTransfer==='function'?shortTransfer(starting):(starting/100000000).toFixed(1)+'억 원';
  const row=(kind,label,value,extra='')=>'<div class="cs-report-row '+extra+'">'+csIcon(kind)+'<span class="cs-report-label">'+label+'</span><strong class="cs-report-value">'+value+'</strong></div>';
  return '<div class="cs-club-head">'+clubSelectBadge(c.id,'large')+
-  '<div class="cs-club-headcopy"><h2 class="cs-club-name">'+escapeHTML(c.name)+'</h2>'+
-  '<div class="cs-club-location">'+escapeHTML(worldClubRegion(c))+'지방 연고</div>'+
-  '<div class="cs-badges"><span class="cs-chip">'+escapeHTML(identity.philosophy)+'</span><span class="cs-chip">'+(c.skill>=75?'우승 경쟁':c.skill>=65?'중위권 경쟁':'성장형 구단')+'</span></div></div></div>'+
-  '<div class="cs-report">'+row('trophy','소속 리그',(c.division+1)+'부 리그')+
+  '<div class="cs-club-headcopy"><h2 class="cs-club-name">'+escapeHTML(c.name)+'</h2></div></div>'+   '<div class="cs-report">'+row('trophy','소속 리그',(c.division+1)+'부 리그')+
   row('money','시작 이적 예산',money)+
-  '<button class="cs-report-row highlight" type="button" onclick="clubTrainerOpen()" aria-label="트레이너 정보 자세히 보기">'+csIcon('people')+'<span class="cs-report-label">트레이너 정보</span><strong class="cs-report-value">'+team.length+'명 / 평균 전술 '+coaching+' <span class="cs-report-arrow">›</span></strong></button>'+
+  '<button class="cs-report-row highlight" type="button" onclick="clubTrainerOpen()" aria-label="트레이너 정보 자세히 보기">'+csIcon('people')+'<span class="cs-report-label">트레이너 정보</span><strong class="cs-report-value">'+team.length+'명 / 평균 전술 '+coaching+'/20 <span class="cs-report-arrow">›</span></strong></button>'+
   row('youth','유소년 시설',clubFacilityGrade(fac.youth),'highlight')+
   row('train','훈련 시설',clubFacilityGrade(fac.training),'highlight')+
   row('recognition','지역 인지도',clubRecognitionGrade(identity.reputation),'highlight')+'</div>';
