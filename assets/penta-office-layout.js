@@ -338,13 +338,49 @@ function patchTrainers(root,club){
  if(toolbar)toolbar.classList.add('pr-old-toolbar');
  const table=frame.querySelector('.trainer-detail-table');if(table)patchTable(table,club);
 }
+/* FM-style secretary rail: actual pending decisions, not decorative or dismissible alerts. */
+function secretaryView(){
+ const aside=document.createElement('aside');aside.className='pr-secretary-rail';
+ aside.setAttribute('aria-label','비서 업무 목록');
+ const heading=document.createElement('div');heading.className='pr-secretary-head';
+ const title=document.createElement('strong');title.className='pr-secretary-title';title.textContent='비서 업무';
+ const tasks=window.PentaSecretaryTasks?.build?.(game,myClub())||[];
+ const count=document.createElement('span');count.className='pr-secretary-count';count.textContent='처리 필요 '+tasks.length;
+ heading.append(title,count);aside.append(heading);
+ const items=document.createElement('div');items.className='pr-secretary-items';
+ if(!tasks.length){
+  const empty=document.createElement('div');empty.className='pr-secretary-empty';
+  const check=document.createElement('strong');check.textContent='처리할 업무 없음';
+  const sub=document.createElement('span');sub.textContent='결정이 필요한 일이 생기면 여기에 표시됩니다.';
+  empty.append(check,sub);items.append(empty);
+ }else{
+  for(const task of tasks){
+   const btn=document.createElement('button');btn.type='button';
+   btn.className='pr-secretary-item'+(task.urgent?' is-urgent':'');
+   const label=document.createElement('strong');label.textContent=task.title;
+   const detail=document.createElement('span');detail.textContent=task.detail;
+   const foot=document.createElement('span');foot.className='pr-secretary-open';
+   foot.textContent='확인하기';foot.setAttribute('aria-hidden','true');
+   btn.append(label,detail,foot);
+   btn.onclick=()=>{
+    if(task.route==='match'){
+     if(typeof window.MatchdayPreparation?.render==='function')window.MatchdayPreparation.render();
+     else window.ManagementUI?.openMatch?.();
+    }else if(task.route==='research')window.ManagementUI?.retryResearch?.();
+    else if(typeof window.setTab==='function')window.setTab(task.route);
+   };
+   items.append(btn);
+  }
+ }
+ aside.append(items);return aside;
+}
 function apply(){
  const root=document.getElementById('dashboard');
  if(!root||root.hidden||typeof game==='undefined'||!game)return;
  const club=typeof myClub==='function'?myClub():null;if(!club)return;
  const panel=root.querySelector(':scope > #dashpanel');if(!panel)return;
  root.classList.add('pr-office');
- root.querySelectorAll(':scope > .pr-navigation-stack,:scope > .pr-top-navigation,:scope > .pr-secondary-navigation,:scope > .pr-club-banner,:scope > .pr-progress-bar,:scope > .pr-season-timeline').forEach(x=>x.remove());
+ root.querySelectorAll(':scope > .pr-navigation-stack,:scope > .pr-top-navigation,:scope > .pr-secondary-navigation,:scope > .pr-club-banner,:scope > .pr-progress-bar,:scope > .pr-season-timeline,:scope > .pr-secretary-rail').forEach(x=>x.remove());
  const selected=newsActive?'news':typeof tab==='string'?tab:'home';
  root.insertBefore(bannerView(root,club),panel);root.insertBefore(progressView(),panel);root.insertBefore(navView(selected),panel);
  const isProfile=selected==='home';
@@ -353,9 +389,10 @@ function apply(){
  if(newsActive)panel.replaceChildren(renderNewsView());
  else if(isProfile)panel.replaceChildren(managerProfileView(root,club));
  if(selected==='team')patchTrainers(root,club);
+ panel.after(secretaryView());
  removeOldPreview();
 }
-const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=sns-news-10';document.head.append(css);
+const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=secretary-sidebar-11';document.head.append(css);
 const previous=window.renderOffice;
 if(typeof previous==='function')window.renderOffice=function(...args){
  const value=previous.apply(this,args);
@@ -371,6 +408,12 @@ if(typeof previousSetTab==='function'){
 }
 window.PentaOfficeLayout={apply,removeOldPreview};
 removeOldPreview();apply();
+/* Load the assistant's read-only task source before first view. */
+const secretaryScript=document.createElement('script');secretaryScript.async=false;
+secretaryScript.src='assets/penta-secretary-tasks.js?v=1';
+secretaryScript.onload=()=>{if(typeof game!=='undefined'&&game)window.PentaOfficeLayout?.apply?.();};
+document.body.append(secretaryScript);
+
 /* Load the pure game-history news feed. */
 const newsDataScript=document.createElement('script');newsDataScript.async=false;
 newsDataScript.src='assets/penta-news-data.js?v=sns-2';

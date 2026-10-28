@@ -283,3 +283,75 @@
  #dashboard.pr-office .pr-news-column-heading{font-size:17px}
  #dashboard.pr-office .pr-social-post h3{font-size:15px}
 }
+
+/* Permanent secretary work queue on the right, independent of the selected screen. */
+#dashboard.pr-office{
+ display:grid;grid-template-columns:minmax(0,1fr) 300px;
+ column-gap:14px;row-gap:0;align-content:start;align-items:start;
+}
+#dashboard.pr-office > :not(#dashpanel):not(.pr-secretary-rail){grid-column:1 / -1}
+#dashboard.pr-office > #dashpanel{
+ grid-column:1;min-width:0;width:100%;max-width:none;
+ box-sizing:border-box;
+}
+#dashboard.pr-office > .pr-secretary-rail{
+ grid-column:2;min-width:0;align-self:start;position:sticky;top:12px;
+ background:linear-gradient(150deg,#132f4d,#09203a);
+ border:1px solid #4b7896;border-radius:11px;
+ box-shadow:inset 0 1px #ffffff16;
+ overflow:hidden;color:#ebf7ff;
+}
+#dashboard.pr-office .pr-secretary-head{
+ display:flex;align-items:center;justify-content:space-between;gap:7px;
+ padding:17px 14px;background:#1a3f5d;border-bottom:1px solid #3d6788;
+}
+#dashboard.pr-office .pr-secretary-title{font-size:17px;color:#fff;letter-spacing:-.025em}
+#dashboard.pr-office .pr-secretary-count{
+ font-size:12px;font-weight:800;white-space:nowrap;border-radius:6px;
+ padding:5px 7px;background:#265578;color:#d6f2ff;
+}
+#dashboard.pr-office .pr-secretary-items{
+ display:flex;flex-direction:column;gap:8px;padding:11px;
+ max-height:calc(100svh - 95px);overflow-y:auto;
+}
+#dashboard.pr-office .pr-secretary-item{
+ display:flex;flex-direction:column;align-items:stretch;text-align:left;gap:9px;
+ width:100%;padding:14px 13px;background:#143653;color:#eaf6ff;
+ border:1px solid #3f6785;border-left:3px solid #6ab9df;border-radius:8px;
+ cursor:pointer;font-family:inherit;white-space:normal;
+}
+#dashboard.pr-office .pr-secretary-item.is-urgent{border-left-color:#e0ae65}
+#dashboard.pr-office .pr-secretary-item strong{
+ font-size:15px;line-height:1.4;font-weight:800;color:#fff;overflow-wrap:anywhere;
+}
+#dashboard.pr-office .pr-secretary-item>span:not(.pr-secretary-open){
+ font-size:13px;line-height:1.5;color:#bfd9ea;overflow-wrap:anywhere;
+}
+#dashboard.pr-office .pr-secretary-open{
+ align-self:flex-end;font-size:13px;font-weight:800;color:#9be6ff;
+}
+#dashboard.pr-office .pr-secretary-item:hover,
+#dashboard.pr-office .pr-secretary-item:focus-visible{
+ border-color:#80c9ec;background:#1b4567;outline-offset:2px;
+}
+#dashboard.pr-office .pr-secretary-empty{
+ display:flex;flex-direction:column;gap:9px;padding:19px 9px;
+ text-align:center;color:#cfe8f5;
+}
+#dashboard.pr-office .pr-secretary-empty strong{font-size:14px;color:#eaf9ff}
+#dashboard.pr-office .pr-secretary-empty span{font-size:13px;line-height:1.5}
+@media(max-width:1050px) and (min-width:761px){
+ #dashboard.pr-office{grid-template-columns:minmax(0,1fr) 254px;column-gap:10px}
+ #dashboard.pr-office .pr-secretary-head{padding:13px 9px}
+ #dashboard.pr-office .pr-secretary-title{font-size:15px}
+ #dashboard.pr-office .pr-secretary-items{padding:8px;gap:7px}
+ #dashboard.pr-office .pr-secretary-item{padding:11px 10px}
+}
+@media(max-width:760px){
+ #dashboard.pr-office{grid-template-columns:minmax(0,1fr);row-gap:12px}
+ #dashboard.pr-office > #dashpanel{grid-column:1}
+ #dashboard.pr-office > .pr-secretary-rail{
+  grid-column:1;position:static;width:100%;max-width:none;
+ }
+ #dashboard.pr-office .pr-secretary-items{max-height:none}
+}
