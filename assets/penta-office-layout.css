@@ -136,7 +136,28 @@
  .pr-manager-profile-detail dl{grid-template-columns:80px 1fr;gap:6px;font-size:11px}
 }
 
-/* Keep the existing season calendar directly beneath the global schedule bar. */
-#dashboard.pr-office>.pr-season-timeline{display:block;min-width:0;width:100%;max-width:100%;margin:0 0 10px;padding:8px 11px 9px;overflow-x:auto;overflow-y:hidden;background:linear-gradient(120deg,#112d4c,#0b223d);border:1px solid #356c90;border-radius:9px;box-sizing:border-box;scrollbar-width:thin;scrollbar-color:#4b86a9 transparent}
-#dashboard.pr-office>.pr-season-timeline>*{margin-top:0;margin-bottom:0;max-width:none}
-@media(max-width:640px){#dashboard.pr-office>.pr-season-timeline{padding:7px 8px;margin-bottom:8px}}
+
+/* Calendar and progression share one stable header on every tab. */
+#dashboard.pr-office>.pr-progress-bar{display:flex;flex-direction:column;align-items:stretch;gap:10px;min-height:0;padding:12px 17px;margin-bottom:12px}
+.pr-progress-head{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.pr-week-calendar{display:flex;flex-direction:column;gap:9px;min-width:0;width:100%;padding-top:10px;border-top:1px solid #47769a}
+.pr-week-track{display:grid;grid-template-columns:repeat(30,minmax(0,1fr));gap:4px;width:100%;min-width:0}
+.pr-week-block{display:block;position:relative;min-width:0;height:20px;border-radius:4px;background:#438ea1}
+.pr-week-off,.pr-week-key.pr-week-off{background:#328c87}
+.pr-week-league,.pr-week-key.pr-week-league{background:#337cb9}
+.pr-week-market,.pr-week-key.pr-week-market{background:#c88e42}
+.pr-week-settlement,.pr-week-key.pr-week-settlement{background:#a485c1}
+.pr-week-block.is-current{outline:2px solid #f4fcff;outline-offset:2px;box-shadow:0 0 0 4px #102740,0 0 0 5px #99dfff}
+.pr-week-legend{display:flex;align-items:center;flex-wrap:wrap;gap:7px 17px;color:#b4cee0;font-size:12px}
+.pr-week-legend-item{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.pr-week-key{display:inline-block;flex:none;width:12px;height:12px;border-radius:3px}
+#dashboard.pr-office>.pr-season-timeline{display:none!important}
+@media(max-width:640px){
+ #dashboard.pr-office>.pr-progress-bar{padding:10px;gap:10px}
+ .pr-progress-head{align-items:stretch;gap:8px}
+ .pr-week-calendar{padding-top:9px}
+ .pr-week-track{gap:2px}
+ .pr-week-block{height:15px;border-radius:3px}
+ .pr-week-legend{gap:6px 12px;font-size:10px}
+ .pr-week-key{height:10px;width:10px}
+}

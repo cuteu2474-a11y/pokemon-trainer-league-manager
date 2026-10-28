@@ -107,44 +107,47 @@ function progressView(){
  important.textContent=game.pendingMatch?'경기 준비로 이동':'다음 중요 일정';
  important.onclick=()=>game.pendingMatch?window.ManagementUI?.openMatch():window.ManagementUI?.important();
  if(game.management?.running){next.disabled=true;important.disabled=true;}
- actions.append(next,important);bar.append(status,actions);return bar;
+ actions.append(next,important);
+ const header=document.createElement('div');header.className='pr-progress-head';
+ header.append(status,actions);
+ bar.append(header,seasonWeekStrip());return bar;
 }
-/* Elevate the existing 30-week calendar instead of recreating the dates,
-   colors, event listeners or state. The original node is reused. */
-function findSeasonTimeline(root){
- const labels=['프리시즌/비시즌','정규 리그','겨울 이적시장','시즌 정산'];
- const protectedSelector='.pr-season-timeline,.pr-navigation-stack,.pr-progress-bar,.pr-club-banner';
- const leaves=Array.from(root.querySelectorAll('*')).filter(node=>
-  node.childElementCount===0 && (node.textContent||'').includes('프리시즌/비시즌') &&
-  !node.closest(protectedSelector));
- for(const leaf of leaves){
-  let fallback=null;
-  for(let parent=leaf.parentElement;parent && parent!==root;parent=parent.parentElement){
-   if(parent.matches(protectedSelector))break;
-   const labelCount=labels.filter(label=>(parent.textContent||'').includes(label)).length;
-   if(labelCount<3)continue;
-   // The colored 30-week boxes are siblings in a timeline row.
-   const weekRow=Array.from(parent.querySelectorAll('*')).some(el=>el.childElementCount>=27 && el.childElementCount<=32);
-   const semantic=/(?:season|calendar|timeline|week|schedule|시즌|일정|주차)/i.test(String(parent.className||'')+' '+String(parent.id||''));
-   if(weekRow)return parent;
-   if(semantic && !fallback)fallback=parent;
-  }
-  if(fallback)return fallback;
+/* Integrated calendar uses the same fixed 30-week season plan as the league.
+   Rendering it directly avoids losing the timeline when dashboard DOM is rebuilt. */
+const SEASON_PHASES=[
+ {start:1,end:4,kind:'off',label:'프리시즌/비시즌'},
+ {start:5,end:13,kind:'league',label:'정규 리그'},
+ {start:14,end:15,kind:'market',label:'겨울 이적시장'},
+ {start:16,end:24,kind:'league',label:'정규 리그'},
+ {start:25,end:25,kind:'settlement',label:'시즌 정산'},
+ {start:26,end:30,kind:'off',label:'프리시즌/비시즌'}
+];
+function phaseForWeek(week){return SEASON_PHASES.find(p=>week>=p.start&&week<=p.end);}
+function seasonWeekStrip(){
+ const frame=document.createElement('div');frame.className='pr-week-calendar';
+ const track=document.createElement('div');track.className='pr-week-track';
+ track.setAttribute('role','img');track.setAttribute('aria-label','30주 시즌 진행 현황');
+ const current=Math.min(30,Math.max(1,Number(game.week)||1));
+ for(let week=1;week<=30;week++){
+  const phase=phaseForWeek(week);
+  const square=document.createElement('span');
+  square.className='pr-week-block pr-week-'+phase.kind+(week===current?' is-current':'');
+  square.title=week+'주차 · '+phase.label+(week===current?' (현재)':'');
+  square.setAttribute('aria-label',square.title);
+  if(week===current)square.setAttribute('aria-current','date');
+  track.append(square);
  }
- return null;
-}
-function elevateSeasonTimeline(root){
- const nav=root.querySelector(':scope > .pr-navigation-stack');
- if(!nav)return;
- const oldSlot=root.querySelector(':scope > .pr-season-timeline');
- const original=findSeasonTimeline(root);
- if(original){
-  const slot=oldSlot||document.createElement('section');
-  slot.className='pr-season-timeline';
-  slot.setAttribute('aria-label','시즌 30주 일정');
-  slot.replaceChildren(original); // Moving retains real week controls and listeners.
-  root.insertBefore(slot,nav);
- }else if(oldSlot)root.insertBefore(oldSlot,nav);
+ const legend=document.createElement('div');legend.className='pr-week-legend';
+ const kinds=['off','league','market','settlement'];
+ for(const kind of kinds){
+  const phase=SEASON_PHASES.find(p=>p.kind===kind);
+  const item=document.createElement('span');item.className='pr-week-legend-item';
+  const marker=document.createElement('span');marker.className='pr-week-key pr-week-'+kind;
+  marker.setAttribute('aria-hidden','true');
+  const label=document.createElement('span');label.textContent=phase.label;
+  item.append(marker,label);legend.append(item);
+ }
+ frame.append(track,legend);return frame;
 }
 function managerProfileView(root,club){
  const page=document.createElement('section');page.className='pr-manager-profile';page.setAttribute('aria-label','감독 프로필');
@@ -212,16 +215,15 @@ function apply(){
  const club=typeof myClub==='function'?myClub():null;if(!club)return;
  const panel=root.querySelector(':scope > #dashpanel');if(!panel)return;
  root.classList.add('pr-office');
- root.querySelectorAll(':scope > .pr-navigation-stack,:scope > .pr-top-navigation,:scope > .pr-secondary-navigation,:scope > .pr-club-banner,:scope > .pr-progress-bar').forEach(x=>x.remove());
+ root.querySelectorAll(':scope > .pr-navigation-stack,:scope > .pr-top-navigation,:scope > .pr-secondary-navigation,:scope > .pr-club-banner,:scope > .pr-progress-bar,:scope > .pr-season-timeline').forEach(x=>x.remove());
  const selected=typeof tab==='string'?tab:'home';
  root.insertBefore(bannerView(root,club),panel);root.insertBefore(progressView(),panel);root.insertBefore(navView(selected),panel);
- elevateSeasonTimeline(root);
  panel.classList.toggle('pr-manager-profile-view',selected==='home'&&homeSubpage==='manager-profile');
  if(selected==='home'&&homeSubpage==='manager-profile')panel.replaceChildren(managerProfileView(root,club));
  if(selected==='team')patchTrainers(root,club);
  removeOldPreview();
 }
-const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=season-timeline-4';document.head.append(css);
+const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=integrated-calendar-5';document.head.append(css);
 const previous=window.renderOffice;
 if(typeof previous==='function')window.renderOffice=function(...args){
  const value=previous.apply(this,args);
