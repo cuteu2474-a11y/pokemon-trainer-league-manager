@@ -920,7 +920,7 @@ if(game&&game.version!==2)game=null;
 const newSeed=()=>Math.floor(Math.random()*2147483646)+1;
 function rng(g){g.seed=(Math.imul(g.seed,1664525)+1013904223)>>>0;return g.seed/4294967296}
 function rnd(g,a,b){return a+Math.floor(rng(g)*(b-a+1))}
-function mkTrainer(g,club,j){let roster=[];for(let i=0;i<6;i++)roster.push({name:SPECIES[rnd(g,0,SPECIES.length-1)],level:rnd(g,36,58),power:rnd(g,48,84),careerSeasons:rnd(g,1,6)});return {id:j,name:['대표','전략','선봉','수비','에이스'][j]+' 트레이너',tactics:rnd(g,6,17),switching:rnd(g,6,17),pokemon:roster};}
+function mkTrainer(g,club,j){let roster=[];for(let i=0;i<6;i++)roster.push({name:SPECIES[rnd(g,0,SPECIES.length-1)],power:rnd(g,48,84),careerSeasons:rnd(g,1,6)});return {id:j,name:['대표','전략','선봉','수비','에이스'][j]+' 트레이너',tactics:rnd(g,6,17),switching:rnd(g,6,17),pokemon:roster};}
 function mkSchedule(ids){const teams=ids.slice();const rounds=[];for(let r=0;r<9;r++){let games=[];for(let k=0;k<5;k++){let a=teams[k],b=teams[9-k];games.push(r%2?[b,a]:[a,b])}rounds.push(games);teams.splice(1,0,teams.pop())}return rounds.concat(rounds.map(g=>g.map(([a,b])=>[b,a])))}
 function freshGame(manager,club){const g={version:2,manager,club,seed:newSeed(),season:1,round:0,coins:750000,academy:1,scout:0,log:[],order:[0,1,2,3,4],clubs:[],fixtures:[],results:[],lastMatch:null};
 ALL_CLUBS.forEach((division,di)=>division.forEach((name,idx)=>g.clubs.push({id:di*10+idx,name,division:di,skill:rnd(g,56,85),trainers:[],points:0,w:0,d:0,l:0,gf:0,ga:0})));
@@ -935,8 +935,8 @@ function playNext(){if(game.round>=18)return;const r=game.round;const matches=[]
 function rankedDivision(g,division){return window.LeagueStandings?LeagueStandings.clubs(g,division):g.clubs.filter(c=>c.division===division).sort((a,b)=>b.points-a.points||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf||b.w-a.w)}
 function sortedDivision(){return rankedDivision(game,myClub().division)}
 function preparePokemonCareers(){if(!game)return;for(const c of game.clubs)for(const t of c.trainers.concat(c.reserveTrainers||[]).filter(Boolean))for(const p of t.pokemon){if(!Number.isInteger(p.careerSeasons))p.careerSeasons=1;if(!Number.isInteger(p.debutSeason))p.debutSeason=game.season-p.careerSeasons+1;}if(!Array.isArray(game.hallOfFame))game.hallOfFame=[];}
-function pokemonRetirements(){preparePokemonCareers();let retired=0;for(const c of game.clubs){for(const t of c.trainers.concat(c.reserveTrainers||[]).filter(Boolean)){for(let i=0;i<t.pokemon.length;i++){const p=t.pokemon[i];p.careerSeasons++;if(p.careerSeasons>=8){const record={name:p.name,level:p.level,power:p.power,careerSeasons:8,trainer:t.name,club:c.name,season:game.season};if(c.name===game.club)game.hallOfFame.unshift(record);t.pokemon[i]=newPokemonProspect(c,t);retired++;if(c.name===game.club)game.log.unshift('은퇴: '+p.name+' ('+t.name+') · 아카데미 신예 영입');}}}}game.log.unshift('시즌 '+game.season+' 은퇴 정산: 전체 '+retired+'마리');return retired;}
-function newPokemonProspect(c,t){return {name:SPECIES[rnd(game,0,SPECIES.length-1)],level:rnd(game,20,32),power:rnd(game,38,62),careerSeasons:1,debutSeason:game.season+1};}
+function pokemonRetirements(){preparePokemonCareers();let retired=0;for(const c of game.clubs){for(const t of c.trainers.concat(c.reserveTrainers||[]).filter(Boolean)){for(let i=0;i<t.pokemon.length;i++){const p=t.pokemon[i];p.careerSeasons++;if(p.careerSeasons>=8){const record={name:p.name,power:p.power,careerSeasons:8,trainer:t.name,club:c.name,season:game.season};if(c.name===game.club)game.hallOfFame.unshift(record);t.pokemon[i]=newPokemonProspect(c,t);retired++;if(c.name===game.club)game.log.unshift('은퇴: '+p.name+' ('+t.name+') · 아카데미 신예 영입');}}}}game.log.unshift('시즌 '+game.season+' 은퇴 정산: 전체 '+retired+'마리');return retired;}
+function newPokemonProspect(c,t){return {name:SPECIES[rnd(game,0,SPECIES.length-1)],power:rnd(game,38,62),careerSeasons:1,debutSeason:game.season+1};}
 function trainerRetirementState(t){if(!t.retirement)t.retirement={intent:0,noticeSeason:null};return t.retirement}
 function trainerRetirementLabel(t){const r=trainerRetirementState(t);return r.noticeSeason!==null?'은퇴 예고':r.intent>=60?'은퇴 고민':'현역 유지'}
 function ensureTrainerAcademies(){for(const c of game.clubs){c.trainerAcademy=c.trainerAcademy||[];c.reserveTrainers=c.reserveTrainers||[];}}
@@ -954,7 +954,7 @@ function processTrainerRetirements(){
     if(rng(game)<0.65){
      game.trainerRetirementHistory.unshift({name:t.name,club:c.name,season:game.season,noticeSeason:r.noticeSeason});
      // 담당 포켓몬도 함께 은퇴. 별도 신입 트레이너/포켓몬을 즉시 배치하지 않는다.
-     if(c.name===game.club){game.hallOfFame=game.hallOfFame||[];for(const p of t.pokemon)game.hallOfFame.unshift({name:p.name,level:p.level,power:p.power,careerSeasons:p.careerSeasons,trainer:t.name,club:c.name,season:game.season,reason:'담당 트레이너 은퇴'});}
+     if(c.name===game.club){game.hallOfFame=game.hallOfFame||[];for(const p of t.pokemon)game.hallOfFame.unshift({name:p.name,power:p.power,careerSeasons:p.careerSeasons,trainer:t.name,club:c.name,season:game.season,reason:'담당 트레이너 은퇴'});}
      if(entry.reserve)c.reserveTrainers.splice(entry.i,1);
      else c.trainers[entry.i]=null;
      if(c.name===game.club)game.log.unshift(t.name+' 자발적 은퇴 · 담당 포켓몬 '+t.pokemon.length+'마리 함께 은퇴 · 출전 자리 공석');
@@ -980,12 +980,12 @@ let trainerListFilter='all',trainerListQuery='',trainerSort='order',trainerSortA
 const TRAINER_COLS=[
  ['order','순서'],['name','트레이너'],['status','구분'],['retirement','은퇴 동향'],['age','나이'],['region','출신 지역'],
  ['tactics','전술'],['switching','교체'],['ca','현재 능력'],['pa','잠재 능력'],
- ['avg','평균 전력'],['level','평균 레벨'],['salary','연봉'],['contract','계약 만료'],['pokemon','포켓몬'],['overall','종합']
+ ['avg','평균 CA'],['potential','평균 PA'],['salary','연봉'],['contract','계약 만료'],['pokemon','포켓몬'],['overall','종합']
 ];
 const DEFAULT_COLS=['order','name','status','retirement','age','region','tactics','switching','ca','pa','avg','salary','contract','pokemon'];
 const COLS_KEY='tlm-trainer-columns-v1';
 let trainerColumns=DEFAULT_COLS.slice(),columnChooserOpen=false;
-try{const v=JSON.parse(localStorage.getItem(COLS_KEY));if(Array.isArray(v)){const valid=v.filter(k=>TRAINER_COLS.some(c=>c[0]===k));if(valid.includes('name')&&valid.length)trainerColumns=[...new Set(valid)];}}catch{}
+try{const v=JSON.parse(localStorage.getItem(COLS_KEY));if(Array.isArray(v)){const valid=v.map(k=>k==='level'?'potential':k).filter(k=>TRAINER_COLS.some(c=>c[0]===k));if(valid.includes('name')&&valid.length)trainerColumns=[...new Set(valid)];}}catch{}
 const TRAINER_REGIONS=['관동','성도','호연','신오','하나','칼로스','알로라','가라르','팔데아'];
 function hashTrainer(s){let h=2166136261;for(const c of s){h=Math.imul(h^c.charCodeAt(0),16777619)>>>0;}return h}
 function ensureTrainerDetails(c){
@@ -1002,7 +1002,7 @@ function ensureTrainerDetails(c){
 function allTrainers(c){ensureTrainerDetails(c);return c.trainers.map((t,i)=>({trainer:t,id:i,reserve:false})).filter(e=>e.trainer).concat((c.reserveTrainers||[]).map((t,i)=>({trainer:t,id:i+5,reserve:true})))}
 function trainerStat(t,key){
  if(key==='avg')return Math.round(t.pokemon.reduce((a,p)=>a+p.power,0)/t.pokemon.length);
- if(key==='level')return Math.round(t.pokemon.reduce((a,p)=>a+p.level,0)/t.pokemon.length);
+ if(key==='potential')return Math.round(t.pokemon.reduce((a,p)=>a+(p.pa??p.power),0)/t.pokemon.length);
  if(key==='retirement')return trainerRetirementState(t).intent;
  if(key==='pokemon')return t.pokemon.length;
  if(key==='overall')return Math.round((t.tactics+t.switching)/2);
@@ -1055,12 +1055,12 @@ function trainerProfileHTML(c){
 
  const attrs=trainerAttribute('전술 지휘',t.tactics)+trainerAttribute('교체 판단',t.switching)+trainerAttribute('포켓몬 평균 전력',Math.round(t.pokemon.reduce((sum,p)=>sum+p.power,0)/6/5))+trainerAttribute('성장 잠재력',Math.min(20,Math.round((t.tactics+t.switching)/2)+2));
  const retirementNote='<div class="g-notice" style="margin:12px 0">은퇴 동향: <strong>'+trainerRetirementLabel(t)+'</strong> · 은퇴 의향 '+trainerRetirementState(t).intent+'/100'+(trainerRetirementState(t).noticeSeason!==null?' · 시즌 '+trainerRetirementState(t).noticeSeason+'에 사전 예고됨':'')+'<br><small>나이는 은퇴에 영향을 주지 않습니다. 은퇴 예고 이후 다음 시즌 종료 시 자발적 은퇴 또는 활동 지속을 결정합니다.</small></div>';
- const mons=t.pokemon.map((p,i)=>'<div class="profile-mon"><b>'+(i+1)+'. '+escapeHTML(p.name)+'</b><small>Lv.'+p.level+'　전투력 '+p.power+'</small><div class="g-bar"><i style="width:'+p.power+'%"></i></div></div>').join('');
+ const mons=t.pokemon.map((p,i)=>'<div class="profile-mon"><b>'+(i+1)+'. '+escapeHTML(p.name)+'</b><small>평균 CA '+p.power+'</small><div class="g-bar"><i style="width:'+p.power+'%"></i></div></div>').join('');
  return '<div class="profile-navigation"><button class="g-btn alt" onclick="setTab(\'team\')">← 트레이너 목록</button><span>TRAINER / PROFILE</span></div><section class="trainer-profile"><div class="trainer-profile-head"><div class="trainer-avatar" aria-label="트레이너 초상화 자리">'+(id+1).toString().padStart(2,'0')+'</div><div><div class="eyebrow">TRAINER PROFILE</div><h2>'+escapeHTML(t.name)+'</h2><div class="role">'+role+'　/　출전 순서 '+order+'번</div><div class="status">소속: '+escapeHTML(c.name)+' 클럽　·　보유 포켓몬 6마리</div></div></div><div class="profile-section-title">코칭 능력</div><div class="trainer-stat-grid">'+attrs+'</div><div class="profile-section-title">보유 포켓몬</div><div class="profile-pokemon">'+mons+'</div><div class="profile-actions"><button class="g-btn" onclick="trainTrainer('+id+')">주간 훈련 선택 →</button><button class="g-btn alt" onclick="setTab(\'tactics\')">출전 순서 관리 →</button></div><div class="profile-footnote">전술·교체 수치는 게임 내부의 생성된 능력치입니다. 성장 잠재력은 참고용 표시이며, 실제 훈련은 전술 능력과 포켓몬 전력을 향상시킵니다.</div></section>';
 }
 function trainTrainer(i){const c=myClub();const t=i<5?c.trainers[i]:(c.reserveTrainers||[])[i-5];if(!t||game.coins<50000)return;game.coins-=50000;t.tactics=Math.min(20,t.tactics+1);const p=t.pokemon[rnd(game,0,5)];p.power=Math.min(99,p.power+1);game.log.unshift(t.name+' 훈련 완료 (₩50,000)');persist();renderOffice()}
-function scoutPokemon(){if(game.coins<100000)return;game.coins-=100000;game.scout++;const active=myClub().trainers.filter(Boolean);if(!active.length)return;const t=active[rnd(game,0,active.length-1)];const p=t.pokemon[rnd(game,0,5)];const before=p.name;p.name=SPECIES[rnd(game,0,SPECIES.length-1)];p.power=rnd(game,60,93);p.level=rnd(game,45,60);game.log.unshift('스카우트 영입: '+before+' → '+p.name+' ('+t.name+')');persist();renderOffice()}
-function upgradeAcademy(){const cost=15000*game.academy;if(game.coins<cost||game.academy>=5)return;game.coins-=cost;game.academy++;for(const t of myClub().trainers.filter(Boolean))for(const p of t.pokemon)p.power=Math.min(99,p.power+1);game.log.unshift('아카데미 레벨 '+game.academy+' 달성');persist();renderOffice()}
+function scoutPokemon(){if(game.coins<100000)return;game.coins-=100000;game.scout++;const active=myClub().trainers.filter(Boolean);if(!active.length)return;const t=active[rnd(game,0,active.length-1)];const p=t.pokemon[rnd(game,0,5)];const before=p.name;p.name=SPECIES[rnd(game,0,SPECIES.length-1)];p.power=rnd(game,60,93);game.log.unshift('스카우트 영입: '+before+' → '+p.name+' ('+t.name+')');persist();renderOffice()}
+function upgradeAcademy(){const cost=15000*game.academy;if(game.coins<cost||game.academy>=5)return;game.coins-=cost;game.academy++;for(const t of myClub().trainers.filter(Boolean))for(const p of t.pokemon)p.power=Math.min(99,p.power+1);game.log.unshift('아카데미 시설 '+game.academy+'단계 달성');persist();renderOffice()}
 function moveOrder(i,delta){if(!game)return;const j=i+delta;if(j<0||j>4)return;[game.order[i],game.order[j]]=[game.order[j],game.order[i]];persist();renderOffice()}
 function startCareer(){const manager=$('manager').value.trim(),club=$('club').value;if(!manager){$('manager').focus();return}game=freshGame(manager,club);persist();save={manager,club,order:[1,2,3,4,5]};try{localStorage.setItem(KEY,JSON.stringify(save))}catch(e){}tutorial(0)}
 function office(){if(!game){dispatch('new');return}close();$('mainmenu').hidden=true;$('dashboard').hidden=false;renderOffice()}
@@ -1069,16 +1069,16 @@ function renderOffice(){if(!game)return;preparePokemonCareers();const c=myClub()
 const p=$('dashpanel'),fixture=nextFixture(),opp=fixture?game.clubs[fixture[0]===c.id?fixture[1]:fixture[0]]:null;
 const btn=(label,fn,disabled=false,alt=false)=>'<button class="g-btn '+(alt?'alt':'')+'" onclick="'+fn+'" '+(disabled?'disabled':'')+'>'+label+'</button>';
 const stat=(label,v)=>'<div class="g-stat"><small>'+label+'</small><b>'+v+'</b></div>';
-if(tab==='home'){p.innerHTML='<h2>구단 운영 현황</h2><div class="g-grid">'+stat('현재 순위',sortedDivision().findIndex(x=>x.id===c.id)+1+'위')+stat('승점',c.points+' PTS')+stat('운영 자금',wonReadable(game.coins))+stat('아카데미','Lv.'+game.academy)+'</div><div class="g-two"><div><h2>다음 경기</h2><div class="g-notice">'+(opp?('ROUND '+(game.round+1)+' · '+(fixture[0]===c.id?'홈':'원정')+'<br><strong>'+escapeHTML(c.name)+' VS '+escapeHTML(opp.name)+'</strong>'):'시즌 종료 · 새 시즌을 시작하세요')+'</div>'+btn(game.round<18?'다음 라운드 진행 ▶':'다음 시즌 시작 ▶',game.round<18?'playNext()':'startNewSeason()')+'<p class="g-muted">현재 경기는 능력치 기반의 간이 시뮬레이션입니다. 원본 Showdown 전투는 아직 연결되지 않았습니다.</p></div><div><h2>최근 활동</h2><div class="g-log">'+(game.log.length?game.log.slice(0,8).map(v=>'<div>'+escapeHTML(v)+'</div>').join(''):'<div>첫 시즌이 시작되었습니다. 출전 순서를 정하고 경기를 진행하세요.</div>')+'</div></div></div>'}
+if(tab==='home'){p.innerHTML='<h2>구단 운영 현황</h2><div class="g-grid">'+stat('현재 순위',sortedDivision().findIndex(x=>x.id===c.id)+1+'위')+stat('승점',c.points+' PTS')+stat('운영 자금',wonReadable(game.coins))+stat('아카데미',game.academy+'단계')+'</div><div class="g-two"><div><h2>다음 경기</h2><div class="g-notice">'+(opp?('ROUND '+(game.round+1)+' · '+(fixture[0]===c.id?'홈':'원정')+'<br><strong>'+escapeHTML(c.name)+' VS '+escapeHTML(opp.name)+'</strong>'):'시즌 종료 · 새 시즌을 시작하세요')+'</div>'+btn(game.round<18?'다음 라운드 진행 ▶':'다음 시즌 시작 ▶',game.round<18?'playNext()':'startNewSeason()')+'<p class="g-muted">현재 경기는 능력치 기반의 간이 시뮬레이션입니다. 원본 Showdown 전투는 아직 연결되지 않았습니다.</p></div><div><h2>최근 활동</h2><div class="g-log">'+(game.log.length?game.log.slice(0,8).map(v=>'<div>'+escapeHTML(v)+'</div>').join(''):'<div>첫 시즌이 시작되었습니다. 출전 순서를 정하고 경기를 진행하세요.</div>')+'</div></div></div>'}
 else if(tab==='team'){p.innerHTML=trainerListHTML(c)}
 else if(tab==='profile'){p.innerHTML=trainerProfileHTML(c)}
-else if(tab==='pokemon'){p.innerHTML='<h2>보유 포켓몬 · 은퇴 관리</h2><p class="g-muted">모든 종족 공통 8시즌 은퇴 · 7시즌차 은퇴 예고 · 은퇴 시 신예 자동 충원</p>'+c.trainers.concat(c.reserveTrainers||[]).filter(Boolean).map(t=>'<h3 style="font-size:14px;color:#82d4ef;margin-top:22px">'+escapeHTML(t.name)+'</h3><div class="g-pokemon">'+t.pokemon.map(x=>'<div><b>'+escapeHTML(x.name)+'</b>Lv.'+x.level+'　전투력 '+x.power+'<div style="margin-top:6px;color:'+(x.careerSeasons>=7?'#ffbf83':'#a8c6d7')+'">활동 '+x.careerSeasons+'/8시즌'+(x.careerSeasons>=7?' · 은퇴 예정':'')+'</div><div class="g-bar"><i style="width:'+x.power+'%"></i></div></div>').join('')+'</div>').join('')}
-else if(tab==='retirement'){p.innerHTML='<h2>구단 명예의 전당</h2><p class="g-muted">시즌 종료 시 활동 8시즌에 도달한 포켓몬이 은퇴합니다. 은퇴 기록은 구단에 남고 빈자리는 신예가 채웁니다.</p>'+(game.hallOfFame.length?'<table class="g-table"><thead><tr><th>포켓몬</th><th>담당 트레이너</th><th>은퇴 시즌</th><th>최종 레벨</th><th>전투력</th></tr></thead><tbody>'+game.hallOfFame.map(x=>'<tr><td>'+escapeHTML(x.name)+'</td><td>'+escapeHTML(x.trainer)+'</td><td>'+x.season+'</td><td>'+x.level+'</td><td>'+x.power+'</td></tr>').join('')+'</tbody></table>':'<div class="g-notice">아직 은퇴한 포켓몬이 없습니다.</div>')}
+else if(tab==='pokemon'){p.innerHTML='<h2>보유 포켓몬 · 은퇴 관리</h2><p class="g-muted">모든 종족 공통 8시즌 은퇴 · 7시즌차 은퇴 예고 · 은퇴 시 신예 자동 충원</p>'+c.trainers.concat(c.reserveTrainers||[]).filter(Boolean).map(t=>'<h3 style="font-size:14px;color:#82d4ef;margin-top:22px">'+escapeHTML(t.name)+'</h3><div class="g-pokemon">'+t.pokemon.map(x=>'<div><b>'+escapeHTML(x.name)+'</b>　평균 CA '+x.power+'<div style="margin-top:6px;color:'+(x.careerSeasons>=7?'#ffbf83':'#a8c6d7')+'">활동 '+x.careerSeasons+'/8시즌'+(x.careerSeasons>=7?' · 은퇴 예정':'')+'</div><div class="g-bar"><i style="width:'+x.power+'%"></i></div></div>').join('')+'</div>').join('')}
+else if(tab==='retirement'){p.innerHTML='<h2>구단 명예의 전당</h2><p class="g-muted">시즌 종료 시 활동 8시즌에 도달한 포켓몬이 은퇴합니다. 은퇴 기록은 구단에 남고 빈자리는 신예가 채웁니다.</p>'+(game.hallOfFame.length?'<table class="g-table"><thead><tr><th>포켓몬</th><th>담당 트레이너</th><th>은퇴 시즌</th><th>당시 평균 CA</th></tr></thead><tbody>'+game.hallOfFame.map(x=>'<tr><td>'+escapeHTML(x.name)+'</td><td>'+escapeHTML(x.trainer)+'</td><td>'+x.season+'</td><td>'+x.power+'</td></tr>').join('')+'</tbody></table>':'<div class="g-notice">아직 은퇴한 포켓몬이 없습니다.</div>')}
 else if(tab==='tactics'){p.innerHTML='<h2>트레이너 출전 순서</h2><p class="g-muted">연승전에서는 선봉이 먼저 출전합니다. 앞/뒤 버튼으로 순서를 조정하세요. 실제 경기 계산에 작은 순서 보정이 적용됩니다.</p><table class="g-table"><thead><tr><th>순서</th><th>트레이너</th><th>전술</th><th>교체</th><th>순서 변경</th></tr></thead><tbody>'+game.order.map((id,i)=>{let t=c.trainers[id];return '<tr><td><b>'+String(i+1).padStart(2,'0')+'</b></td><td>'+(t?escapeHTML(t.name):'공석')+'</td><td>'+(t?t.tactics:'—')+'</td><td>'+(t?t.switching:'—')+'</td><td>'+btn('▲','moveOrder('+i+',-1)',i===0,true)+btn('▼','moveOrder('+i+',1)',i===4,true)+'</td></tr>'}).join('')+'</tbody></table>'}
 else if(tab==='league'){p.innerHTML='<h2>'+(c.division+1)+'부 리그 순위표</h2><table class="g-table"><thead><tr><th>#</th><th>구단</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>득실</th><th>승점</th></tr></thead><tbody>'+sortedDivision().map((x,i)=>'<tr class="'+(x.id===c.id?'mine':'')+'"><td>'+(i+1)+'</td><td>'+escapeHTML(x.name)+'</td><td>'+(x.w+x.d+x.l)+'</td><td>'+x.w+'</td><td>'+x.d+'</td><td>'+x.l+'</td><td>'+(x.gf-x.ga)+'</td><td><b>'+x.points+'</b></td></tr>').join('')+'</tbody></table><p class="g-muted">상위 2팀 승격 · 하위 2팀 강등 (1부는 승격 없음, 4부는 강등 없음)</p>'}
 else if(tab==='fixtures'){p.innerHTML='<h2>시즌 일정 / 결과</h2><table class="g-table"><thead><tr><th>라운드</th><th>홈</th><th>원정</th><th>결과</th></tr></thead><tbody>'+game.fixtures[c.division].map((round,i)=>{const f=round.find(([a,b])=>a===c.id||b===c.id);const r=game.results[i]?.find(m=>m.home===f[0]&&m.away===f[1]);return '<tr class="'+(i===game.round?'mine':'')+'"><td>'+(i+1)+'</td><td>'+escapeHTML(game.clubs[f[0]].name)+'</td><td>'+escapeHTML(game.clubs[f[1]].name)+'</td><td>'+(r?r.aScore+' : '+r.bScore:i===game.round?'다음 경기':'예정')+'</td></tr>'}).join('')+'</tbody></table>'}
 else if(tab==='scout'){p.innerHTML='<h2>포켓몬 스카우트</h2><div class="g-grid">'+stat('스카우트 완료',game.scout+'회')+stat('운영 자금',wonReadable(game.coins))+'</div><p>₩100,000을 사용하여 무작위 트레이너의 포켓몬 1마리를 새로운 후보로 교체합니다.</p>'+btn('포켓몬 영입 ₩100,000','scoutPokemon()',game.coins<100000)+'<p class="g-muted">임시 영입 시스템: 확률·포획·계약 규칙은 추후 원본 설계와 연동됩니다.</p>'}
-else if(tab==='academy'){ensureTrainerAcademies();const academyCandidates=c.trainerAcademy.map((t,i)=>'<tr><td><div class="face-row">'+facePortrait(fpTrainerCode(t),t.name,'tiny')+'<span>'+escapeHTML(t.name)+'</span></div></td><td>'+t.tactics+'</td><td>'+t.switching+'</td><td>'+t.pokemon.length+'</td><td>'+btn('1군 승격','academyPromote('+i+')',false,true)+'</td></tr>').join('');p.innerHTML='<h2>아카데미 / 육성 시설</h2><div class="g-grid">'+stat('시설 등급','Lv.'+game.academy)+stat('운영 자금',wonReadable(game.coins))+'</div><p>시설을 업그레이드하면 소속 포켓몬 30마리의 전투력이 각각 1 상승합니다.</p>'+btn('시설 업그레이드 ₩'+(15000*game.academy).toLocaleString(),'upgradeAcademy()',game.coins<15000*game.academy||game.academy>=5)+'<p class="g-muted">최대 시설 등급: Lv.5</p><h2>구단 자체 아카데미 · 신인 트레이너</h2><p class="g-muted">매 시즌 구단별 신인 트레이너 1~2명이 생성됩니다. 자동 배치되지 않으며 감독이 직접 승격시킵니다.</p><table class="g-table"><thead><tr><th>이름</th><th>전술</th><th>교체</th><th>포켓몬</th><th>관리</th></tr></thead><tbody>'+(academyCandidates||'<tr><td colspan="5">아직 배출된 신인 트레이너가 없습니다. 다음 시즌에 생성됩니다.</td></tr>')+'</tbody></table>'}
+else if(tab==='academy'){ensureTrainerAcademies();const academyCandidates=c.trainerAcademy.map((t,i)=>'<tr><td><div class="face-row">'+facePortrait(fpTrainerCode(t),t.name,'tiny')+'<span>'+escapeHTML(t.name)+'</span></div></td><td>'+t.tactics+'</td><td>'+t.switching+'</td><td>'+t.pokemon.length+'</td><td>'+btn('1군 승격','academyPromote('+i+')',false,true)+'</td></tr>').join('');p.innerHTML='<h2>아카데미 / 육성 시설</h2><div class="g-grid">'+stat('시설 등급',game.academy+'단계')+stat('운영 자금',wonReadable(game.coins))+'</div><p>시설을 업그레이드하면 소속 포켓몬 30마리의 현재 능력(CA)이 성장합니다.</p>'+btn('시설 업그레이드 ₩'+(15000*game.academy).toLocaleString(),'upgradeAcademy()',game.coins<15000*game.academy||game.academy>=5)+'<p class="g-muted">최대 시설 등급: 5단계</p><h2>구단 자체 아카데미 · 신인 트레이너</h2><p class="g-muted">매 시즌 구단별 신인 트레이너 1~2명이 생성됩니다. 자동 배치되지 않으며 감독이 직접 승격시킵니다.</p><table class="g-table"><thead><tr><th>이름</th><th>전술</th><th>교체</th><th>포켓몬</th><th>관리</th></tr></thead><tbody>'+(academyCandidates||'<tr><td colspan="5">아직 배출된 신인 트레이너가 없습니다. 다음 시즌에 생성됩니다.</td></tr>')+'</tbody></table>'}
 }
 function menu(){const m=$('menu');m.replaceChildren(...buttons.map(([k,label])=>makeGlossyButton(k,label,k,k==='continue'&&!game)));const t=$('tiles');t.replaceChildren(...tiles.map(([k,label])=>imageButton(k,label,'tile:'+k)))}
 function makeGlossyButton(k,label,action,disabled){const b=document.createElement('button');b.type='button';b.className='g-btn';b.style.cssText='display:flex;align-items:center;justify-content:space-between;width:100%;font-size:16px;padding:17px 22px;text-align:left;margin:0 0 8px;min-height:61px;';if(k!=='new')b.classList.add('alt');b.disabled=disabled;b.textContent=label+'　❯';b.onclick=()=>dispatch(action);return b}
@@ -1287,7 +1287,7 @@ transferMarketHTML=function(){
  html=html.replace('<div class="g-grid">',extra+'<div class="g-grid">');
  if(x){const pref=trainerPreferences(x.t,x.c),a=transferAcceptance(x.t,x.c,own,transferValuation(x.t,x.c),transferValuation(x.t,x.c));
  const breakdown=clubAppealBreakdown(x.t,own,x.c);const m=breakdown.metrics;
- const note='<div class="g-notice"><strong>트레이너의 구단 평가</strong><p>선호 이념: '+pref.philosophy+' · 우승 야망 '+pref.ambition+' · 현 구단 충성도 '+pref.loyalty+'</p><p>우리 구단에 대한 호감도 '+a.appeal+'점 · 구단 수락 '+Math.round(a.clubChance*100)+'% · 트레이너 수락 '+Math.round(a.trainerChance*100)+'%</p><p>리그 '+(own.division+1)+'부 · 순위 '+m.rank+'위 · 승점 효율 '+m.form+'점 · 재정 '+m.finances+'/100 · 아카데미 Lv.'+m.academy+' · 출전 기회 '+m.opportunities+'/100</p><p>호감도 영향: 이념 '+breakdown.components.ideology+' / 성적 '+breakdown.components.results+' / 리그 '+breakdown.components.league+' / 재정 '+breakdown.components.finances+' / 시설 '+breakdown.components.academy+' / 출전 기회 '+breakdown.components.opportunity+'</p></div>';
+ const note='<div class="g-notice"><strong>트레이너의 구단 평가</strong><p>선호 이념: '+pref.philosophy+' · 우승 야망 '+pref.ambition+' · 현 구단 충성도 '+pref.loyalty+'</p><p>우리 구단에 대한 호감도 '+a.appeal+'점 · 구단 수락 '+Math.round(a.clubChance*100)+'% · 트레이너 수락 '+Math.round(a.trainerChance*100)+'%</p><p>리그 '+(own.division+1)+'부 · 순위 '+m.rank+'위 · 승점 효율 '+m.form+'점 · 재정 '+m.finances+'/100 · 아카데미 '+m.academy+'단계 · 출전 기회 '+m.opportunities+'/100</p><p>호감도 영향: 이념 '+breakdown.components.ideology+' / 성적 '+breakdown.components.results+' / 리그 '+breakdown.components.league+' / 재정 '+breakdown.components.finances+' / 시설 '+breakdown.components.academy+' / 출전 기회 '+breakdown.components.opportunity+'</p></div>';
  html=html.replace('<h2>우리 구단 계약 관리</h2>',note+'<h2>우리 구단 계약 관리</h2>');
  html=html.replace('구단 측 수락 확률 85% · 결렬 시 비용 차감 없음','구단과 트레이너가 각각 제안을 검토 · 결렬 시 비용 차감 없음');
  }
@@ -2442,8 +2442,9 @@ function canonGameTrainer(t,d){
  // Keep all six league slots, but only verified members are tagged 'original'.
  for(let i=0;i<t.pokemon.length;i++){
   const p=t.pokemon[i],original=d.team[i];
-  if(original){p.name=original.name;p.originalLevel=original.level;p.rosterOrigin='original';}
-  else{p.rosterOrigin='league';delete p.originalLevel;}
+  if(original){p.name=original.name;p.rosterOrigin='original';}
+  else{p.rosterOrigin='league';}
+  delete p.originalLevel;
  }
  return t;
 }
@@ -2483,14 +2484,14 @@ function canonImportCurrent(){
  fpEnsureTrainerCodes();persist();renderOffice();
 }
 function canonDownload(){
- const data=CANON_TRAINERS.map(d=>({id:d.id,name:d.ko,english:d.en,rank:d.rank,region:d.region,hometown:d.hometown,specialty:d.type,sourceGame:d.sourceGame,originalPokemon:d.team,source:d.source}));
+ const data=CANON_TRAINERS.map(d=>({id:d.id,name:d.ko,english:d.en,rank:d.rank,region:d.region,hometown:d.hometown,specialty:d.type,sourceGame:d.sourceGame,originalPokemon:d.team.map(p=>({name:p.name})),source:d.source}));
  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'});
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='pokemon_original_trainers_kanto_v1.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
-function canonTeamMarkup(d){return d.team.map((p,i)=>'<div class="orig-mon"><span><strong>'+(i+1)+'. '+escapeHTML(p.name)+'</strong></span><em>Lv.'+p.level+'</em></div>').join('')}
+function canonTeamMarkup(d){return d.team.map((p,i)=>'<div class="orig-mon"><span><strong>'+(i+1)+'. '+escapeHTML(p.name)+'</strong></span></div>').join('')}
 function canonOriginalInfo(t){
  const d=canonById(t.canonId);if(!d)return '';
- return '<div class="orig-profile-detail"><div class="eyebrow">ORIGINAL SERIES DATA / '+escapeHTML(d.sourceGame)+'</div><h3>원작 트레이너 정보</h3><p>원작 분류: <strong>'+escapeHTML(d.rank)+'</strong> · 출신 지역: '+escapeHTML(d.region)+' · 활동 장소: '+escapeHTML(d.hometown)+' · 전문 타입: '+escapeHTML(d.type)+'</p><div class="orig-team">'+canonTeamMarkup(d)+'</div><p class="g-muted">위는 원작 자료의 포켓몬과 원작 레벨입니다. 현재 게임의 6마리 구성 및 전투력은 별도로 적용됩니다.</p><a href="'+escapeHTML(d.source)+'" target="_blank" rel="noopener noreferrer">원작 팀 정보 출처 ↗</a></div>';
+ return '<div class="orig-profile-detail"><div class="eyebrow">ORIGINAL SERIES DATA / '+escapeHTML(d.sourceGame)+'</div><h3>원작 트레이너 정보</h3><p>원작 분류: <strong>'+escapeHTML(d.rank)+'</strong> · 출신 지역: '+escapeHTML(d.region)+' · 활동 장소: '+escapeHTML(d.hometown)+' · 전문 타입: '+escapeHTML(d.type)+'</p><div class="orig-team">'+canonTeamMarkup(d)+'</div><p class="g-muted">위는 원작에 등장한 포켓몬 명단입니다. 현재 게임에서는 각 능력치의 CA/PA가 적용됩니다.</p><a href="'+escapeHTML(d.source)+'" target="_blank" rel="noopener noreferrer">원작 팀 정보 출처 ↗</a></div>';
 }
 const canonFreshGame=freshGame;
 freshGame=function(manager,club){const g=canonFreshGame(manager,club);installCanonTrainers(g,false);return g;};
@@ -2516,7 +2517,7 @@ function marketMatches(t,cName){
  return matched&&(marketRegion==='all'||d?.rank===marketRegion);
 }
 function marketOriginalCard(t){const d=marketSource(t);if(!d)return '<div class="fm-original-note">포켓몬 6마리는 리그 시스템에 따라 육성·은퇴합니다. 해당 트레이너의 능력치와 포켓몬 전력은 게임 내 데이터입니다.</div>';
- return '<div class="fm-original-note"><strong>'+escapeHTML(d.sourceGame)+' · '+escapeHTML(d.rank)+' · '+escapeHTML(d.type)+' 타입</strong> — '+escapeHTML(d.hometown)+'<div>원작에서 확인된 포켓몬 '+d.team.length+'마리: '+d.team.map(p=>escapeHTML(p.name)+' Lv.'+p.level).join(' · ')+'</div><div>원작 명단과 리그 편성 명단은 별도로 관리합니다. 전술 능력과 이적료는 게임용 수치입니다. <a target="_blank" rel="noopener noreferrer" href="'+escapeHTML(d.source)+'">원작 팀 출처 ↗</a></div></div>';
+ return '<div class="fm-original-note"><strong>'+escapeHTML(d.sourceGame)+' · '+escapeHTML(d.rank)+' · '+escapeHTML(d.type)+' 타입</strong> — '+escapeHTML(d.hometown)+'<div>원작에서 확인된 포켓몬 '+d.team.length+'마리: '+d.team.map(p=>escapeHTML(p.name)).join(' · ')+'</div><div>원작 명단과 리그 편성 명단은 별도로 관리합니다. 전술 능력과 이적료는 게임용 수치입니다. <a target="_blank" rel="noopener noreferrer" href="'+escapeHTML(d.source)+'">원작 팀 출처 ↗</a></div></div>';
 }
 function marketDisplayRow(item){
  const t=item.t,d=marketSource(t),free=item.kind==='free';
@@ -2791,7 +2792,7 @@ function koGeneratedTrainer(c){
  const roster=[...town.species,...SPECIES];
  for(let i=0;i<t.pokemon.length;i++){
   const p=t.pokemon[i];p.name=roster[rnd(game,0,roster.length-1)];
-  p.level=rnd(game,25,42);p.power=rnd(game,38,67);p.careerSeasons=1;
+  p.power=rnd(game,38,67);p.careerSeasons=1;
   p.rosterOrigin='league';delete p.originalLevel;delete p.signatureSource;
  }
  return t;

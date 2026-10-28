@@ -46,6 +46,7 @@ test('Pokémon image opens a dashboard page, not a modal overlay, and returns to
   assert.match(s.panel.innerHTML,/POKÉMON \/ PROFILE/);
   assert.match(s.panel.innerHTML,/피카츄/);
   assert.match(s.panel.innerHTML,/통산 실전 기록 보기/);
+  assert.doesNotMatch(s.panel.innerHTML,/Lv\.|레벨/, 'legacy level must not appear even when saved Pokémon has one');
   assert.doesNotMatch(s.panel.innerHTML,/role="dialog"|aria-modal="true"|pki-shade|pki-overlay/);
   assert.ok(s.officeCalls>0);
   s.back.onclick();

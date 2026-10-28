@@ -40,6 +40,7 @@ function increaseOne(mon){
 /** Upgrade each owned or academy Pokémon only once; later growth is per-stat. */
 function ensureAll(){
   const pokemon=allPokemon();
+  let changed=false;
   for(const p of pokemon){
     if(!p.statCA||!p.statPA){
       const pairs=normalizeStatPairs(p);
@@ -48,6 +49,7 @@ function ensureAll(){
       p._abilityMirror=meanStatCA(p);
       // Legacy fast league-score consumers read an aggregate cache only.
       p.power=p._abilityMirror;
+      changed=true;
     }else if(Number.isFinite(p.power)&&Number.isFinite(p._abilityMirror)&&
       p.power>p._abilityMirror){
       // Older academy or AI-training code added to Power; translate to real CA.
@@ -55,14 +57,21 @@ function ensureAll(){
       for(let i=0;i<increments;i++)increaseOne(p);
       p.power=meanStatCA(p);
       p._abilityMirror=p.power;
+      changed=true;
     }else if(!Number.isFinite(p._abilityMirror)){
       p._abilityMirror=meanStatCA(p);
       p.power=p._abilityMirror;
+      changed=true;
     }
     // A historical level field is not part of the new saved Pokémon schema.
-    delete p.level;
-    delete p.gp;delete p.ca;delete p.pa;
+    for(const key of ['level','originalLevel','gp','ca','pa']){
+      if(Object.hasOwn(p,key)){delete p[key];changed=true;}
+    }
   }
+  for(const retired of game?.hallOfFame||[]){
+    if(Object.hasOwn(retired,'level')){delete retired.level;changed=true;}
+  }
+  if(changed&&typeof persist==='function')persist();
 }
 const abilityRows=p=>{
   const {statCA,statPA}=normalizeStatPairs(p);
@@ -80,7 +89,7 @@ function updateOffice(){
   ensureAll();
   if(typeof TRAINER_COLS!=='undefined'){
     const avg=TRAINER_COLS.find(entry=>entry[0]==='avg');
-    const potential=TRAINER_COLS.find(entry=>entry[0]==='level');
+    const potential=TRAINER_COLS.find(entry=>entry[0]==='potential');
     if(avg)avg[1]='평균 CA';
     if(potential)potential[1]='평균 PA';
   }
@@ -110,24 +119,17 @@ function enhanceRenderedCards(){
   }else if(tab==='retirement'){
     // Legacy retired records may contain levels; don't display that progression.
     panel.querySelectorAll('.g-table').forEach(table=>{
-      const heads=[...table.querySelectorAll('thead th')];
-      const levelColumn=heads.findIndex(x=>x.textContent.includes('최종 레벨'));
-      if(levelColumn>=0)for(const row of table.querySelectorAll('tr')){
-        row.cells?.[levelColumn]?.remove();
-      }
       const powerColumn=[...table.querySelectorAll('thead th')].find(x=>x.textContent.includes('전투력'));
       if(powerColumn)powerColumn.textContent='당시 평균 CA';
     });
   }
-  // Other sections sometimes include legacy "Lv." labels in historical sources.
-  panel.querySelectorAll('.orig-mon em').forEach(el=>el.remove());
 }
 
 const previousTrainerStat=typeof trainerStat==='function'?trainerStat:null;
 if(previousTrainerStat){
   window.trainerStat=function(trainer,key){
     if(key==='avg')return Math.round(trainer.pokemon.reduce((a,p)=>a+meanStatCA(p),0)/trainer.pokemon.length);
-    if(key==='level')return Math.round(trainer.pokemon.reduce((a,p)=>a+meanStatPA(p),0)/trainer.pokemon.length);
+    if(key==='potential')return Math.round(trainer.pokemon.reduce((a,p)=>a+meanStatPA(p),0)/trainer.pokemon.length);
     return previousTrainerStat(trainer,key);
   };
 }

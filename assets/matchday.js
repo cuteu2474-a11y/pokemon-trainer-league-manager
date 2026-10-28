@@ -186,7 +186,7 @@
   // Presentation follows authoritative Showdown events; it never resolves a hit or changes HP.
   let visualState = {}, skipping = false;
   function resetVisuals(){visualState={p1:{trainer:-1,remaining:6,hp:null,maxhp:100},p2:{trainer:-1,remaining:6,hp:null,maxhp:100}};skipping=false;}
-  function arenaHTML(){return `<div class="md-field" aria-label="포켓몬 전투 전장"><div class="md-stands"></div><div class="md-pitch"></div><div class="md-center-mark"></div><div class="md-platform md-platform-home"></div><div class="md-platform md-platform-away"></div><div class="md-weather" id="md-weather"></div>${['p1','p2'].map(side=>`<div class="md-hud ${side}"><div class="md-hud-head"><span id="${side}-name">출전 준비</span><span class="md-status" id="${side}-status"></span><span class="md-level" id="${side}-level"></span></div><div class="md-hp-row"><b>HP</b><progress id="${side}-hp" value="0" max="100"></progress></div><div class="md-hud-foot"><span class="md-balls" id="${side}-balls" aria-label="남은 포켓몬"></span><span id="${side}-state"></span></div></div><div class="md-combatant ${side}" id="${side}-combatant"><div class="md-shadow"></div><div class="md-sprite-wrap"><img class="md-sprite" id="${side}-sprite" alt="출전 대기" hidden><div class="md-sprite-fallback" id="${side}-fallback" hidden>?</div></div><div class="md-popups" id="${side}-popups"></div></div>`).join('')}<div class="md-relay"><span id="p1-relay"></span><span id="p2-relay"></span></div><div class="md-keymoment" id="md-keymoment" hidden></div><div class="md-announcement" id="md-announcement" aria-live="polite">포켓몬 출전 준비</div></div>`;}
+  function arenaHTML(){return `<div class="md-field" aria-label="포켓몬 전투 전장"><div class="md-stands"></div><div class="md-pitch"></div><div class="md-center-mark"></div><div class="md-platform md-platform-home"></div><div class="md-platform md-platform-away"></div><div class="md-weather" id="md-weather"></div>${['p1','p2'].map(side=>`<div class="md-hud ${side}"><div class="md-hud-head"><span id="${side}-name">출전 준비</span><span class="md-status" id="${side}-status"></span></div><div class="md-hp-row"><b>HP</b><progress id="${side}-hp" value="0" max="100"></progress></div><div class="md-hud-foot"><span class="md-balls" id="${side}-balls" aria-label="남은 포켓몬"></span><span id="${side}-state"></span></div></div><div class="md-combatant ${side}" id="${side}-combatant"><div class="md-shadow"></div><div class="md-sprite-wrap"><img class="md-sprite" id="${side}-sprite" alt="출전 대기" hidden><div class="md-sprite-fallback" id="${side}-fallback" hidden>?</div></div><div class="md-popups" id="${side}-popups"></div></div>`).join('')}<div class="md-relay"><span id="p1-relay"></span><span id="p2-relay"></span></div><div class="md-keymoment" id="md-keymoment" hidden></div><div class="md-announcement" id="md-announcement" aria-live="polite">포켓몬 출전 준비</div></div>`;}
   const typeColors={Normal:'#d8d5c8',Fire:'#ff784a',Water:'#54bcff',Electric:'#ffe769',Grass:'#82e18b',Ice:'#a8f7ff',Fighting:'#fba677',Poison:'#d68ae8',Ground:'#dfbb7c',Flying:'#c4dcff',Psychic:'#ff91c2',Bug:'#c7df65',Rock:'#c5ba96',Ghost:'#ad9fff',Dragon:'#b69aff',Dark:'#a6a2b9',Steel:'#c6e4ea',Fairy:'#ffc6ed'};
   const statusNames={par:'마비',brn:'화상',slp:'잠듦',tox:'맹독',psn:'독',frz:'얼음'};
   const visualStyles=document.createElement('style');visualStyles.textContent=`
@@ -198,7 +198,7 @@
     #matchday .md-platform{position:absolute;width:31%;height:14%;border-radius:50%;background:radial-gradient(ellipse,#72947480,#365c46b3 66%,#a7c69b75 68%,#152d2544 76%);box-shadow:0 9px 22px #03150b66}
     #matchday .md-platform-home{left:9%;bottom:16%}#matchday .md-platform-away{right:8%;top:39%;width:28%;height:11%}
     #matchday .md-hud{position:absolute;width:37%;max-width:390px;z-index:5;background:linear-gradient(115deg,#102630f5,#152e3dea);border:1px solid #80a0a582;border-left:4px solid #77c7b4;border-radius:5px;padding:10px 14px;box-shadow:0 5px 20px #00121b55}
-    #matchday .md-hud.p2{left:3%;top:7%}#matchday .md-hud.p1{right:3%;bottom:20%}#matchday .md-hud-head{display:flex;align-items:center;gap:8px;min-height:24px}#matchday [id$="-name"]{font-size:17px;font-weight:800}#matchday .md-level{font-size:11px;color:#bfd4de;margin-left:auto}#matchday .md-status{font-size:10px;padding:2px 5px;border-radius:3px;background:#b28a25;color:white}#matchday .md-status:empty{display:none}
+    #matchday .md-hud.p2{left:3%;top:7%}#matchday .md-hud.p1{right:3%;bottom:20%}#matchday .md-hud-head{display:flex;align-items:center;gap:8px;min-height:24px}#matchday [id$="-name"]{font-size:17px;font-weight:800}#matchday .md-status{font-size:10px;padding:2px 5px;border-radius:3px;background:#b28a25;color:white}#matchday .md-status:empty{display:none}
     #matchday .md-hp-row{display:flex;align-items:center;gap:8px;margin:6px 0}#matchday .md-hp-row b{color:#e8d679;font-size:10px;letter-spacing:1px}#matchday progress{appearance:none;-webkit-appearance:none;display:block;height:10px;border:1px solid #c4dfb842;border-radius:8px;overflow:hidden;background:#071813;accent-color:#77d6a8;flex:1;transition:filter .2s}
     #matchday progress::-webkit-progress-bar{background:#071813}#matchday progress::-webkit-progress-value{background:var(--hp-color,#77d6a8);transition:width .25s}#matchday progress::-moz-progress-bar{background:var(--hp-color,#77d6a8)}
     #matchday .md-hud-foot{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#b8d0d5}#matchday .md-balls{display:flex;gap:5px}#matchday .md-ball{width:9px;height:9px;border:1px solid #adc1bf;border-radius:50%;background:linear-gradient(#e5807d 0 43%,#385554 44% 56%,#dfe9dc 57%)}#matchday .md-ball.out{opacity:.23;background:#5c7475}
@@ -210,7 +210,7 @@
     #matchday .md-popups{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;z-index:8}#matchday .md-float{position:absolute;top:15%;font-size:23px;font-weight:900;text-shadow:0 2px 4px #000;color:#ffccbc;white-space:nowrap}#matchday .md-float.heal{color:#a3ffbe}
     #matchday .md-weather{position:absolute;inset:0;pointer-events:none;z-index:4}#matchday .md-weather.rain{background:repeating-linear-gradient(110deg,transparent 0 23px,#b5deff20 24px 25px,transparent 26px 47px)}#matchday .md-weather.sun{background:radial-gradient(ellipse at 80% 0%,#ffe57c4f,transparent 70%)}#matchday .md-weather.sand{background:#dfbc5d26}#matchday .md-weather.snow{background:radial-gradient(circle,#ffffffaa 1px,transparent 2px) 0 0/30px 25px}
     #matchday .md-commentary{margin-top:8px;color:#aebfcf;border-top:1px solid #345061;padding-top:8px;font-size:12px}#matchday .md-commentary summary{cursor:pointer}#matchday #md-log{height:130px;font-size:12px;margin-top:6px;padding:10px}#matchday .md-actions{margin:10px 0}#matchday #md-stage{color:#d7e4e8;font-size:12px}
-    @media(max-width:700px){#matchday .md-field{height:350px}#matchday .md-hud{width:45%;padding:7px 9px}#matchday .md-hud.p2{left:2%;top:6%}#matchday .md-hud.p1{right:2%;bottom:17%}#matchday [id$="-name"]{font-size:14px}#matchday .md-level{font-size:9px}#matchday .md-combatant.p1{left:6%;width:32%;bottom:20%}#matchday .md-combatant.p2{right:7%;width:28%;top:3%}#matchday .md-announcement{font-size:13px;padding:12px}#matchday .md-relay{left:52%;font-size:9px}#matchday .md-top h1{font-size:18px}}
+    @media(max-width:700px){#matchday .md-field{height:350px}#matchday .md-hud{width:45%;padding:7px 9px}#matchday .md-hud.p2{left:2%;top:6%}#matchday .md-hud.p1{right:2%;bottom:17%}#matchday [id$="-name"]{font-size:14px}#matchday .md-combatant.p1{left:6%;width:32%;bottom:20%}#matchday .md-combatant.p2{right:7%;width:28%;top:3%}#matchday .md-announcement{font-size:13px;padding:12px}#matchday .md-relay{left:52%;font-size:9px}#matchday .md-top h1{font-size:18px}}
     @media(prefers-reduced-motion:reduce){#matchday *,#matchday progress::-webkit-progress-value{transition:none!important}}
   `;document.head.append(visualStyles);
   function announce(text){const node=document.getElementById('md-announcement');if(node)node.textContent=text;}
@@ -221,7 +221,7 @@
       const state=visualState[side];
       if(state.trainer!==index){state.trainer=index;state.remaining=6;}
       state.hp=null;state.maxhp=100;
-      document.getElementById(side+'-sprite').hidden=true;document.getElementById(side+'-fallback').hidden=true;document.getElementById(side+'-popups').replaceChildren();document.getElementById(side+'-level').textContent='';document.getElementById(side+'-combatant').classList.remove('fainted');
+      document.getElementById(side+'-sprite').hidden=true;document.getElementById(side+'-fallback').hidden=true;document.getElementById(side+'-popups').replaceChildren();document.getElementById(side+'-combatant').classList.remove('fainted');
       document.getElementById(side+'-status').textContent='';document.getElementById(side+'-name').textContent='출전 준비';document.getElementById(side+'-state').textContent='';document.getElementById(side+'-hp').value=0;updateBalls(side);
       document.getElementById(side+'-relay').innerHTML=Array.from({length:5},(_,i)=>'<i class="md-trainer-dot '+(i<index?'defeated':i===index?'current':'')+'" title="'+(i+1)+'번 트레이너"></i>').join('');
     }
@@ -236,7 +236,6 @@
     const id=/^[a-z0-9-]+$/.test(info.id)?info.id:'substitute';
     const img=document.getElementById(side+'-sprite'),holder=document.getElementById(side+'-combatant'),fallback=document.getElementById(side+'-fallback');
     holder.classList.remove('fainted');fallback.hidden=true;img.hidden=false;img.alt=name||mon?.name||species;
-    document.getElementById(side+'-level').textContent='Lv.'+(details.match(/, L(\d+)/)?.[1]||mon?.level||100);
     state.species=species;state.types=info.types||[];
     const front='https://play.pokemonshowdown.com/sprites/ani/'+id+'.gif';
     const urls=[side==='p1'?'https://play.pokemonshowdown.com/sprites/ani-back/'+id+'.gif':front,front];
@@ -367,7 +366,7 @@
         const visual=result.visuals?.[mon.species],n=visual?.num;
         const backup=Number.isInteger(n)&&n>0?'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'+n+'.png':'';
         const url=/^[a-z0-9-]+$/.test(visual?.id||'')?'https://play.pokemonshowdown.com/sprites/gen5/'+visual.id+'.png':backup;
-        return `<div class="md-party-mon" id="${side}-party-${i}" title="${esc(mon.displayName||mon.name)} Lv.${mon.level}">${url?`<img src="${url}" data-backup="${backup}" alt="" loading="lazy" onerror="if(!this.dataset.failed&&this.dataset.backup){this.dataset.failed='1';this.src=this.dataset.backup}else this.hidden=true">`:''}<strong>${esc(mon.displayName||mon.name)}</strong><span class="md-party-health"><i></i></span><small></small></div>`;
+        return `<div class="md-party-mon" id="${side}-party-${i}" title="${esc(mon.displayName||mon.name)}">${url?`<img src="${url}" data-backup="${backup}" alt="" loading="lazy" onerror="if(!this.dataset.failed&&this.dataset.backup){this.dataset.failed='1';this.src=this.dataset.backup}else this.hidden=true">`:''}<strong>${esc(mon.displayName||mon.name)}</strong><span class="md-party-health"><i></i></span><small></small></div>`;
       }).join('');refreshParty(side);
     }
   }
@@ -900,7 +899,7 @@
     const ca=mon?.ca??mon?.power,pa=mon?.pa;
     const kpis=[['현재 HP',hp===null?'미기록':String(hp)+(maximum!==null?' / '+maximum:'')],['상태',condition],['현재 능력 (CA)',ca],['잠재 능력 (PA)',pa]];
     const kpiHTML='<div class="pki-kpis">'+kpis.map(([k,v])=>'<div class="pki-kpi"><small>'+esc(k)+'</small><strong>'+show(v)+'</strong></div>').join('')+'</div>';
-    const facts='<div class="pki-grid">'+field('레벨',mon?.level)+field('특성',mon?.ability)+field('지닌 도구',mon?.item||'없음')+
+    const facts='<div class="pki-grid">'+field('특성',mon?.ability)+field('지닌 도구',mon?.item||'없음')+
       field('성격',mon?.nature)+field('활동 시즌',mon?.careerSeasons)+field('폼',mon?.form||mon?.forme||'기본')+
       (meta?field('종족 신장',meta.height+'m')+field('종족 체중',meta.weight+'kg'):'')+'</div>';
     const gp=mon?.gp,savedStats=mon?.stats??mon?.battleStats;
@@ -919,7 +918,7 @@
     root.innerHTML='<div class="pki-navigation"><button class="pki-return" type="button">← '+esc(back)+'로 돌아가기</button><span>POKÉMON / PROFILE</span></div>'+
       '<section class="pki-panel pki-page" aria-labelledby="pki-heading" tabindex="-1">'+
       '<header class="pki-top"><div class="pki-image">'+image+'</div><div><small>'+(info.baseId?'도감 No. '+String(info.baseId).padStart(4,'0'):'도감 번호 미확인')+'</small>'+
-      '<h2 id="pki-heading">'+show(mon?.name||mon?.species)+'</h2><div>Lv. '+show(mon?.level)+'</div><div class="pki-types">'+monTypes.map(t=>'<span class="pki-type" style="background:'+(color[String(t).toLowerCase()]||'#51677b')+'">'+esc(types[String(t).toLowerCase()]||t)+'</span>').join('')+'</div></div></header>'+
+      '<h2 id="pki-heading">'+show(mon?.name||mon?.species)+'</h2><div class="pki-types">'+monTypes.map(t=>'<span class="pki-type" style="background:'+(color[String(t).toLowerCase()]||'#51677b')+'">'+esc(types[String(t).toLowerCase()]||t)+'</span>').join('')+'</div></div></header>'+
       '<div class="pki-body">'+kpiHTML+section('기본 정보',facts)+section('기술과 PP',moves(mon))+statsHTML+career+
       '<p class="pki-note">현재 HP·상태·CA·PA·GP·기술은 저장된 값만 표시합니다. 종족값은 참고용 외부 도감 자료입니다.</p></div></section>';
     root.querySelector('.pki-return').onclick=close;
