@@ -43,6 +43,7 @@ export function entryHazardFraction(conditions={},types=[],item='',ability=''){
 /** Engine policy changes the preference among legal actions, never resolves damage. */
 export class TrainerAI extends RandomPlayerAI{
   constructor(stream,trainer={},options={}){
+    const originalTrainer=trainer;
     trainer=conditionedTrainer(trainer);
     const skill=trainerSkill(trainer);
     super(stream,{move:Math.min(1,.70+skill.tactics*.015),seed:options.seed});
@@ -51,9 +52,11 @@ export class TrainerAI extends RandomPlayerAI{
     const rating=(...args)=>Math.max(1,Math.min(20,Number(args.find(v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v)))??10)));
     // Prepared personalities already include ratings: never erase these with undefined.
     this.profile={...base,...preset,
-      moveSkill:rating(trainer.moveJudgment,preset.moveSkill,skill.tactics),
-      switchSkill:rating(trainer.switchJudgment,preset.switchSkill,skill.switching),
-      analysis:rating(trainer.battleAnalysis,preset.analysis,skill.tactics),
+      // Condition fills in missing ratings. Do not let those defaults erase an
+      // explicitly prepared AI profile when the original rating was absent.
+      moveSkill:rating(originalTrainer.moveJudgment===undefined?undefined:trainer.moveJudgment,preset.moveSkill,skill.tactics),
+      switchSkill:rating(originalTrainer.switchJudgment===undefined?undefined:trainer.switchJudgment,preset.switchSkill,skill.switching),
+      analysis:rating(originalTrainer.battleAnalysis===undefined?undefined:trainer.battleAnalysis,preset.analysis,skill.tactics),
       preservation:rating(trainer.resourceManagement??trainer.management,preset.preservation,skill.switching)};
     this.plan=trainer.battlePlan?battlePlan(trainer):(this.profile.plan||'balanced');
     this.secondaryPlan=this.profile.secondaryPlan||null;
@@ -64,6 +67,8 @@ export class TrainerAI extends RandomPlayerAI{
     this.foeIdentity='';
     this.publicMoveHistory=new Map();
     this.lastVoluntarySwitchTurn=null;
+    this.preferredSwitchSlot=null;
+    this.lastActionComparison=null;
     this.team=options.team||[];
     this.ownActive=null;
     this.request=null;
@@ -122,8 +127,8 @@ export class TrainerAI extends RandomPlayerAI{
     if(slot>=0)this.ownActive=this.findOwned(request.side.pokemon[slot],slot+1);
     this.request=request;
     if(request.active?.length){
-      // RandomPlayerAI controls voluntary switch selection using this.move.
-      // Make it context-sensitive and based on public matchup/HP, not coin-flip switching.
+      // The upstream player selects the action category with `this.move`.
+      // Use 1 (move) or -1 (switch), not a random switch probability.
       this.move=this.moveProbability(request);
     }
     return super.receiveRequest(request);
@@ -194,56 +199,75 @@ export class TrainerAI extends RandomPlayerAI{
     return {ownTypes:own.exists?own.types:[],foeTypes:foe.exists?foe.types:[]};
   }
   moveProbability(request){
+    this.preferredSwitchSlot=null;
+    const pokemon=request.side?.pokemon||[];
+    const activeSlot=pokemon.findIndex(mon=>mon.active);
+    const active=pokemon[activeSlot];
+    const moveRequest=request.active?.[0];
+    if(!active||!moveRequest||moveRequest.trapped||moveRequest.maybeTrapped)return 1;
     const {ownTypes,foeTypes}=this.matchup();
-    const bench=(request.side?.pokemon||[]).filter(mon=>!mon.active&&Number.parseInt(mon.condition||'',10)>0);
-    if(!bench.length)return 1;
-    if(!ownTypes.length||!foeTypes.length)return .985;
-    const active=request.side.pokemon.find(mon=>mon.active);
-    const hp=Number.parseInt(active?.condition||'',10);
-    const max=Number.parseInt(active?.condition?.split('/')[1]||'',10);
-    const health=Number.isFinite(hp)&&Number.isFinite(max)&&max>0?hp/max:1;
-    const danger=Math.max(...foeTypes.map(type=>typeMultiplier(type,ownTypes)));
-    const immediate=Math.max(...ownTypes.map(type=>typeMultiplier(type,foeTypes)));
-    const mismatch=danger>=2&&immediate<=1;
-    const liveBattle=this.battleProvider?.();
-    if(this.lastVoluntarySwitchTurn!==null&&Number.isInteger(liveBattle?.turn)&&
-      liveBattle.turn<=this.lastVoluntarySwitchTurn+1)return 1;
-    // Switching without a safer living replacement wastes a full turn.
-    const hazards=this.battleProvider?.()?.[this.side]?.sideConditions||{};
-    const counter=bench.some(mon=>{
-      const owned=this.findOwned(mon,request.side.pokemon.indexOf(mon)+1);
+    const battle=this.battleProvider?.();
+    if(this.lastVoluntarySwitchTurn!==null&&Number.isInteger(battle?.turn)&&
+      battle.turn<=this.lastVoluntarySwitchTurn+1)return 1;
+    const own=this.findOwned(active,activeSlot+1);
+    const hp=Number.parseInt(active.condition||'',10);
+    const max=Number.parseInt((active.condition||'').split('/')[1]||'',10);
+    const health=max>0?limit(hp/max,0,1):1;
+    // Estimate risk from revealed moves plus a non-zero unknown-coverage floor.
+    // Never read opposing moveSlots, item, ability, stats or battle set here.
+    const observed=this.publicMoveHistory.get(this.foeIdentity)||new Set();
+    const danger=types=>{
+      const known=[...observed].map(id=>Dex.moves.get(id))
+        .filter(m=>m.exists&&m.category!=='Status')
+        .map(m=>typeMultiplier(m.type,types)*Math.min(1.5,(m.basePower||70)/85));
+      const stab=foeTypes.map(t=>typeMultiplier(t,types));
+      return Math.max(foeTypes.length?1.1:1,...stab,...known);
+    };
+    const currentDanger=danger(ownTypes);
+    const ownBattle=battle?.[this.side]?.active?.[0];
+    const context={foeTypes,ownTypes,ownAbility:own?.ability,ownItem:own?.item,
+      ownHpFraction:health,foeStatus:this.foeStatus,
+      ownBoosts:ownBattle?.boosts||{},foeSideConditions:{}};
+    const available=moveRequest.moves||[];
+    const bestMove=Math.max(-80,...available.filter(m=>!m.disabled).map((m,i)=>{
+      const move=Dex.moves.get(m.id||m.move||'');
+      if(wastedStatusMove(move,{status:this.foeStatus,types:foeTypes}))return -120;
+      return evaluateMove({choice:`move ${i+1}`,move:{id:move.id}},context);
+    }));
+    const current=this.candidateScore(active,activeSlot+1,foeTypes);
+    // Staying earns the current Pokémon's future contribution and one immediate
+    // legal move. An attack is worth less if it is likely to lose this Pokémon.
+    const moveScore=current+Math.max(-80,bestMove)*.23-
+      currentDanger*(health<.35?18:8);
+    const hazards=battle?.[this.side]?.sideConditions||{};
+    const candidates=pokemon.flatMap((mon,i)=>{
+      if(mon.active||Number.parseInt(mon.condition||'',10)<=0)return [];
+      const owned=this.findOwned(mon,i+1);
       const species=Dex.species.get(mon.details?.split(',')[0]||owned?.species||'');
-      if(!species.exists)return false;
-      const threat=Math.max(...foeTypes.map(t=>typeMultiplier(t,species.types)));
-      const attack=Math.max(...species.types.map(t=>typeMultiplier(t,foeTypes)));
-      const hp=Number.parseInt(mon.condition||'',10),max=Number.parseInt((mon.condition||'').split('/')[1]||'',10);
-      const safeFraction=(max>0?hp/max:1)-
-        entryHazardFraction(hazards,species.types,owned?.item,owned?.ability);
-      return safeFraction>.30&&threat<danger&&(threat<=1||attack>immediate);
-    });
-    const careful=['control','endurance'].includes(this.plan);
-    let chance=.025+(mismatch?.22:0)+(health<.37?.13:0)+(careful?.07:0);
-    if(this.plan==='offense'||this.plan==='tempo')chance-=.03;
-    chance*=.35+this.profile.switchSkill/20;
-    if(this.profile.preservation>=16&&this.remaining>1&&health<.55)chance+=.10;
-    // Earned play traits influence decision tendencies, not legal actions or stats.
-    chance+=.075*traitValue(this.profile,'switch');
-    if(this.remaining>1&&health<.75)chance+=.06*traitValue(this.profile,'preserve');
-    // Successful previous choices strengthen a habit even without fresh manager input.
-    if(mismatch)chance+=.03*traitValue(this.profile,'matchup');
-    if(this.remaining>1&&health<.45&&danger>=2)chance+=.035*traitValue(this.profile,'preserve');
-    if(counter&&mismatch)chance+=.19;
-    if(!counter)chance*=health<.24?.55:.16;
-    // Experienced trainers decisively take a clearly favorable counter,
-    // except immediately after their last voluntary switch.
-    if(this.skill.switching===20&&this.profile.switchSkill>=19&&mismatch&&counter){
-      const activeSlot=request.side.pokemon.findIndex(mon=>mon.active);
-      const current=this.candidateScore(active,activeSlot+1,foeTypes);
-      const best=Math.max(...request.side.pokemon.map((mon,i)=>
-        mon.active?-1e6:this.candidateScore(mon,i+1,foeTypes)));
-      if(best>current+22)return 0;
+      if(!species.exists)return [];
+      const n=Number.parseInt(mon.condition||'',10),d=Number.parseInt((mon.condition||'').split('/')[1]||'',10);
+      const fraction=d>0?n/d:1;
+      const hazard=entryHazardFraction(hazards,species.types,owned?.item,owned?.ability);
+      if(fraction-hazard<=.02)return [];
+      const nextDanger=danger(species.types);
+      const betterMatchup=Math.max(-3,Math.min(3,currentDanger-nextDanger));
+      const traits=traitValue(this.profile,'switch')*7+
+        (betterMatchup>0?traitValue(this.profile,'matchup')*8:0)+
+        (this.remaining>1&&health<.55?traitValue(this.profile,'preserve')*10:0);
+      const preservation=this.remaining>1&&this.profile.preservation>=14&&health<.40?8:0;
+      const score=this.candidateScore(mon,i+1,foeTypes,hazard)+betterMatchup*9+
+        traits+preservation-28-nextDanger*8-hazard*28;
+      return [{slot:i+1,score}];
+    }).sort((a,b)=>b.score-a.score||a.slot-b.slot);
+    const best=candidates[0];
+    this.lastActionComparison={moveScore,switchScore:best?.score??-Infinity,
+      switchSlot:best?.slot??null};
+    const precisionMargin=(20-this.profile.switchSkill)*.6;
+    if(best&&best.score>moveScore+precisionMargin){
+      this.preferredSwitchSlot=best.slot;
+      return -1;
     }
-    return 1-limit(chance,0,counter?.76:.28);
+    return 1;
   }
   preference(move,battle){
     const primary=planPreference(move,battle,this.side,this.plan);
@@ -334,14 +358,14 @@ export class TrainerAI extends RandomPlayerAI{
        clarity>=.40&&publicCountermoves.length){
       try{
         const choices=moves.map(x=>x.choice).filter(x=>/^move [1-4](?:$|\s)/.test(x));
-        const {depth,samples}=searchBudget(this.profile.analysis);
+        const {samples}=searchBudget(this.profile.analysis);
         // Public-only mode cannot silently simulate unrevealed opponent moves.
         const count=this.profile.analysis>=18?
           Math.min(8,Math.max(4,publicCountermoves.length*2)):
           Math.min(samples+(insight?1:0),4);
         const ranked=rolloutActions(battle,{
-          sideId:this.side,choices,depth,samples:count,
-          opponentChoices:publicCountermoves,requirePublicChoices:true,
+          sideId:this.side,choices,depth:1,samples:count,
+          opponentChoices:publicCountermoves,requirePublicChoices:true,publicOpponent:true,
         });
         for(const candidate of ranked){
           const index=Number(candidate.choice.split(' ')[1])-1;
@@ -446,7 +470,9 @@ export class TrainerAI extends RandomPlayerAI{
     // Weaker evaluators are allowed to be less precise, but never pick an invalid slot.
     const uncertainty=(20-this.profile.switchSkill)/20;
     const index=scored.length>1&&this.prng.random()<uncertainty*.35?1:0;
-    const selected=scored[index]||scored[0];
+    const preferred=active!==undefined&&this.preferredSwitchSlot!==null?
+      scored.find(x=>x.entry.slot===this.preferredSwitchSlot):null;
+    const selected=preferred||scored[index]||scored[0];
     const best=selected?.entry||switches[0];
     const activePokemon=this.battleProvider?.()?.[this.side]?.active?.[0];
     const ownTypes=activePokemon?.getTypes?.()||this.matchup().ownTypes;

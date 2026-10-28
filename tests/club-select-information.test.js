@@ -24,7 +24,7 @@ test('club trainer preview shows only league and removes role and lineup badges'
   assert.match(preview,/ctSortedPokemon\(t\)/);
   assert.match(preview,/ctTrainerPortrait\(t,true\)/);
   assert.match(preview,/ct-mini-mons/);
-  assert.match(preview,/\(c\.division\+1\)\+'부 리그'/);
+  assert.match(preview,/\(c\.division\+1\)\+'부 리그<\/div>/);
   assert.doesNotMatch(preview,/worldClubRegion\(c\)|ct-pill-list|대표 트레이너|출전 '\+\(clubTrainerIndex/);
 });
 

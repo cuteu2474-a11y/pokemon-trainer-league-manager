@@ -83,10 +83,15 @@ test('long-term experience raises specialist skills, learns traits and affects l
   basic.autonomyAI.playTraits=[];
   const aiA=new TrainerAI({}, {...trainer,aiProfile:enriched},{seed:[1,2,3,4]});
   const aiB=new TrainerAI({}, {...basic,aiProfile:resolveBattleAutonomy(basic,60)},{seed:[1,2,3,4]});
-  for(const ai of [aiA,aiB]){ai.ownActive={species:'Pikachu'};ai.foeSpecies='Golem';ai.remaining=4;}
-  const request={side:{pokemon:[{active:true,condition:'90/100'}]}};
-  assert.ok(aiA.moveProbability(request)<aiB.moveProbability(request),
-    'learned switching and preservation traits should increase the willingness to switch');
+  for(const ai of [aiA,aiB]){ai.ownActive={species:'Pikachu'};ai.foeSpecies='Golem';ai.remaining=4;
+    ai.team=[{species:'Pikachu',moves:['thunderbolt']},{species:'Togekiss',moves:['dazzlinggleam']}];}
+  const request={active:[{moves:[{move:'Thunderbolt'}]}],side:{pokemon:[
+   {active:true,details:'Pikachu',condition:'90/100'},
+   {details:'Togekiss',condition:'100/100'}]}};
+  aiA.moveProbability(request);aiB.moveProbability(request);
+  assert.ok(aiA.lastActionComparison.switchScore-aiA.lastActionComparison.moveScore>
+    aiB.lastActionComparison.switchScore-aiB.lastActionComparison.moveScore,
+    'learned switching traits should increase a legal counter-switch action value');
 });
 
 test('pre-match advice plus successful real play improves future autonomous preference',()=>{
@@ -115,9 +120,14 @@ test('pre-match advice plus successful real play improves future autonomous pref
   const noviceAI=new TrainerAI({}, {...coach('fresh'),aiProfile:inexperienced},{seed:[3,4,5,6]});
   for(const ai of [learnedAI,noviceAI]){
     ai.ownActive={species:'Pikachu'};ai.foeSpecies='Golem';ai.remaining=4;
+    ai.team=[{species:'Pikachu',moves:['thunderbolt']},{species:'Togekiss',moves:['dazzlinggleam']}];
   }
-  const request={side:{pokemon:[{active:true,condition:'90/100'}]}};
-  assert.ok(learnedAI.moveProbability(request)<noviceAI.moveProbability(request));
+  const request={active:[{moves:[{move:'Thunderbolt'}]}],side:{pokemon:[
+    {active:true,details:'Pikachu',condition:'90/100'},
+    {details:'Togekiss',condition:'100/100'}]}};
+  learnedAI.moveProbability(request);noviceAI.moveProbability(request);
+  assert.ok(learnedAI.lastActionComparison.switchScore-learnedAI.lastActionComparison.moveScore>
+    noviceAI.lastActionComparison.switchScore-noviceAI.lastActionComparison.moveScore);
 });
 test('losses or ineffective actions do not reinforce or grant a trait',()=>{
   const api=careerApi(),save=game();

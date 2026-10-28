@@ -42,3 +42,26 @@ test('public rollouts never substitute secret moves for missing revealed choices
    opponentChoices:['move 99'],requirePublicChoices:true,depth:1,samples:2});
  assert.equal(ranks[0].runs,0);
 });
+
+test('blind rollout does not change when private opposing item, ability and GP stats differ',()=>{
+ const sim=battle();
+ const params={choices:['move 1'],opponentChoices:['move 2'],
+  requirePublicChoices:true,publicOpponent:true,depth:1,samples:2};
+ const original=JSON.stringify(sim.toJSON());
+ const first=rolloutActions(sim,params);
+ assert.equal(JSON.stringify(sim.toJSON()),original,'blind forecast must not edit the live battle');
+ const enemy=sim.p2.active[0];
+ enemy.item='assaultvest';enemy.ability='multiscale';
+ enemy.storedStats.spd*=3;enemy.baseStoredStats.spd*=3;
+ enemy.storedStats.atk*=2;enemy.baseStoredStats.atk*=2;
+ const second=rolloutActions(sim,params);
+ assert.ok(first[0].runs>0);
+ assert.deepEqual(second,first,'unrevealed private values cannot influence action scores');
+});
+
+test('blind rollout rejects hidden-choice fallback and multi-turn future knowledge',()=>{
+ const sim=battle(),params={choices:['move 1'],opponentChoices:['move 1'],
+  requirePublicChoices:true,publicOpponent:true};
+ assert.throws(()=>rolloutActions(sim,{...params,depth:2}),RangeError);
+ assert.throws(()=>rolloutActions(sim,{...params,requirePublicChoices:false}),RangeError);
+});

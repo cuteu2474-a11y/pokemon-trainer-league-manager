@@ -12,7 +12,7 @@ const sample=()=>({
 });
 test('news is made from verified results and transfers without invented articles',()=>{
  const news=build(sample(),a);
- assert.equal(news.filter(n=>n.kind==='match').length,1);
+ assert.equal(news.filter(n=>n.kind==='match').length,2,'both confirmed league results are news');
  assert.ok(news.some(n=>n.kind==='match'&&n.title.includes('구름시티')));
  assert.equal(news.filter(n=>n.kind==='transfer').length,1);
  assert.equal(news.filter(n=>n.kind==='club').length,1);

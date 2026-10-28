@@ -3,6 +3,40 @@ import {installLeagueRules} from '../core/league-rules.js';
 import {installFormHooks} from './gp-battle-stream.js';
 import {Battle} from '@pkmn/sim';
 import {installLevelFreeDamage} from './level-free-damage.js';
+import {calculateLevelFreeStats} from '../core/stat-potential.js';
+
+/** Blind forecast: neutral species-derived CA and no unrevealed item/ability.
+ * Live battle data is never mutated. This is a deliberately approximate
+ * possible opponent, not the actual private set passed to the trainer. */
+export function maskPrivateOpponent(clone,foeId){
+  const neutralCA={hp:100,atk:100,def:100,spa:100,spd:100,spe:100};
+  for(const mon of clone[foeId]?.pokemon||[]){
+    const base=mon.species?.baseStats;
+    if(!base)continue;
+    const stats=calculateLevelFreeStats(base,neutralCA);
+    const hpFraction=mon.maxhp>0?mon.hp/mon.maxhp:0;
+    for(const key of ['atk','def','spa','spd','spe']){
+      mon.storedStats[key]=stats[key];
+      mon.baseStoredStats[key]=stats[key];
+    }
+    mon.baseStoredStats.hp=stats.hp;
+    mon.maxhp=stats.hp;mon.baseMaxhp=stats.hp;
+    mon.hp=hpFraction>0?Math.max(1,Math.round(stats.hp*hpFraction)):0;
+    mon.speed=stats.spe;
+    mon.item='';mon.baseAbility='';mon.ability='';mon.lastItem='';
+    if(mon.itemState)mon.itemState.id='';
+    if(mon.abilityState)mon.abilityState.id='';
+    // Form changes in a forecast must not restore the real hidden GP values.
+    mon.leagueMeta={species:mon.species.name,nature:'Hardy',statCA:neutralCA,
+      statPA:{...neutralCA}};
+    if(mon.set){
+      mon.set.item='';mon.set.ability='';
+      const stats=['hp','atk','def','spa','spd','spe'];
+      mon.set.evs=Object.fromEntries(stats.map(stat=>[stat,0]));
+      mon.set.ivs=Object.fromEntries(stats.map(stat=>[stat,31]));
+    }
+  }
+}
 
 /** Evaluates legal actions using actual cloned Showdown turns. No mutation of live battle. */
 export function evaluateBattle(battle, sideId = 'p1') {
@@ -40,12 +74,16 @@ export function summarizeResponses(samples=[]){
   worst:averages.length?Math.min(...averages):-Infinity};
 }
 export function rolloutActions(battle, {sideId='p1', choices, opponentChoices,
-  requirePublicChoices=false, depth=1, samples=1} = {}) {
+  requirePublicChoices=false, publicOpponent=false, depth=1, samples=1} = {}) {
   if (!battle?.toJSON || !Array.isArray(choices) || !choices.length) throw new TypeError('Battle and legal choices required');
   if(requirePublicChoices&&(!Array.isArray(opponentChoices)||opponentChoices.length===0))
     throw new TypeError('Revealed opponent responses required');
   if (!Number.isInteger(depth) || depth < 1 || depth > 3 || !Number.isInteger(samples) || samples < 1 || samples > 12)
     throw new RangeError('Rollout budget exceeded');
+  // Multi-turn automatic choices can expose an unobserved opposing move or
+  // bench member. Blind opponent simulation is restricted to one turn.
+  if(publicOpponent&&(!requirePublicChoices||depth!==1))
+    throw new RangeError('Public opponent rollouts require revealed moves and depth 1');
   const baseline = battle.toJSON();
   const foeId = sideId === 'p1' ? 'p2' : 'p1';
   const results = [];
@@ -57,6 +95,7 @@ export function rolloutActions(battle, {sideId='p1', choices, opponentChoices,
       // Each search branch must own its log, including separate samples.
       const clone=installLevelFreeDamage(Battle.fromJSON(structuredClone(baseline)));
       installLeagueRules(clone);installFormHooks(clone);installEnhancementRules(clone);
+      if(publicOpponent)maskPrivateOpponent(clone,foeId);
       const available=legalRolloutMoves(clone,foeId);
       const known=Array.isArray(opponentChoices)?opponentChoices.filter(choice=>
         available.some(move=>move.choice===choice)):[];

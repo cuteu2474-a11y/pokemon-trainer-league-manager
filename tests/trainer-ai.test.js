@@ -45,13 +45,63 @@ test('novice picks a viable attack over a move with known type immunity',()=>{
  assert.equal(ai.chooseMove({},[{choice:'move 1',move:{id:'earthquake'}},{choice:'move 2',move:{id:'thunderbolt'}}]),'move 2');
 });
 test('switching considers availability of a safe reserve rather than random turns',()=>{
- const ai=new TrainerAI({}, {tactics:15,switching:18}, {seed:[1,2,3,4]});
+ const ai=new TrainerAI({}, {tactics:15,switching:18}, {seed:[1,2,3,4],
+  team:[{species:'Pikachu',moves:['thunderbolt']},{species:'Jolteon',moves:['thunderbolt']},
+   {species:'Togekiss',moves:['dazzlinggleam']}]});
  ai.ownActive={species:'Pikachu'};ai.foeSpecies='Garchomp';
- const active={active:true,condition:'75/100'};
- const noCounter=ai.moveProbability({side:{pokemon:[active,{condition:'100/100',details:'Jolteon'}]}});
- const counter=ai.moveProbability({side:{pokemon:[active,{condition:'100/100',details:'Togekiss'}]}});
+ const active={active:true,details:'Pikachu',condition:'75/100'};
+ const moves=[{move:'Thunderbolt',disabled:false}];
+ const noCounter=ai.moveProbability({active:[{moves}],side:{pokemon:[active,{condition:'100/100',details:'Jolteon'}]}});
+ const counter=ai.moveProbability({active:[{moves}],side:{pokemon:[active,{condition:'100/100',details:'Togekiss'}]}});
  assert.ok(counter<noCounter);
- assert.equal(ai.moveProbability({side:{pokemon:[active]}}),1);
+ assert.equal(ai.moveProbability({active:[{moves}],side:{pokemon:[active]}}),1);
+});
+
+test('expert compares legal attack with counter-switch rather than rolling a switch chance',()=>{
+ const ai=new TrainerAI({}, {tactics:20,switching:20,moveJudgment:20,switchJudgment:20},
+  {seed:[1,2,3,4],team:[{species:'Pikachu',moves:['thunderbolt']},
+   {species:'Togekiss',moves:['dazzlinggleam']}]});
+ ai.ownActive=ai.team[0];
+ const request={active:[{moves:[{move:'Thunderbolt',disabled:false}]}],side:{pokemon:[
+  {active:true,details:'Pikachu',condition:'85/100'},
+  {active:false,details:'Togekiss',condition:'100/100'}]}};
+ ai.foeSpecies='Garchomp';
+ assert.equal(ai.moveProbability(request),-1);
+ assert.equal(ai.preferredSwitchSlot,2);
+ assert.ok(ai.lastActionComparison.switchScore>ai.lastActionComparison.moveScore);
+ ai.foeSpecies='Gyarados';
+ assert.equal(ai.moveProbability(request),1,'a super-effective attack is worth the turn');
+ assert.equal(ai.preferredSwitchSlot,null);
+});
+
+test('a real move request sends the selected legal switch command',()=>{
+ const commands=[];
+ const ai=new TrainerAI({write:choice=>{commands.push(choice);return Promise.resolve();}},
+  {tactics:20,switching:20},{seed:[1,2,3,4],
+   team:[{species:'Pikachu',moves:['thunderbolt']},{species:'Togekiss',moves:['dazzlinggleam']}]});
+ ai.ownActive=ai.team[0];ai.foeSpecies='Garchomp';
+ ai.receiveRequest({active:[{moves:[{move:'Thunderbolt',disabled:false}],trapped:false}],
+  side:{pokemon:[{active:true,details:'Pikachu',condition:'80/100'},
+    {active:false,details:'Togekiss',condition:'100/100'}]}});
+ assert.deepEqual(commands,['switch 2']);
+ assert.equal(ai.decisions.voluntarySwitches,1);
+});
+
+test('hazard-fainting, trapped and rapid return switches cannot beat legal attacks',()=>{
+ const battle={turn:7,p1:{sideConditions:{stealthrock:{layers:1}}}};
+ const ai=new TrainerAI({}, {tactics:20,switching:20},{seed:[1,2,3,4],
+  team:[{species:'Pikachu',moves:['thunderbolt']},{species:'Charizard',moves:['flamethrower']}],
+  battleProvider:()=>battle});
+ ai.ownActive=ai.team[0];ai.foeSpecies='Venusaur';
+ const request={active:[{moves:[{move:'Thunderbolt',disabled:false}]}],side:{pokemon:[
+  {active:true,details:'Pikachu',condition:'15/100'},
+  {active:false,details:'Charizard',condition:'25/100'}]}};
+ assert.equal(ai.moveProbability(request),1,'a rock-weak reserve faints on entry');
+ request.active[0].trapped=true;
+ assert.equal(ai.moveProbability(request),1);
+ request.active[0].trapped=false;
+ ai.lastVoluntarySwitchTurn=6;
+ assert.equal(ai.moveProbability(request),1,'no back-to-back voluntary switches');
 });
 
 test('paralyzed opponent is not targeted with Will-O-Wisp even by control-style trainer',()=>{
