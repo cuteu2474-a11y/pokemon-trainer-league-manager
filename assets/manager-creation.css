@@ -51,3 +51,11 @@
 .pm-stat-meta strong{font-size:15px}
 .pm-renown{margin-top:16px}
 @media(max-width:760px){.pm-tier span{font-size:12px}}
+
+/* Meaningful ability descriptions are intentionally retained and legible. */
+#player-manager-setup .pm-linkage-note{font-size:14px;line-height:1.5;color:#b9dff5;margin:0 0 18px;padding:9px 12px;border-left:3px solid #57b7e7;background:#103351;border-radius:3px 7px 7px 3px}
+#player-manager-setup .pm-stat-effect,#player-manager-setup .pm-renown-effect{display:block!important;font-size:14px;line-height:1.5;color:#bad9ed;font-weight:500;margin-top:5px;letter-spacing:0}
+#player-manager-setup .pm-stat-meta>div:first-child{gap:1px;min-width:0}
+#player-manager-setup .pm-stat-meta strong{font-size:15px;line-height:1.5}
+#player-manager-setup .pm-renown>span:first-child{min-width:0}
+@media(max-width:760px){#player-manager-setup .pm-linkage-note{font-size:13px}#player-manager-setup .pm-stat-effect,#player-manager-setup .pm-renown-effect{font-size:13px}}

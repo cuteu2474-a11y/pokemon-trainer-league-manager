@@ -33,9 +33,10 @@ function draw(){
  '<div class="pm-grid"><section class="pm-panel"><h2>감독 경력 선택</h2><div class="pm-tier-list">'+
  Object.entries(CAREERS).map(([id,c])=>'<button type="button" class="pm-tier'+(career===id?' selected':'')+'" data-career="'+id+'" aria-pressed="'+(career===id)+'"><strong>'+c.name+'</strong><span>추가 '+c.points+'P · 개별 최대 '+c.max+'</span></button>').join('')+'</div></section>'+
  '<section class="pm-panel"><div class="pm-score"><div><h2>능력치 배분</h2></div><strong>남은 '+remaining()+'P</strong></div>'+
- '<div class="pm-stats">'+STATS.map(([id,label])=>
- '<div class="pm-stat"><div class="pm-stat-meta"><div><strong>'+label+'</strong></div><div class="pm-stepper"><button type="button" data-stat="'+id+'" data-delta="-1" aria-label="'+label+' 감소" '+(points[id]<=BASE?'disabled':'')+'>−</button><b>'+points[id]+'</b><button type="button" data-stat="'+id+'" data-delta="1" aria-label="'+label+' 증가" '+(remaining()<=0||points[id]>=tier.max?'disabled':'')+'>+</button></div></div><div class="pm-bar"><span style="width:'+(points[id]/20*100)+'%"></span></div></div>').join('')+'</div>'+
- '<div class="pm-renown"><span><strong>명성 '+tier.renown+'/100</strong></span><span class="pm-renown-badge">'+tier.name+'</span></div>'+
+ '<div class="pm-linkage-note" data-keep-copy>아래는 능력치별 연동 대상입니다. 게임 내 실제 효과는 연결 예정입니다.</div>'+
+ '<div class="pm-stats">'+STATS.map(([id,label,desc])=>
+ '<div class="pm-stat"><div class="pm-stat-meta"><div><strong>'+label+'</strong><span class="pm-stat-effect" data-keep-copy>'+desc+'</span></div><div class="pm-stepper"><button type="button" data-stat="'+id+'" data-delta="-1" aria-label="'+label+' 감소" '+(points[id]<=BASE?'disabled':'')+'>−</button><b>'+points[id]+'</b><button type="button" data-stat="'+id+'" data-delta="1" aria-label="'+label+' 증가" '+(remaining()<=0||points[id]>=tier.max?'disabled':'')+'>+</button></div></div><div class="pm-bar"><span style="width:'+(points[id]/20*100)+'%"></span></div></div>').join('')+'</div>'+
+ '<div class="pm-renown"><span><strong>명성 '+tier.renown+'/100</strong><span class="pm-renown-effect" data-keep-copy>감독 평판 · 유명 트레이너 영입</span></span><span class="pm-renown-badge">'+tier.name+'</span></div>'+
  '<div class="pm-actions"><button type="button" data-action="reset" class="pm-reset">배분 초기화</button><button type="button" data-action="submit" class="pm-submit" '+(remaining()!==0?'disabled':'')+'>설정 완료 · 감독 취임</button></div></section></div></div>';
 }
 function back(){
@@ -90,5 +91,5 @@ screen.addEventListener('click',e=>{
 });
 window.clubSelectCommit=begin;
 window.PlayerManagerSetup={careers:CAREERS,stats:STATS,open:begin,back,remaining};
-const css=document.createElement('link');css.rel='stylesheet';css.href='assets/manager-creation.css?v=trimmed-copy-2';document.head.append(css);
+const css=document.createElement('link');css.rel='stylesheet';css.href='assets/manager-creation.css?v=ability-linkage-3';document.head.append(css);
 })();
