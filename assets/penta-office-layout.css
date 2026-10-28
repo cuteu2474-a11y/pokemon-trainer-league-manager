@@ -151,6 +151,12 @@
 .pr-week-legend{display:flex;align-items:center;flex-wrap:wrap;gap:7px 17px;color:#b4cee0;font-size:12px}
 .pr-week-legend-item{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .pr-week-key{display:inline-block;flex:none;width:12px;height:12px;border-radius:3px}
+.pr-save-tools{align-self:flex-start;max-width:100%;font-size:12px;color:#bfe1f1}
+.pr-save-tools>summary{display:inline-flex;align-items:center;min-height:40px;padding:8px 12px;border:1px solid #557e9c;border-radius:7px;cursor:pointer;list-style:inside;background:#173c5b;font-weight:800}
+.pr-save-tools>summary:focus-visible{outline:2px solid #9be9f5;outline-offset:2px}
+.pr-save-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.pr-save-actions button{min-height:44px;border:1px solid #6aa6c5;border-radius:7px;background:#1b5072;color:#f3fbff;font:inherit;font-weight:800;padding:9px 12px;cursor:pointer}
+.pr-save-actions button:hover{background:#246b8e}
 #dashboard.pr-office>.pr-season-timeline{display:none!important}
 @media(max-width:640px){
  #dashboard.pr-office>.pr-progress-bar{padding:10px;gap:10px}
@@ -160,6 +166,11 @@
  .pr-week-block{height:15px;border-radius:3px}
  .pr-week-legend{gap:6px 12px;font-size:10px}
  .pr-week-key{height:10px;width:10px}
+ .pr-progress-actions{width:100%}
+ .pr-progress-actions .pr-progress-button{flex:1 1 145px;min-height:44px}
+ .pr-save-tools{width:100%}
+ .pr-save-tools>summary{min-height:44px;width:100%}
+ .pr-save-actions button{flex:1 1 140px}
 }
 
 /* Full-width manager profile: bio left, all six abilities filling the right. */

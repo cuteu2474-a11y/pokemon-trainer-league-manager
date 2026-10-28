@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {webcrypto} from 'node:crypto';
 import * as registration from '../src/core/match-registration.js';
+import {createCareerBackup,parseCareerBackup} from '../src/core/career-backup.js';
 const clone=x=>JSON.parse(JSON.stringify(x));
 const p=()=>({season:1,round:1,week:5,home:0,away:1,phase:'watch',order:[0,1,2,3,4],plans:[null,null,null,null,null],behaviors:[null,null,null,null,null]});
 const club=id=>({id,name:'구단 '+id,trainers:Array.from({length:5},(_,i)=>({name:'선수 '+id+'-'+i,tactics:10,switching:10,pokemon:Array.from({length:6},()=>({name:'피카츄',power:70,moves:['thunderbolt']}))}))});
@@ -48,12 +49,15 @@ test('old oversized collections migrate without discarding Pokémon, while match
  assert.notEqual(await registration.digest(registration.lineupState(g,g.pendingMatch)),before);
 });
 function browser(g,store,locks){
- const ctx={registration,game:clone(g),SKEY:'save',crypto:webcrypto,navigator:{locks},Date,console,
+ const listeners={};const nodes=new Map();
+ const ctx={registration,createCareerBackup,parseCareerBackup,game:clone(g),SKEY:'save',crypto:webcrypto,navigator:{locks},Date,console,
   localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>{if(store.fail&&k==='save')throw Error('quota');store.set(k,v);},removeItem:k=>store.delete(k)},
   freshGame:()=>clone(g),renderOffice(){},myClub:()=>ctx.game.clubs[0],
-  document:{getElementById(){return null;},createElement(){return {style:{},append(){}};},body:{append(){}}},addEventListener(){}};
+  document:{getElementById:id=>nodes.get(id)||null,createElement(){return {style:{},append(){},setAttribute(){},focus(){},remove(){nodes.delete(this.id);}};},body:{append(node){if(node.id)nodes.set(node.id,node);}},addEventListener:(event,fn)=>{listeners['document:'+event]=fn;}},
+  addEventListener:(event,fn)=>{listeners[event]=fn;},alert(){}};
+ ctx.listeners=listeners;
  ctx.MatchdayPreparation={invalidate(){ctx.invalidated=true;},render(){}};ctx.window=ctx;
- const source=readFileSync(new URL('../assets/match-registration-ui.js',import.meta.url),'utf8').replace(/^import .*;\n/,'');
+ const source=readFileSync(new URL('../assets/match-registration-ui.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
  runInNewContext(source,ctx);return ctx;
 }
 const serialLocks=()=>{let tail=Promise.resolve();return {request:(_name,job)=>{const next=tail.then(job);tail=next.catch(()=>{});return next;}};};
@@ -83,4 +87,55 @@ test('changed registered lineup is rejected before any reward is applied',async(
  const {g}=await fixture();g.pendingMatch.frozen.registration.rulesVersion='old-rules';g.appliedMatches={'earlier':{id:'completed'}};
  const store=new Map([['save',JSON.stringify(g)]]),ctx=browser(g,store,serialLocks());
  assert.equal(ctx.invalidated,true);assert.equal(ctx.game.pendingMatch.phase,'prepare');assert.equal(ctx.game.pendingMatch.frozen,undefined);assert.equal(ctx.game.pendingMatch.result,undefined);assert.equal(ctx.game.appliedMatches.earlier.id,'completed');
+});
+test('reload resumes interrupted research or running match requests as retryable preparation',async()=>{
+ for(const phase of ['research','running']){
+  const {g}=await fixture();g.pendingMatch.phase=phase;
+  const store=new Map([['save',JSON.stringify(g)]]),ctx=browser(g,store,serialLocks());
+  assert.equal(ctx.game.pendingMatch.phase,'prepare');
+  assert.match(ctx.game.pendingMatch.error,/중단/);
+  assert.ok(ctx.game.pendingMatch.frozen);
+  assert.equal(JSON.parse(store.get('save')).pendingMatch.phase,'prepare');
+ }
+});
+test('opening a second tab without a migration does not silently bump the save revision',async()=>{
+ const {g}=await fixture(),store=new Map([['save',JSON.stringify(g)]]),locks=serialLocks();
+ const a=browser(g,store,locks),b=browser(g,store,locks);
+ assert.equal(JSON.parse(store.get('save')).saveRevision,0);
+ assert.equal(a.game.saveRevision,0);assert.equal(b.game.saveRevision,0);
+ a.persist();assert.equal(JSON.parse(store.get('save')).saveRevision,1);
+ b.listeners.storage({key:'save'});
+ assert.equal(b.MatchRegistration.stale,true);
+ assert.ok(b.document.getElementById('match-save-notice'));
+ assert.throws(()=>b.persist(),/다른 탭/);
+ b.MatchRegistration.reload();
+ assert.equal(b.MatchRegistration.stale,false);assert.equal(b.game.saveRevision,1);
+});
+test('a background tab checks the save again on focus before changing game data',async()=>{
+ const {g}=await fixture(),store=new Map([['save',JSON.stringify(g)]]),locks=serialLocks();
+ const a=browser(g,store,locks),b=browser(g,store,locks);
+ a.persist();b.listeners.focus();
+ assert.equal(b.MatchRegistration.stale,true);
+});
+test('restore takes a validated backup atomically, assigns a new career ID and makes old tabs stale',async()=>{
+ const {g}=await fixture(),store=new Map([['save',JSON.stringify(g)]]),locks=serialLocks();
+ const a=browser(g,store,locks),b=browser(g,store,locks);
+ const candidate={...clone(g),manager:'복원할 감독',week:6,round:2,clubs:[...g.clubs,...Array.from({length:38},(_,i)=>club(i+2))],fixtures:[[],[],[],[]],results:[]};
+ const data=JSON.stringify(createCareerBackup(candidate));
+ assert.equal(await a.MatchRegistration.restoreCareer(data),true);
+ const restored=JSON.parse(store.get('save'));
+ assert.equal(restored.manager,'복원할 감독');assert.equal(restored.week,6);
+ assert.notEqual(restored.saveId,g.saveId);assert.equal(restored.saveRevision,1);
+ b.listeners.storage({key:'save'});assert.equal(b.MatchRegistration.stale,true);
+ assert.throws(()=>b.persist(),/다른 탭/);
+});
+test('failed backup restore preserves the previous save and current in-memory career',async()=>{
+ const {g}=await fixture(),store=new Map([['save',JSON.stringify(g)]]),ctx=browser(g,store,serialLocks());
+ const before=store.get('save');
+ await assert.rejects(ctx.MatchRegistration.restoreCareer('{"format":"penta-rivals-career"}'),/백업 파일/);
+ assert.equal(store.get('save'),before);
+ const candidate={...clone(g),manager:'복원 테스트 감독',clubs:[...g.clubs,...Array.from({length:38},(_,i)=>club(i+2))],fixtures:[[],[],[],[]],results:[]};
+ store.fail=true;
+ await assert.rejects(ctx.MatchRegistration.restoreCareer(JSON.stringify(createCareerBackup(candidate))),/복원하지 못/);
+ assert.equal(store.get('save'),before);assert.equal(ctx.game.saveId,g.saveId);
 });

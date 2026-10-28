@@ -117,9 +117,17 @@ function progressView(){
  important.onclick=()=>game.pendingMatch?window.ManagementUI?.openMatch():window.ManagementUI?.important();
  if(game.management?.running){next.disabled=true;important.disabled=true;}
  actions.append(next,important);
+ const saveTools=document.createElement('details');saveTools.className='pr-save-tools';
+ const saveLabel=document.createElement('summary');saveLabel.textContent='저장 관리';
+ const saveActions=document.createElement('div');saveActions.className='pr-save-actions';
+ const backup=document.createElement('button');backup.type='button';backup.textContent='백업 파일 저장';
+ backup.onclick=()=>{try{window.MatchRegistration?.downloadBackup();}catch(error){alert(error.message);}};
+ const restore=document.createElement('button');restore.type='button';restore.textContent='백업 파일 복원';
+ restore.onclick=()=>window.MatchRegistration?.chooseBackup();
+ saveActions.append(backup,restore);saveTools.append(saveLabel,saveActions);
  const header=document.createElement('div');header.className='pr-progress-head';
  header.append(status,actions);
- bar.append(header,seasonWeekStrip());return bar;
+ bar.append(header,saveTools,seasonWeekStrip());return bar;
 }
 /* Integrated calendar uses the same fixed 30-week season plan as the league.
    Rendering it directly avoids losing the timeline when dashboard DOM is rebuilt. */
