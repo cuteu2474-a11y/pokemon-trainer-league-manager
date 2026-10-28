@@ -13,7 +13,7 @@ const sample=()=>({
 test('news is made from verified results and transfers without invented articles',()=>{
  const news=build(sample(),a);
  assert.equal(news.filter(n=>n.kind==='match').length,1);
- assert.match(news[0].title,/구름시티/);
+ assert.ok(news.some(n=>n.kind==='match'&&n.title.includes('구름시티')));
  assert.equal(news.filter(n=>n.kind==='transfer').length,1);
  assert.equal(news.filter(n=>n.kind==='club').length,1);
  assert.ok(!news.some(n=>n.title.includes('급여 정산')));
@@ -27,9 +27,9 @@ test('completed draws, zero scores and transfer records are displayed',()=>{
  const n=build(g,a);assert.match(n.find(x=>x.kind==='match').title,/무승부/);
  assert.match(n.find(x=>x.kind==='transfer').meta,/6주차/);
 });
-test('unconfirmed match results and out-of-division matches are excluded',()=>{
+test('unconfirmed scores are excluded but league-wide completed scores remain visible',()=>{
  const g=sample();g.results=[[{home:1,away:2},{home:1,away:2,aScore:null,bScore:null},{home:2,away:3,aScore:5,bScore:0}]];
- assert.equal(build(g,a).filter(n=>n.kind==='match').length,0);
+ assert.equal(build(g,a).filter(n=>n.kind==='match').length,1);
 });
 
 test('player and AI manager appointments are sourced from actual named contracts',()=>{
@@ -67,4 +67,15 @@ test('SNS posts are derived from real news and never invent reaction totals',()=
  assert.ok(posts.some(x=>x.kind==='coach'));
  assert.ok(posts.every(x=>news.some(e=>e.id===x.sourceId)));
  assert.ok(posts.every(x=>!('likeCount' in x)));
+});
+
+test('retirement archival and coach dismissal never become duplicate SNS announcements',()=>{
+ const g=sample();g.clubs[1].aiCoachHistory=[{name:'구감독',id:'past',leftSeason:2}];
+ g.clubs[1].aiCoachDecisions=[{season:2,status:'감독 경질',detail:'구감독 후임 결정'}];
+ g.retiredTrainers=[{season:2,club:'금빛시티',trainer:{name:'도감독'}}];
+ g.trainerRetirementHistory=[{season:2,club:'금빛시티',name:'도감독'}];
+ const news=build(g,a),social=globalThis.PentaNewsFeed.buildSocial(news);
+ assert.equal(news.filter(x=>x.subtype==='dismissal').length,1);
+ assert.equal(news.filter(x=>x.subtype==='trainer').length,1);
+ assert.equal(social.filter(x=>x.sourceId===news.find(y=>y.subtype==='dismissal').id).length,1);
 });
