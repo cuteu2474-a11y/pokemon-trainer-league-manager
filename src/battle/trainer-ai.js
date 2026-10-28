@@ -5,6 +5,7 @@ import {RandomPlayerAI,Dex} from '@pkmn/sim';
 import {selectTacticalMove,searchBudget,evaluateMove,wastedStatusMove,wastedSelfMove} from './tactical-search.js';
 import {rolloutActions,robustResponseScore} from './showdown-rollout.js';
 import {traitValue,assessMoveTraits,switchTraitBonus} from './trait-decision.js';
+import {aceSwitchAdjustment} from './relay-resource-policy.js';
 
 const clamp=x=>Math.max(1,Math.min(20,Number.isFinite(x)?x:10));
 const limit=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -77,6 +78,7 @@ export class TrainerAI extends RandomPlayerAI{
     this.side='p1';
     this.remaining=trainer.relayOpponentsRemaining??1;
     this.decisions={moves:0,switches:0,voluntarySwitches:0,rollouts:0,rolloutFallbacks:0,
+      ppConservations:0,
       plan:this.plan,response:this.profile.response||'자율',preferred:this.profile.preferred,
       traits:[...(this.profile.traits||[])],
       behaviorAdvice:this.profile.behaviorAdvice||null,
@@ -84,6 +86,7 @@ export class TrainerAI extends RandomPlayerAI{
       reasons:{},trace:[]};
   }
   record(kind,choice,reason,details={}){
+    if(kind==='move'&&details.quality?.pp)this.decisions.ppConservations++;
     this.decisions.reasons[reason]=(this.decisions.reasons[reason]||0)+1;
     if(this.decisions.trace.length<60){
       this.decisions.trace.push({kind,choice,reason,...details});
@@ -275,6 +278,8 @@ export class TrainerAI extends RandomPlayerAI{
     const moveScore=current+Math.max(-80,bestMove)*.23-
       currentDanger*(health<.35?18:8);
     const hazards=battle?.[this.side]?.sideConditions||{};
+    const livingTeam=pokemon.flatMap((mon,i)=>Number.parseInt(mon.condition||'',10)>0?
+      [this.findOwned(mon,i+1)].filter(Boolean):[]);
     const candidates=pokemon.flatMap((mon,i)=>{
       if(mon.active||Number.parseInt(mon.condition||'',10)<=0)return [];
       const owned=this.findOwned(mon,i+1);
@@ -290,8 +295,12 @@ export class TrainerAI extends RandomPlayerAI{
         (betterMatchup>0?traitValue(this.profile,'matchup')*8:0)+
         (this.remaining>1&&health<.55?traitValue(this.profile,'preserve')*10:0);
       const preservation=this.remaining>1&&this.profile.preservation>=14&&health<.40?8:0;
+      const aceAdjustment=aceSwitchAdjustment({active:own,candidate:owned,team:livingTeam,
+        remaining:this.remaining,preservation:this.profile.preservation,
+        currentHealth:health,currentDanger,matchupGain:betterMatchup,
+        candidateHealthAfterEntry:fraction-hazard});
       const score=this.candidateScore(mon,i+1,foeTypes,hazard)+betterMatchup*9+
-        traits+preservation-28-nextDanger*8-hazard*28;
+        traits+preservation+aceAdjustment-28-nextDanger*8-hazard*28;
       return [{slot:i+1,score}];
     }).sort((a,b)=>b.score-a.score||a.slot-b.slot);
     const best=candidates[0];
@@ -320,13 +329,7 @@ export class TrainerAI extends RandomPlayerAI{
     if(move.heal&&hp<.65)return conservation+6;
     if(move.drain&&hp<.60)return conservation;
     if(move.selfdestruct||move.id==='explosion'||move.id==='selfdestruct')return -conservation*3;
-    // Low remaining PP matters across KOF challengers. This is a tie-break,
-    // never a substitute for a clear knockout or Showdown's PP accounting.
-    const slot=own.moveSlots?.find(entry=>entry.id===move.id);
-    if(this.profile.preservation>=14&&slot&&slot.pp<=2&&slot.maxpp>=5&&
-      move.category!=='Status'&&move.basePower>=70&&traitValue(this.profile,'pp')>0){
-      return -Math.min(8,conservation*.8)*traitValue(this.profile,'pp');
-    }
+    // PP conservation is centralized in assessMoveTraits for rollout and fallback.
     return 0;
   }
   chooseMove(active,moves){

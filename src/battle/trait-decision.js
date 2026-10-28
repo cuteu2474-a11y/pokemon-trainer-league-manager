@@ -1,4 +1,5 @@
 import {Dex} from '@pkmn/sim';
+import {ppConservation} from './relay-resource-policy.js';
 
 /** The seven league traits affect AI selection only. They never modify Showdown rules. */
 export const TRAITS=Object.freeze({
@@ -58,29 +59,15 @@ export function assessMoveTraits({move,battle,side='p1',profile={},remaining=1,o
   } else if(move.category==='Status'&&move.status&&!statusIsUseful(move,foe)) {
     bonus-=75; // A trait never rewards immune or already-statused targets.
   }
-  const pp=traitValue(profile,'pp');
-  if(attacking&&remaining>1&&pp>0&&Array.isArray(own.moveSlots)) {
-    const ownTypes=own.getTypes?.()||own.types||[];
-    const foeTypes=foe.getTypes?.()||foe.types||[];
-    const estimate=m=>(m.basePower||0)*
-      (m.accuracy===true?1:(Number(m.accuracy)||100)/100)*
-      foeTypes.reduce((n,t)=>n*(Dex.getImmunity(m.type,[t])?2**Dex.getEffectiveness(m.type,[t]):0),1)*
-      (ownTypes.includes(m.type)?1.5:1);
-    const scarce=options.filter(option=>{
-      if(option.category==='Status'||!option.basePower||option.id===move.id)return false;
-      const slot=own.moveSlots.find(s=>s.id===option.id);
-      return slot&&slot.maxpp>=5&&slot.pp<=Math.max(2,Math.floor(slot.maxpp*.2));
-    });
-    const ownSlot=own.moveSlots.find(s=>s.id===move.id);
-    const ownLow=ownSlot&&ownSlot.maxpp>=5&&ownSlot.pp<=Math.max(2,Math.floor(ownSlot.maxpp*.2));
-    if(ownLow&&options.some(m=>m.id!==move.id&&m.category!=='Status'&&
-       estimate(m)>=estimate(move)*.82) && chance<.5){
-      bonus-=pp*32;
-    } else if(!ownLow&&scarce.some(m=>estimate(move)>=estimate(m)*.82)&&chance<.5) {
-      // Picking a sufficiently strong, non-scarce alternative preserves rare PP.
-      bonus+=pp*12;
-      quality.pp=true;
-    }
+  if(attacking){
+    const scored=ppConservation({move,options,own,
+      ownTypes:own.getTypes?.()||own.types||[],
+      foeTypes:foe.getTypes?.()||foe.types||[],
+      foeHpFraction:foe.maxhp>0?foe.hp/foe.maxhp:1,
+      remaining,preservation:profile.preservation||10,
+      ppHabit:traitValue(profile,'pp'),koRate:Number(forecast?.koRate)||0});
+    bonus+=scored.bonus;
+    quality.pp=scored.saved;
   }
   return {bonus,quality};
 }

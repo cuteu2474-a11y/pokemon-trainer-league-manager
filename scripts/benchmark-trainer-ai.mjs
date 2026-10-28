@@ -1,6 +1,6 @@
 /** Reproducible paired-seed trainer AI benchmark.
  * Each roster is mirrored and the expert swaps p1/p2 for every seed.
- * Usage: node scripts/benchmark-trainer-ai.mjs [seedPairs=8] [all|balanced|offense|endurance] [turnCap=180]
+ * Usage: node scripts/benchmark-trainer-ai.mjs [seedPairs=8] [all|balanced|offense|endurance] [turnCap=180] [remainingOpponents=1]
  * Results are diagnostics, not guarantees of general competitive strength.
  */
 import {performance} from 'node:perf_hooks';
@@ -9,6 +9,9 @@ import {simulateSixVsSix} from '../src/battle/showdown.js';
 const pairs=Number(process.argv[2]||8);
 const selection=process.argv[3]||'all';
 const maxTurns=Number(process.argv[4]||180);
+const remainingOpponents=Number(process.argv[5]||1);
+if(!Number.isInteger(remainingOpponents)||remainingOpponents<1||remainingOpponents>5)
+  throw new RangeError('Remaining opponents must be 1..5');
 if(!Number.isInteger(maxTurns)||maxTurns<1||maxTurns>300)
   throw new RangeError('Turn cap must be 1..300');
 if(!Number.isInteger(pairs)||pairs<1||pairs>20)
@@ -47,14 +50,16 @@ if(selection!=='all'&&!Object.hasOwn(sets,selection))
   throw new RangeError('Roster must be all, balanced, offense or endurance');
 const selected=selection==='all'?Object.entries(sets):[[selection,sets[selection]]];
 const rated=value=>({tactics:value,switching:value,moveJudgment:value,
- switchJudgment:value,battleAnalysis:value,resourceManagement:value});
+ switchJudgment:value,battleAnalysis:value,resourceManagement:value,
+ relayOpponentsRemaining:remainingOpponents});
 const makeTeam=rows=>rows.map(([species,moves],i)=>({
  name:`${species}-${i+1}`,species,moves,nature:'Hardy',statCA:{...ca},statPA:{...pa}
 }));
 const fresh=()=>({games:0,expertWins:0,noviceWins:0,ties:0,turns:0,
  expertMoves:0,noviceMoves:0,expertSwitches:0,noviceSwitches:0,
  expertRollouts:0,noviceRollouts:0,expertFallbacks:0,noviceFallbacks:0,
- expertMistakeSelections:0,noviceMistakeSelections:0,durationMs:0,
+ expertMistakeSelections:0,noviceMistakeSelections:0,
+ expertPPSaves:0,novicePPSaves:0,durationMs:0,
  expertWinsBySide:{p1:0,p2:0},endReasons:{}});
 function accumulate(bucket,row){
  bucket.games++;
@@ -68,6 +73,7 @@ function accumulate(bucket,row){
   bucket[`${label}Switches`]+=data.voluntarySwitches||0;
   bucket[`${label}Rollouts`]+=data.rollouts||0;
   bucket[`${label}Fallbacks`]+=data.rolloutFallbacks||0;
+  bucket[`${label}PPSaves`]+=data.ppConservations||0;
   bucket[`${label}MistakeSelections`]+=data.reasons?.['판단 실패 · 비슷한 선택지 중 선택']||0;
  }
 }
@@ -104,5 +110,5 @@ for(const [rosterName,rows] of selected){
  perRoster[rosterName]={...summarize(metrics),roster:rows.map(x=>x[0])};
 }
 console.log(JSON.stringify({pairCount:pairs,totalGames:overall.games,selectedRosters:selected.map(x=>x[0]),
- ratings:{expert:20,novice:1},maxTurns,
+ ratings:{expert:20,novice:1},maxTurns,remainingOpponents,
  ...summarize(overall),perRoster,games},null,2));
