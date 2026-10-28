@@ -84,3 +84,16 @@ test('team preview picks a suitable living lead from own team and visible opposi
  const lead=ai.chooseTeamPreview(team.map(mon=>({details:mon.species,ident:'p1: '+mon.name,condition:'100/100'})));
  assert.equal(lead,'team 2');
 });
+
+test('highest tactical skill always uses deliberate reasoning regardless of RNG roll',()=>{
+ const ai=new TrainerAI({}, {tactics:20,switching:20,moveJudgment:20,
+  battleAnalysis:20},{seed:[1,2,3,4]});
+ ai.foeSpecies='Gyarados';ai.ownActive={species:'Pikachu'};
+ ai.prng.random=()=>.999999;
+ const choice=ai.chooseMove({},[
+  {choice:'move 1',move:{id:'earthquake'}},
+  {choice:'move 2',move:{id:'thunderbolt'}}
+ ]);
+ assert.equal(choice,'move 2');
+ assert.equal(ai.decisions.reasons['판단 실패 · 비슷한 선택지 중 선택']||0,0);
+});

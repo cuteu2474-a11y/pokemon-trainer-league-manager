@@ -3,7 +3,7 @@ import {battlePlan,planPreference} from './battle-plans.js';
 import {trainerPersonality} from './battle-autonomy.js';
 import {RandomPlayerAI,Dex} from '@pkmn/sim';
 import {selectTacticalMove,searchBudget,evaluateMove,wastedStatusMove} from './tactical-search.js';
-import {rolloutActions} from './showdown-rollout.js';
+import {rolloutActions,robustResponseScore} from './showdown-rollout.js';
 import {traitValue,assessMoveTraits,switchTraitBonus} from './trait-decision.js';
 
 const clamp=x=>Math.max(1,Math.min(20,Number.isFinite(x)?x:10));
@@ -258,7 +258,9 @@ export class TrainerAI extends RandomPlayerAI{
     const clarity=limit((this.profile.analysis+insight)/20,0,1);
     // Positive analysis experience raises the chance the trainer will choose
     // deliberate tactical reasoning again without another coach instruction.
-    const understands=this.prng.random()<
+    // Maximum tactical judgement does not voluntarily skip the decision model.
+    // It still cannot know hidden opposing sets or guarantee an optimal result.
+    const understands=this.skill.tactics===20||this.prng.random()<
       limit((this.skill.tactics+analysisHabit/25+meetingBoost)/20,.05,.98);
     if(!understands){
       // Weaker trainers sometimes pick the second-best viable action, not a
@@ -289,7 +291,12 @@ export class TrainerAI extends RandomPlayerAI{
           const effects=assessMoveTraits({move,battle,side:this.side,profile:this.profile,
             remaining:this.remaining,options:legalMoveData,forecast:candidate});
           candidate.traitEvidence=effects.quality;
-          candidate.score+=this.preference(move,battle)+this.contextualBonus(move,battle)+effects.bonus;
+          // Stronger trainers hedge against an opponent's worst sampled reply,
+          // rather than optimizing only the average cloned Showdown outcome.
+          const risk=this.skill.tactics===20&&this.profile.analysis>=19?.38:
+            this.profile.analysis>=16?.16:0;
+          candidate.score=robustResponseScore(candidate,risk)+
+            this.preference(move,battle)+this.contextualBonus(move,battle)+effects.bonus;
         }
         ranked.sort((a,b)=>b.score-a.score||a.choice.localeCompare(b.choice));
         if(ranked[0]?.runs>0&&Number.isFinite(ranked[0].score)){

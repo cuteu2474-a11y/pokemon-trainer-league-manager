@@ -25,7 +25,7 @@ export function rolloutActions(battle, {sideId='p1', choices, opponentChoices, d
   const foeId = sideId === 'p1' ? 'p2' : 'p1';
   const results = [];
   for (const choice of choices) {
-    let score = 0, runs = 0, kos = 0, damage = 0;
+    let score = 0, worstScore = Infinity, runs = 0, kos = 0, damage = 0;
     for (let i=0;i<samples;i++) {
       // Showdown serialization retains the original log array by reference.
       // Each search branch must own its log, including separate samples.
@@ -52,14 +52,31 @@ export function rolloutActions(battle, {sideId='p1', choices, opponentChoices, d
           if (clone.requestState !== 'move') break;
           clone.makeChoices();
         }
-        score += evaluateBattle(clone,sideId);
+        const outcome=evaluateBattle(clone,sideId);
+        score += outcome;
+        worstScore=Math.min(worstScore,outcome);
         runs++;
       } catch {
         // Invalid branches are excluded rather than contaminating the live battle.
       }
     }
-    results.push({choice,score:runs ? score/runs : -Infinity,runs,
+    results.push({choice,score:runs ? score/runs : -Infinity,
+      worstScore:runs ? worstScore : -Infinity,runs,
       koRate:runs?kos/runs:0,damageFraction:runs?damage/runs:0});
   }
   return results.sort((a,b)=>b.score-a.score);
+}
+
+/**
+ * Poke Engine-style conservative opponent response evaluation, adapted to
+ * existing cloned Showdown turns rather than importing a second rules engine.
+ * score and worstScore share the same battle-state value units.
+ * This score is not an exact game-theoretic equilibrium or guaranteed win rate.
+ * References: https://github.com/pmariglia/poke-engine (MIT license).
+ */
+export function robustResponseScore({score,worstScore},risk=0){
+ if(!Number.isFinite(score))return -Infinity;
+ if(!Number.isFinite(worstScore))return score;
+ const bounded=Math.max(0,Math.min(1,Number(risk)||0));
+ return score*(1-bounded)+worstScore*bounded;
 }
