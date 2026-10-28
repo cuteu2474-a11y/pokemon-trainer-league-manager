@@ -109,6 +109,43 @@ function progressView(){
  if(game.management?.running){next.disabled=true;important.disabled=true;}
  actions.append(next,important);bar.append(status,actions);return bar;
 }
+/* Elevate the existing 30-week calendar instead of recreating the dates,
+   colors, event listeners or state. The original node is reused. */
+function findSeasonTimeline(root){
+ const labels=['프리시즌/비시즌','정규 리그','겨울 이적시장','시즌 정산'];
+ const protectedSelector='.pr-season-timeline,.pr-navigation-stack,.pr-progress-bar,.pr-club-banner';
+ const leaves=Array.from(root.querySelectorAll('*')).filter(node=>
+  node.childElementCount===0 && (node.textContent||'').includes('프리시즌/비시즌') &&
+  !node.closest(protectedSelector));
+ for(const leaf of leaves){
+  let fallback=null;
+  for(let parent=leaf.parentElement;parent && parent!==root;parent=parent.parentElement){
+   if(parent.matches(protectedSelector))break;
+   const labelCount=labels.filter(label=>(parent.textContent||'').includes(label)).length;
+   if(labelCount<3)continue;
+   // The colored 30-week boxes are siblings in a timeline row.
+   const weekRow=Array.from(parent.querySelectorAll('*')).some(el=>el.childElementCount>=27 && el.childElementCount<=32);
+   const semantic=/(?:season|calendar|timeline|week|schedule|시즌|일정|주차)/i.test(String(parent.className||'')+' '+String(parent.id||''));
+   if(weekRow)return parent;
+   if(semantic && !fallback)fallback=parent;
+  }
+  if(fallback)return fallback;
+ }
+ return null;
+}
+function elevateSeasonTimeline(root){
+ const nav=root.querySelector(':scope > .pr-navigation-stack');
+ if(!nav)return;
+ const oldSlot=root.querySelector(':scope > .pr-season-timeline');
+ const original=findSeasonTimeline(root);
+ if(original){
+  const slot=oldSlot||document.createElement('section');
+  slot.className='pr-season-timeline';
+  slot.setAttribute('aria-label','시즌 30주 일정');
+  slot.replaceChildren(original); // Moving retains real week controls and listeners.
+  root.insertBefore(slot,nav);
+ }else if(oldSlot)root.insertBefore(oldSlot,nav);
+}
 function managerProfileView(root,club){
  const page=document.createElement('section');page.className='pr-manager-profile';page.setAttribute('aria-label','감독 프로필');
  const heading=document.createElement('h2');heading.textContent='감독 프로필';
@@ -178,12 +215,13 @@ function apply(){
  root.querySelectorAll(':scope > .pr-navigation-stack,:scope > .pr-top-navigation,:scope > .pr-secondary-navigation,:scope > .pr-club-banner,:scope > .pr-progress-bar').forEach(x=>x.remove());
  const selected=typeof tab==='string'?tab:'home';
  root.insertBefore(bannerView(root,club),panel);root.insertBefore(progressView(),panel);root.insertBefore(navView(selected),panel);
+ elevateSeasonTimeline(root);
  panel.classList.toggle('pr-manager-profile-view',selected==='home'&&homeSubpage==='manager-profile');
  if(selected==='home'&&homeSubpage==='manager-profile')panel.replaceChildren(managerProfileView(root,club));
  if(selected==='team')patchTrainers(root,club);
  removeOldPreview();
 }
-const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=manager-nav-3';document.head.append(css);
+const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=season-timeline-4';document.head.append(css);
 const previous=window.renderOffice;
 if(typeof previous==='function')window.renderOffice=function(...args){
  const value=previous.apply(this,args);
