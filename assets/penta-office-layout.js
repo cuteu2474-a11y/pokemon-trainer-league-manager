@@ -9,6 +9,7 @@ const sections=[
  {tab:'home',label:'감독실',group:'home',icon:'house',children:[['manager-profile','감독 프로필']]},
  {tab:'team',label:'선수단',group:'squad',icon:'users',children:[['team','트레이너 목록'],['profile','트레이너 프로필'],['pokemon','포켓몬'],['tactics','게임 플랜'],['weekly','주간 프로그램'],['scout','포켓몬 탐색'],['academy','아카데미']]},
  {tab:'fixtures',label:'리그',group:'league',icon:'trophy',children:[]},
+ {tab:'news',label:'뉴스',group:'news',icon:'newspaper',children:[]},
  {tab:'transfer',label:'영입',group:'market',icon:'arrows',children:[]},
  {tab:'finance',label:'구단',group:'club',icon:'shield',children:[]}
 ];
@@ -16,6 +17,7 @@ const svgPaths={
  house:'<path d="m3 10 9-7 9 7"/><path d="M5 9v12h14V9"/><path d="M9 21v-7h6v7"/>',
  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
  trophy:'<path d="M8 21h8M12 17v4M7 4h10v7a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4v2a4 4 0 0 0 4 4M17 6h3v2a4 4 0 0 1-4 4"/>',
+ newspaper:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h5v5H7zM15 8h3M15 11h3M7 16h11"/>',
  arrows:'<path d="M7 7h14m-4-4 4 4-4 4"/><path d="M17 17H3m4-4-4 4 4 4"/>',
  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>'
 };
@@ -32,10 +34,13 @@ function spriteURL(p){
 function removeOldPreview(){
  document.querySelectorAll('#clubtrainers .ct-trainer-card .pkm-roster-mini,#clubtrainers [data-preview-index]>.pkm-roster-mini').forEach(e=>e.remove());
 }
-const groupOf=k=>['team','profile','pokemon','tactics','weekly','scout','academy','pokemonDetail','career'].includes(k)?'squad':
+let newsActive=false;
+let newsFilter='all';
+const groupOf=k=>k==='news'?'news':['team','profile','pokemon','tactics','weekly','scout','academy','pokemonDetail','career'].includes(k)?'squad':
  ['fixtures','league','calendar','retirement'].includes(k)?'league':
  ['transfer','ai'].includes(k)?'market':k==='home'?'home':'club';
 function openManagerProfile(){
+ newsActive=false;
  if(typeof tab==='string'&&tab==='home')window.renderOffice?.();
  else setTab('home');
 }
@@ -50,7 +55,12 @@ function navView(selected){
   btn.className='pr-top-link pr-main-link'+(current?' active':'');
   if(current)btn.setAttribute('aria-current','location');
   btn.innerHTML=iconSVG(section.icon)+'<span>'+safe(section.label)+'</span>';
-  btn.onclick=()=>section.group==='home'?openManagerProfile():setTab(section.children[0]?.[0]||section.tab);
+  btn.onclick=()=>{
+   if(section.group==='news'){newsActive=true;newsFilter='all';window.renderOffice?.();return;}
+   newsActive=false;
+   if(section.group==='home')openManagerProfile();
+   else setTab(section.children[0]?.[0]||section.tab);
+  };
   primary.append(btn);
  });
  const children=sections.find(x=>x.group===activeGroup)?.children||[];
@@ -61,7 +71,7 @@ function navView(selected){
   btn.className='pr-top-link pr-sub-link'+(current?' active':'');
   if(current)btn.setAttribute('aria-current','page');
   btn.textContent=label;
-  btn.onclick=()=>activeGroup==='home'?openManagerProfile():setTab(id);
+  btn.onclick=()=>{newsActive=false;if(activeGroup==='home')openManagerProfile();else setTab(id);};
   secondary.append(btn);
  });
  stack.append(primary,secondary);
@@ -190,6 +200,55 @@ function managerProfileView(root,club){
  card.append(summary);page.append(heading,card);return page;
 }
 
+
+/* News renders only persisted game events. It never creates a new game event. */
+function renderNewsView(){
+ const page=document.createElement('section');page.className='pr-news-workspace';
+ page.setAttribute('aria-label','리그 뉴스');
+ const heading=document.createElement('h2');heading.textContent='리그 뉴스';
+ page.append(heading);
+ const feed=window.PentaNewsFeed?.build?.(game,myClub())||[];
+ const filters=document.createElement('nav');filters.className='pr-news-filters';filters.setAttribute('aria-label','뉴스 분류');
+ const stories=document.createElement('div');stories.className='pr-news-stories';
+ const categories=[['all','전체'],['match','경기'],['transfer','이적'],['club','구단']];
+ function draw(){
+  filters.replaceChildren();stories.replaceChildren();
+  for(const [kind,label] of categories){
+   const count=kind==='all'?feed.length:feed.filter(e=>e.kind===kind).length;
+   const button=document.createElement('button');button.type='button';button.className='pr-news-filter'+(newsFilter===kind?' active':'');
+   button.textContent=label+' '+count;
+   button.setAttribute('aria-pressed',newsFilter===kind?'true':'false');
+   button.onclick=()=>{newsFilter=kind;draw();};filters.append(button);
+  }
+  const displayed=feed.filter(e=>newsFilter==='all'||e.kind===newsFilter).slice(0,45);
+  if(!displayed.length){
+   const empty=document.createElement('p');empty.className='pr-news-empty';
+   empty.textContent=feed.length?'해당 분류의 소식이 없습니다.':'아직 기록된 소식이 없습니다. 경기를 진행하거나 이적하면 뉴스가 생성됩니다.';
+   stories.append(empty);return;
+  }
+  const groupTitles={match:'리그 경기',transfer:'이적시장',club:'구단 소식'};
+  let lastKind=null;
+  for(const story of displayed){
+   if(newsFilter==='all'&&lastKind!==story.kind){
+    const section=document.createElement('h3');section.className='pr-news-section-title';section.textContent=groupTitles[story.kind]||'뉴스';
+    stories.append(section);
+   }
+   lastKind=story.kind;
+   const item=document.createElement('article');item.className='pr-news-story';
+   const top=document.createElement('div');top.className='pr-news-story-top';
+   const tag=document.createElement('span');tag.className='pr-news-tag pr-news-tag-'+story.kind;tag.textContent=story.label;
+   const context=document.createElement('span');context.className='pr-news-meta';context.textContent=story.meta||'';
+   top.append(tag,context);
+   const title=document.createElement('h3');title.textContent=story.title;
+   item.append(top,title);
+   if(story.description){
+    const detail=document.createElement('p');detail.textContent=story.description;item.append(detail);
+   }
+   stories.append(item);
+  }
+ }
+ page.append(filters,stories);draw();return page;
+}
 function patchTable(table,club){
  if(table.querySelector('th.pr-roster-heading'))return;
  const header=Array.from(table.querySelectorAll('thead th')).find(x=>x.textContent.trim().startsWith('트레이너'));
@@ -239,15 +298,17 @@ function apply(){
  const panel=root.querySelector(':scope > #dashpanel');if(!panel)return;
  root.classList.add('pr-office');
  root.querySelectorAll(':scope > .pr-navigation-stack,:scope > .pr-top-navigation,:scope > .pr-secondary-navigation,:scope > .pr-club-banner,:scope > .pr-progress-bar,:scope > .pr-season-timeline').forEach(x=>x.remove());
- const selected=typeof tab==='string'?tab:'home';
+ const selected=newsActive?'news':typeof tab==='string'?tab:'home';
  root.insertBefore(bannerView(root,club),panel);root.insertBefore(progressView(),panel);root.insertBefore(navView(selected),panel);
  const isProfile=selected==='home';
  panel.classList.toggle('pr-manager-profile-view',isProfile);
- if(isProfile)panel.replaceChildren(managerProfileView(root,club));
+ panel.classList.toggle('pr-news-view',newsActive);
+ if(newsActive)panel.replaceChildren(renderNewsView());
+ else if(isProfile)panel.replaceChildren(managerProfileView(root,club));
  if(selected==='team')patchTrainers(root,club);
  removeOldPreview();
 }
-const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=profile-only-8';document.head.append(css);
+const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=league-news-9';document.head.append(css);
 const previous=window.renderOffice;
 if(typeof previous==='function')window.renderOffice=function(...args){
  const value=previous.apply(this,args);
@@ -256,8 +317,19 @@ if(typeof previous==='function')window.renderOffice=function(...args){
 };
 const oldClub=window.renderClubTrainers;
 if(typeof oldClub==='function')window.renderClubTrainers=function(...args){const r=oldClub.apply(this,args);removeOldPreview();return r;};
+/* Any existing game navigation dismisses the virtual news page. */
+const previousSetTab=window.setTab;
+if(typeof previousSetTab==='function'){
+ window.setTab=function(...args){newsActive=false;return previousSetTab.apply(this,args);};
+}
 window.PentaOfficeLayout={apply,removeOldPreview};
 removeOldPreview();apply();
+/* Load the pure game-history news feed. */
+const newsDataScript=document.createElement('script');newsDataScript.async=false;
+newsDataScript.src='assets/penta-news-data.js?v=1';
+newsDataScript.onload=()=>{if(newsActive)window.renderOffice?.();};
+document.body.append(newsDataScript);
+
 /* Shared game microcopy cleanup, also active on club selection and setup. */
 const minimalCopyScript=document.createElement('script');
 minimalCopyScript.src='assets/ui-copy-cleanup.js?v=microcopy-1';minimalCopyScript.async=false;

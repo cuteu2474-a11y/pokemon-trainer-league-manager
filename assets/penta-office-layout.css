@@ -218,3 +218,30 @@
  #dashboard.pr-office .pr-manager-ability-stats>.pr-manager-stat{min-height:80px;padding:11px;font-size:12px}
  #dashboard.pr-office .pr-manager-ability-stats>.pr-manager-stat strong{font-size:20px}
 }
+
+/* League news — readable, restrained and consistent with the manager office. */
+#dashboard.pr-office>.dashpanel.pr-news-view{min-height:360px}
+#dashboard.pr-office .pr-news-workspace{width:100%;min-width:0;display:flex;flex-direction:column;gap:18px}
+#dashboard.pr-office .pr-news-workspace>h2{margin:0;font-size:23px;color:#fff;font-weight:800}
+#dashboard.pr-office .pr-news-filters{display:flex;flex-wrap:wrap;gap:9px;border-bottom:1px solid #325674;padding-bottom:15px}
+#dashboard.pr-office .pr-news-filter{border:1px solid #4b7291;border-radius:8px;background:#122d49;color:#ccdfed;min-height:39px;padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer}
+#dashboard.pr-office .pr-news-filter.active{border-color:#84d8ff;background:#1c577f;color:#fff}
+#dashboard.pr-office .pr-news-filter:hover,#dashboard.pr-office .pr-news-filter:focus-visible{border-color:#9bdefb}
+#dashboard.pr-office .pr-news-stories{display:flex;flex-direction:column;gap:10px;min-width:0}
+#dashboard.pr-office .pr-news-section-title{font-size:16px;margin:12px 0 2px;color:#a8ddff}
+#dashboard.pr-office .pr-news-story{display:flex;flex-direction:column;gap:9px;min-width:0;padding:16px 18px;border:1px solid #355c7b;border-radius:10px;background:linear-gradient(120deg,#123353,#0b2340)}
+#dashboard.pr-office .pr-news-story-top{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+#dashboard.pr-office .pr-news-tag{display:inline-flex;align-items:center;border-radius:5px;background:#215879;padding:4px 10px;font-size:13px;font-weight:800;color:#e0f6ff}
+#dashboard.pr-office .pr-news-tag-transfer{background:#614a33;color:#ffe1b5}
+#dashboard.pr-office .pr-news-tag-club{background:#294f55;color:#c9fae7}
+#dashboard.pr-office .pr-news-meta{font-size:13px;color:#accde0}
+#dashboard.pr-office .pr-news-story h3{font-size:17px;font-weight:750;margin:0;line-height:1.4;color:#fff}
+#dashboard.pr-office .pr-news-story p{margin:0;font-size:14px;line-height:1.45;color:#bcdae9}
+#dashboard.pr-office .pr-news-empty{font-size:15px;padding:30px 16px;text-align:center;margin:0;background:#0f2d4b;border-radius:8px;color:#d7e9f5}
+@media(max-width:650px){
+ #dashboard.pr-office .pr-news-workspace{gap:12px}
+ #dashboard.pr-office .pr-news-story{padding:12px;gap:7px}
+ #dashboard.pr-office .pr-news-filter{flex:1 0 auto;min-height:36px;padding:7px 10px;font-size:13px}
+ #dashboard.pr-office .pr-news-story h3{font-size:15px}
+ #dashboard.pr-office .pr-news-meta{font-size:12px}
+}
