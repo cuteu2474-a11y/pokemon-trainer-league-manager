@@ -245,3 +245,41 @@
  #dashboard.pr-office .pr-news-story h3{font-size:15px}
  #dashboard.pr-office .pr-news-meta{font-size:12px}
 }
+
+/* Editorial reports + fan-community SNS, desktop side-by-side and mobile stacked. */
+#dashboard.pr-office .pr-news-controls{display:flex;flex-direction:column;gap:14px}
+#dashboard.pr-office .pr-news-modes{display:flex;gap:10px;flex-wrap:wrap}
+#dashboard.pr-office .pr-news-mode{min-height:41px;border:1px solid #547e9e;border-radius:8px;background:#122e4a;color:#cfe9fb;padding:9px 22px;font-size:15px;font-weight:800;cursor:pointer}
+#dashboard.pr-office .pr-news-mode.active{background:#1e6698;border-color:#95dfff;color:#fff}
+#dashboard.pr-office .pr-news-columns{display:grid;grid-template-columns:minmax(0,1.32fr) minmax(0,1fr);gap:18px;width:100%;align-items:start}
+#dashboard.pr-office .pr-news-columns.only-one{grid-template-columns:minmax(0,1fr)}
+#dashboard.pr-office .pr-news-column[hidden]{display:none!important}
+#dashboard.pr-office .pr-news-column{min-width:0;display:flex;flex-direction:column;gap:12px}
+#dashboard.pr-office .pr-news-column-heading{font-size:19px;font-weight:800;margin:0;color:#edf8ff}
+#dashboard.pr-office .pr-news-filters{border-top:1px solid #325674;border-bottom:0;padding:13px 0 0}
+#dashboard.pr-office .pr-news-stories{display:flex;flex-direction:column;gap:11px}
+#dashboard.pr-office .pr-news-tag-coach{background:#315f8d;color:#e1f5ff}
+#dashboard.pr-office .pr-news-tag-retirement{background:#55436c;color:#e9d9ff}
+#dashboard.pr-office .pr-news-story h3{font-size:17px}
+#dashboard.pr-office .pr-social-post{display:flex;flex-direction:column;gap:11px;min-width:0;background:#0f2945;border:1px solid #38688c;border-radius:11px;padding:18px}
+#dashboard.pr-office .pr-social-author{display:flex;align-items:center;gap:11px}
+#dashboard.pr-office .pr-social-avatar{display:flex;justify-content:center;align-items:center;flex:none;width:42px;height:42px;border-radius:50%;font-size:21px;font-weight:900;background:#276991;color:#fff}
+#dashboard.pr-office .pr-social-author-name{display:flex;flex-direction:column;gap:2px}
+#dashboard.pr-office .pr-social-author-name strong{font-size:15px;color:#fff}
+#dashboard.pr-office .pr-social-author-name span{font-size:13px;color:#a3cadf}
+#dashboard.pr-office .pr-social-post h3{font-size:16px;font-weight:800;margin:0;color:#fff;line-height:1.45}
+#dashboard.pr-office .pr-social-post p{font-size:14px;line-height:1.55;color:#c5e1f1;margin:0}
+#dashboard.pr-office .pr-social-actions{padding-top:9px;border-top:1px solid #355a76}
+#dashboard.pr-office .pr-social-like{border:1px solid #4c7592;border-radius:7px;background:#173955;color:#e5f5ff;font-size:14px;font-weight:700;padding:8px 15px;cursor:pointer}
+#dashboard.pr-office .pr-social-like[aria-pressed=true]{border-color:#ce86a0;color:#ffd6e6;background:#512f48}
+#dashboard.pr-office .pr-social-like:hover{border-color:#9ddafd}
+@media(max-width:900px){
+ #dashboard.pr-office .pr-news-columns{grid-template-columns:minmax(0,1fr)}
+ #dashboard.pr-office .pr-news-modes{gap:6px}
+ #dashboard.pr-office .pr-news-mode{flex:1;padding:9px 14px;font-size:14px}
+}
+@media(max-width:650px){
+ #dashboard.pr-office .pr-social-post{padding:13px}
+ #dashboard.pr-office .pr-news-column-heading{font-size:17px}
+ #dashboard.pr-office .pr-social-post h3{font-size:15px}
+}

@@ -36,6 +36,7 @@ function removeOldPreview(){
 }
 let newsActive=false;
 let newsFilter='all';
+let newsMode='all';
 const groupOf=k=>k==='news'?'news':['team','profile','pokemon','tactics','weekly','scout','academy','pokemonDetail','career'].includes(k)?'squad':
  ['fixtures','league','calendar','retirement'].includes(k)?'league':
  ['transfer','ai'].includes(k)?'market':k==='home'?'home':'club';
@@ -56,7 +57,7 @@ function navView(selected){
   if(current)btn.setAttribute('aria-current','location');
   btn.innerHTML=iconSVG(section.icon)+'<span>'+safe(section.label)+'</span>';
   btn.onclick=()=>{
-   if(section.group==='news'){newsActive=true;newsFilter='all';window.renderOffice?.();return;}
+   if(section.group==='news'){newsActive=true;newsFilter='all';newsMode='all';window.renderOffice?.();return;}
    newsActive=false;
    if(section.group==='home')openManagerProfile();
    else setTab(section.children[0]?.[0]||section.tab);
@@ -201,53 +202,99 @@ function managerProfileView(root,club){
 }
 
 
-/* News renders only persisted game events. It never creates a new game event. */
+/* League press and simulated social posts stay in separate, readable columns. */
 function renderNewsView(){
  const page=document.createElement('section');page.className='pr-news-workspace';
- page.setAttribute('aria-label','리그 뉴스');
- const heading=document.createElement('h2');heading.textContent='리그 뉴스';
- page.append(heading);
- const feed=window.PentaNewsFeed?.build?.(game,myClub())||[];
- const filters=document.createElement('nav');filters.className='pr-news-filters';filters.setAttribute('aria-label','뉴스 분류');
- const stories=document.createElement('div');stories.className='pr-news-stories';
- const categories=[['all','전체'],['match','경기'],['transfer','이적'],['club','구단']];
+ page.setAttribute('aria-label','리그 뉴스 및 SNS');
+ const title=document.createElement('h2');title.textContent='뉴스 · 리그 SNS';page.append(title);
+ const news=window.PentaNewsFeed?.build?.(game,myClub())||[];
+ const social=window.PentaNewsFeed?.buildSocial?.(news)||[];
+ const categories=[['all','전체'],['coach','감독'],['transfer','이적'],['retirement','은퇴'],['match','경기'],['club','구단']];
+ const header=document.createElement('div');header.className='pr-news-controls';
+ const modeNav=document.createElement('nav');modeNav.className='pr-news-modes';modeNav.setAttribute('aria-label','뉴스 보기 방식');
+ const filters=document.createElement('nav');filters.className='pr-news-filters';filters.setAttribute('aria-label','뉴스 주제');
+ const columns=document.createElement('div');columns.className='pr-news-columns';
+ const newsColumn=document.createElement('section');newsColumn.className='pr-news-column pr-news-press';
+ const socialColumn=document.createElement('section');socialColumn.className='pr-news-column pr-news-social';
+ const newsTitle=document.createElement('h3');newsTitle.className='pr-news-column-heading';newsTitle.textContent='리그 뉴스';
+ const socialTitle=document.createElement('h3');socialTitle.className='pr-news-column-heading';socialTitle.textContent='리그 SNS';
+ const newsList=document.createElement('div');newsList.className='pr-news-stories';
+ const socialList=document.createElement('div');socialList.className='pr-news-stories';
+ newsColumn.append(newsTitle,newsList);socialColumn.append(socialTitle,socialList);
+ columns.append(newsColumn,socialColumn);
+ const empty=(target,message)=>{
+  const p=document.createElement('p');p.className='pr-news-empty';p.textContent=message;target.append(p);
+ };
+ function appendPress(story){
+  const item=document.createElement('article');item.className='pr-news-story';
+  const top=document.createElement('div');top.className='pr-news-story-top';
+  const tag=document.createElement('span');tag.className='pr-news-tag pr-news-tag-'+story.kind;tag.textContent=story.label;
+  const context=document.createElement('span');context.className='pr-news-meta';context.textContent=story.meta||'';
+  top.append(tag,context);
+  const headline=document.createElement('h3');headline.textContent=story.title;
+  item.append(top,headline);
+  if(story.description){
+   const description=document.createElement('p');description.textContent=story.description;item.append(description);
+  }
+  newsList.append(item);
+ }
+ function appendSocial(post){
+  const item=document.createElement('article');item.className='pr-social-post';
+  const top=document.createElement('div');top.className='pr-social-author';
+  const avatar=document.createElement('span');avatar.className='pr-social-avatar';avatar.textContent='P';avatar.setAttribute('aria-hidden','true');
+  const author=document.createElement('div');author.className='pr-social-author-name';
+  const name=document.createElement('strong');name.textContent=post.author;
+  const handle=document.createElement('span');handle.textContent=post.handle;author.append(name,handle);
+  top.append(avatar,author);
+  const context=document.createElement('span');context.className='pr-news-meta';context.textContent=post.meta||'';
+  const subject=document.createElement('h3');subject.textContent=post.title;
+  const body=document.createElement('p');body.textContent=post.body;
+  const foot=document.createElement('div');foot.className='pr-social-actions';
+  const like=document.createElement('button');like.type='button';like.className='pr-social-like';
+  function liked(){
+   const ids=Array.isArray(game.newsLikedIds)?game.newsLikedIds:[];
+   return ids.includes(post.id);
+  }
+  function updateLike(){
+   like.textContent=liked()?'♥ 공감함':'♡ 공감';
+   like.setAttribute('aria-pressed',liked()?'true':'false');
+  }
+  like.onclick=()=>{
+   const ids=new Set(Array.isArray(game.newsLikedIds)?game.newsLikedIds:[]);
+   if(ids.has(post.id))ids.delete(post.id);else ids.add(post.id);
+   game.newsLikedIds=Array.from(ids).slice(-350);
+   if(typeof persist==='function')persist();
+   updateLike();
+  };
+  updateLike();foot.append(like);
+  item.append(top,context,subject,body,foot);socialList.append(item);
+ }
  function draw(){
-  filters.replaceChildren();stories.replaceChildren();
+  modeNav.replaceChildren();filters.replaceChildren();newsList.replaceChildren();socialList.replaceChildren();
+  for(const [mode,label] of [['all','전체'],['news','뉴스'],['social','SNS']]){
+   const button=document.createElement('button');button.type='button';
+   button.className='pr-news-mode'+(newsMode===mode?' active':'');
+   button.textContent=label;button.setAttribute('aria-pressed',newsMode===mode?'true':'false');
+   button.onclick=()=>{newsMode=mode;draw();};modeNav.append(button);
+  }
   for(const [kind,label] of categories){
-   const count=kind==='all'?feed.length:feed.filter(e=>e.kind===kind).length;
-   const button=document.createElement('button');button.type='button';button.className='pr-news-filter'+(newsFilter===kind?' active':'');
-   button.textContent=label+' '+count;
+   const button=document.createElement('button');button.type='button';
+   button.className='pr-news-filter'+(newsFilter===kind?' active':'');
+   button.textContent=label;
    button.setAttribute('aria-pressed',newsFilter===kind?'true':'false');
    button.onclick=()=>{newsFilter=kind;draw();};filters.append(button);
   }
-  const displayed=feed.filter(e=>newsFilter==='all'||e.kind===newsFilter).slice(0,45);
-  if(!displayed.length){
-   const empty=document.createElement('p');empty.className='pr-news-empty';
-   empty.textContent=feed.length?'해당 분류의 소식이 없습니다.':'아직 기록된 소식이 없습니다. 경기를 진행하거나 이적하면 뉴스가 생성됩니다.';
-   stories.append(empty);return;
-  }
-  const groupTitles={match:'리그 경기',transfer:'이적시장',club:'구단 소식'};
-  let lastKind=null;
-  for(const story of displayed){
-   if(newsFilter==='all'&&lastKind!==story.kind){
-    const section=document.createElement('h3');section.className='pr-news-section-title';section.textContent=groupTitles[story.kind]||'뉴스';
-    stories.append(section);
-   }
-   lastKind=story.kind;
-   const item=document.createElement('article');item.className='pr-news-story';
-   const top=document.createElement('div');top.className='pr-news-story-top';
-   const tag=document.createElement('span');tag.className='pr-news-tag pr-news-tag-'+story.kind;tag.textContent=story.label;
-   const context=document.createElement('span');context.className='pr-news-meta';context.textContent=story.meta||'';
-   top.append(tag,context);
-   const title=document.createElement('h3');title.textContent=story.title;
-   item.append(top,title);
-   if(story.description){
-    const detail=document.createElement('p');detail.textContent=story.description;item.append(detail);
-   }
-   stories.append(item);
-  }
+  const showNews=newsMode!=='social',showSocial=newsMode!=='news';
+  newsColumn.hidden=!showNews;socialColumn.hidden=!showSocial;
+  columns.classList.toggle('only-one',!showNews||!showSocial);
+  const matches=s=>newsFilter==='all'||s.kind===newsFilter;
+  const articles=news.filter(matches).slice(0,40),posts=social.filter(matches).slice(0,30);
+  for(const article of articles)appendPress(article);
+  for(const post of posts)appendSocial(post);
+  if(showNews&&!articles.length)empty(newsList,'표시할 리그 소식이 없습니다.');
+  if(showSocial&&!posts.length)empty(socialList,'아직 SNS에 올라온 소식이 없습니다.');
  }
- page.append(filters,stories);draw();return page;
+ header.append(modeNav,filters);page.append(header,columns);draw();return page;
 }
 function patchTable(table,club){
  if(table.querySelector('th.pr-roster-heading'))return;
@@ -308,7 +355,7 @@ function apply(){
  if(selected==='team')patchTrainers(root,club);
  removeOldPreview();
 }
-const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=league-news-9';document.head.append(css);
+const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=sns-news-10';document.head.append(css);
 const previous=window.renderOffice;
 if(typeof previous==='function')window.renderOffice=function(...args){
  const value=previous.apply(this,args);
@@ -326,7 +373,7 @@ window.PentaOfficeLayout={apply,removeOldPreview};
 removeOldPreview();apply();
 /* Load the pure game-history news feed. */
 const newsDataScript=document.createElement('script');newsDataScript.async=false;
-newsDataScript.src='assets/penta-news-data.js?v=1';
+newsDataScript.src='assets/penta-news-data.js?v=sns-2';
 newsDataScript.onload=()=>{if(newsActive)window.renderOffice?.();};
 document.body.append(newsDataScript);
 
