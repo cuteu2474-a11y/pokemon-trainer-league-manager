@@ -6,7 +6,7 @@ const safe=value=>escapeHTML(String(value??''));
 
 /* Two-level navigation: a primary section never mixes with another section's children. */
 const sections=[
- {tab:'home',label:'감독실',group:'home',icon:'house',children:[['manager-profile','감독 프로필'],['home','주간 운영']]},
+ {tab:'home',label:'감독실',group:'home',icon:'house',children:[['manager-profile','감독 프로필']]},
  {tab:'team',label:'선수단',group:'squad',icon:'users',children:[['team','트레이너 목록'],['profile','트레이너 프로필'],['pokemon','포켓몬'],['tactics','게임 플랜'],['weekly','주간 프로그램'],['scout','포켓몬 탐색'],['academy','아카데미']]},
  {tab:'fixtures',label:'리그',group:'league',icon:'trophy',children:[]},
  {tab:'transfer',label:'영입',group:'market',icon:'arrows',children:[]},
@@ -32,13 +32,11 @@ function spriteURL(p){
 function removeOldPreview(){
  document.querySelectorAll('#clubtrainers .ct-trainer-card .pkm-roster-mini,#clubtrainers [data-preview-index]>.pkm-roster-mini').forEach(e=>e.remove());
 }
-let homeSubpage='manager-profile';
 const groupOf=k=>['team','profile','pokemon','tactics','weekly','scout','academy','pokemonDetail','career'].includes(k)?'squad':
  ['fixtures','league','calendar','retirement'].includes(k)?'league':
  ['transfer','ai'].includes(k)?'market':k==='home'?'home':'club';
-function openHomeSubpage(id){
- homeSubpage=id==='home'?'home':'manager-profile';
- if(typeof tab==='string'&&tab==='home'){window.renderOffice?.();}
+function openManagerProfile(){
+ if(typeof tab==='string'&&tab==='home')window.renderOffice?.();
  else setTab('home');
 }
 function navView(selected){
@@ -52,18 +50,18 @@ function navView(selected){
   btn.className='pr-top-link pr-main-link'+(current?' active':'');
   if(current)btn.setAttribute('aria-current','location');
   btn.innerHTML=iconSVG(section.icon)+'<span>'+safe(section.label)+'</span>';
-  btn.onclick=()=>section.group==='home'?openHomeSubpage('manager-profile'):setTab(section.children[0]?.[0]||section.tab);
+  btn.onclick=()=>section.group==='home'?openManagerProfile():setTab(section.children[0]?.[0]||section.tab);
   primary.append(btn);
  });
  const children=sections.find(x=>x.group===activeGroup)?.children||[];
  if(!children.length){secondary.classList.add('is-empty');secondary.setAttribute('aria-label','하위 메뉴 없음');}
  children.forEach(([id,label])=>{
-  const current=activeGroup==='home'?(selected==='home'&&homeSubpage===id):selected===id;
+  const current=activeGroup==='home'?selected==='home':selected===id;
   const btn=document.createElement('button');btn.type='button';
   btn.className='pr-top-link pr-sub-link'+(current?' active':'');
   if(current)btn.setAttribute('aria-current','page');
   btn.textContent=label;
-  btn.onclick=()=>activeGroup==='home'?openHomeSubpage(id):setTab(id);
+  btn.onclick=()=>activeGroup==='home'?openManagerProfile():setTab(id);
   secondary.append(btn);
  });
  stack.append(primary,secondary);
@@ -78,7 +76,7 @@ function bannerView(root,club){
  const heading=document.createElement('h1');heading.textContent=club.name;
  const division=document.createElement('span');division.className='pr-league-label';division.textContent=(club.division+1)+'부 리그';
  team.append(heading,division);left.append(emblem,team);
- const right=document.createElement('button');right.type='button';right.className='pr-director';right.setAttribute('aria-label','감독 프로필 보기');right.onclick=()=>openHomeSubpage('manager-profile');
+ const right=document.createElement('button');right.type='button';right.className='pr-director';right.setAttribute('aria-label','감독 프로필 보기');right.onclick=()=>openManagerProfile();
  const portrait=root.querySelector(':scope > .fp-manager-badge .face-portrait');
  if(portrait)right.append(portrait);
  else if(typeof facePortrait==='function'){
@@ -192,65 +190,6 @@ function managerProfileView(root,club){
  card.append(summary);page.append(heading,card);return page;
 }
 
-/* Weekly operations should never reuse the legacy home dashboard.
-   Keep only live settings and actionable deadlines; preserve game state and handlers. */
-function weeklyOperationsView(root,club){
- const page=document.createElement('section');page.className='pr-weekly-workspace';
- page.setAttribute('aria-label','주간 운영');
- const header=document.createElement('div');header.className='pr-weekly-title';
- const title=document.createElement('h2');title.textContent='주간 운영';header.append(title);
- const cards=document.createElement('div');cards.className='pr-weekly-scoreboard';
- const record=(game.weeklyPrograms||[]).find(item=>Number(item.season)===Number(game.season)&&Number(item.week)===Number(game.week));
- const score=[
-  {label:'이번 주 활동',value:record?'완료':'미실행',note:record?.title||'아직 진행한 활동 없음'},
-  {label:'선수단 피로',value:String(Math.max(0,Math.round(Number(club.fatigue)||0)))+'/100',note:Math.max(0,Number(club.fatigue)||0)>=45?'자동 회복 기준 도달':'자동 회복 기준 45'},
-  {label:'선수단 사기',value:String(Math.max(0,Math.round(Number(club.morale)||0)))+'/100',note:'현재 구단 상태'}
- ];
- for(const stat of score){
-  const card=document.createElement('div');card.className='pr-weekly-score';
-  const label=document.createElement('span');label.className='pr-weekly-score-label';label.textContent=stat.label;
-  const value=document.createElement('strong');value.className='pr-weekly-score-value';value.textContent=stat.value;
-  const note=document.createElement('span');note.className='pr-weekly-score-note';note.textContent=stat.note;
-  card.append(label,value,note);cards.append(card);
- }
- const controls=document.createElement('section');controls.className='pr-weekly-settings';
- const original=window.ManagementUI?.policyHTML?.();
- if(original){
-  const template=document.createElement('div');template.innerHTML=original;
-  const policy=template.querySelector('.management-policy');
-  if(policy){
-   policy.querySelector('.management-progress-report')?.remove();
-   const heading=policy.querySelector('h3');if(heading){
-    heading.textContent='기본 훈련 설정';
-    if(heading.nextElementSibling?.matches('p'))heading.nextElementSibling.remove();
-   }
-   for(const btn of policy.querySelectorAll('.management-controls button')){
-    const onclick=btn.getAttribute('onclick')||'';
-    if(/(?:nextWeek\(|ManagementUI\.(?:important|openMatch)\()/u.test(onclick))btn.remove();
-   }
-   for(const group of policy.querySelectorAll('.management-controls')){
-    if(!group.querySelector('button,input,select'))group.remove();
-   }
-   const status=policy.querySelector('[role="status"]');
-   if(status&&!game.management?.notice)status.remove();
-   controls.append(policy);
-  }
- }
- if(!controls.childElementCount){
-  const message=document.createElement('p');message.textContent='주간 훈련 설정을 불러올 수 없습니다.';
-  message.setAttribute('role','status');controls.append(message);
- }
- const blocker=window.ManagementUI?.blocker?.();
- if(blocker&&blocker.tab&&blocker.tab!=='home'){
-  const alert=document.createElement('div');alert.className='pr-weekly-decision';
-  const label=document.createElement('strong');label.textContent=blocker.text||'확인해야 할 일정이 있습니다.';
-  const action=document.createElement('button');action.type='button';action.className='pr-weekly-decision-button';
-  action.textContent=blocker.match?'경기 준비로 이동':'확인하러 가기';
-  action.onclick=()=>blocker.match?window.MatchdayPreparation?.render?.():setTab(blocker.tab);
-  alert.append(label,action);controls.prepend(alert);
- }
- page.append(header,cards,controls);return page;
-}
 function patchTable(table,club){
  if(table.querySelector('th.pr-roster-heading'))return;
  const header=Array.from(table.querySelectorAll('thead th')).find(x=>x.textContent.trim().startsWith('트레이너'));
@@ -302,16 +241,13 @@ function apply(){
  root.querySelectorAll(':scope > .pr-navigation-stack,:scope > .pr-top-navigation,:scope > .pr-secondary-navigation,:scope > .pr-club-banner,:scope > .pr-progress-bar,:scope > .pr-season-timeline').forEach(x=>x.remove());
  const selected=typeof tab==='string'?tab:'home';
  root.insertBefore(bannerView(root,club),panel);root.insertBefore(progressView(),panel);root.insertBefore(navView(selected),panel);
- const isProfile=selected==='home'&&homeSubpage==='manager-profile';
- const isWeekly=selected==='home'&&homeSubpage==='home';
+ const isProfile=selected==='home';
  panel.classList.toggle('pr-manager-profile-view',isProfile);
- panel.classList.toggle('pr-weekly-view',isWeekly);
  if(isProfile)panel.replaceChildren(managerProfileView(root,club));
- else if(isWeekly)panel.replaceChildren(weeklyOperationsView(root,club));
  if(selected==='team')patchTrainers(root,club);
  removeOldPreview();
 }
-const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=weekly-workspace-7';document.head.append(css);
+const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=profile-only-8';document.head.append(css);
 const previous=window.renderOffice;
 if(typeof previous==='function')window.renderOffice=function(...args){
  const value=previous.apply(this,args);
