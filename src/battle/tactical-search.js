@@ -29,8 +29,24 @@ export function knownModifier({ability, item} = {}, move = {}) {
   if (boosted[it] === type) factor *= 1.2;
   return factor;
 }
+/* Avoid spending a legal turn on primary-status moves that cannot affect a
+   publicly known target. Damaging secondary effects are NOT suppressed. */
+export function wastedStatusMove(move,{status='',types=[],volatiles={}}={}){
+ if(!move?.exists||move.category!=='Status')return false;
+ const direct=Boolean(move.status);
+ const delayed=move.id==='yawn'||move.volatileStatus==='yawn';
+ if(!direct&&!delayed)return false;
+ if(status||delayed&&volatiles?.yawn)return true;
+ if(direct&&!Dex.getImmunity(move.type,types))return true;
+ if(['psn','tox'].includes(move.status)&&types.some(t=>t==='Poison'||t==='Steel'))return true;
+ if(move.status==='brn'&&types.includes('Fire'))return true;
+ if(move.status==='par'&&types.includes('Electric'))return true;
+ if(move.status==='frz'&&types.includes('Ice'))return true;
+ return false;
+}
 export function evaluateMove(entry, {foeTypes = [], ownAbility, ownItem, ownTypes = [],
-  foeHpFraction = 1, ownHpFraction = 1, foeStatus = '', ownBoosts = {}, foeSideConditions = {}} = {}) {
+  foeHpFraction = 1, ownHpFraction = 1, foeStatus = '', foeVolatiles = {},
+  ownBoosts = {}, foeSideConditions = {}} = {}) {
   const data = Dex.moves.get(entry.move?.id || entry.move?.move || entry.move || '');
   if (!data.exists) return 0;
   const accuracy = typeof data.accuracy === 'number' ? data.accuracy / 100 : 1;
@@ -38,14 +54,8 @@ export function evaluateMove(entry, {foeTypes = [], ownAbility, ownItem, ownType
     // Recovery value must depend on the user's missing HP.
     if (data.heal||['recover','roost','rest','slackoff','softboiled','synthesis','moonlight','morningsun','strengthsap'].includes(data.id))
       return ownHpFraction>=.95?-80:Math.max(6,78*(1-ownHpFraction));
-    if (data.status) {
-      if (foeStatus||!Dex.getImmunity(data.type,foeTypes)||
-          (['tox','psn'].includes(data.status)&&foeTypes.some(t=>['Poison','Steel'].includes(t)))||
-          (data.status==='brn'&&foeTypes.includes('Fire'))||
-          (data.status==='par'&&foeTypes.includes('Electric'))||
-          (data.status==='frz'&&foeTypes.includes('Ice')))return -75;
-      return 30*accuracy;
-    }
+    if (wastedStatusMove(data,{status:foeStatus,types:foeTypes,volatiles:foeVolatiles}))return -120;
+    if (data.status || data.id==='yawn')return 30*accuracy;
     const boosts=data.boosts||data.self?.boosts;
     if (boosts) return Object.entries(boosts).some(([stat,value])=>
       value>0&&Number(ownBoosts[stat]||0)<6)&&ownHpFraction>.28?33:-45;

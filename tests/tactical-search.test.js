@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {searchBudget,knownModifier,evaluateMove,selectTacticalMove} from '../src/battle/tactical-search.js';
+import {searchBudget,knownModifier,evaluateMove,selectTacticalMove,wastedStatusMove} from '../src/battle/tactical-search.js';
 import {simulateSixVsSix} from '../src/battle/showdown.js';
 
 test('tactics increase bounded rollout budget',()=>{
@@ -45,4 +45,17 @@ test('status heuristics reject type immunity, already-statused foes and fully ra
  const boost={choice:'move 1',move:{id:'swordsdance'}};
  assert.ok(evaluateMove(boost,{ownBoosts:{atk:0}})>0);
  assert.ok(evaluateMove(boost,{ownBoosts:{atk:6}})<0);
+});
+
+test('direct burn and paralysis are not considered useful on an already statused target',()=>{
+ const burn={exists:true,id:'willowisp',type:'Fire',category:'Status',status:'brn'};
+ const paralysis={exists:true,id:'thunderwave',type:'Electric',category:'Status',status:'par'};
+ assert.equal(wastedStatusMove(burn,{types:['Normal'],status:'par'}),true);
+ assert.equal(wastedStatusMove(paralysis,{types:['Water'],status:'brn'}),true);
+ assert.equal(wastedStatusMove(burn,{types:['Normal'],status:''}),false);
+});
+test('a damaging move with possible secondary status is never discarded',()=>{
+ const scald={exists:true,id:'scald',type:'Water',category:'Special',basePower:80,
+  secondaries:[{chance:30,status:'brn'}]};
+ assert.equal(wastedStatusMove(scald,{types:['Normal'],status:'par'}),false);
 });

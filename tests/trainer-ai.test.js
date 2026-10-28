@@ -53,3 +53,34 @@ test('switching considers availability of a safe reserve rather than random turn
  assert.ok(counter<noCounter);
  assert.equal(ai.moveProbability({side:{pokemon:[active]}}),1);
 });
+
+test('paralyzed opponent is not targeted with Will-O-Wisp even by control-style trainer',()=>{
+ const trainer={tactics:20,switching:12,battlePlan:'control'};
+ const opponent={status:'par',hp:70,maxhp:100,types:['Normal'],getTypes(){return this.types;}};
+ const own={hp:100,maxhp:100,boosts:{},moveSlots:[{id:'willowisp'},{id:'tackle'}]};
+ const battle={requestState:'idle',p1:{active:[own],sideConditions:{}},
+  p2:{active:[opponent],sideConditions:{}}};
+ const ai=new TrainerAI({},trainer,{seed:[1,2,3,4],battleProvider:()=>battle,team:[{species:'Arcanine'}]});
+ ai.ownActive={species:'Arcanine'};ai.foeSpecies='Snorlax';ai.prng.random=()=>0;
+ assert.equal(ai.chooseMove({},[{choice:'move 1',move:{id:'willowisp'}},
+  {choice:'move 2',move:{id:'tackle'}}]),'move 2');
+});
+test('novice refuses redundant burn and keeps damaging secondary burn legal',()=>{
+ const opponent={status:'par',hp:80,maxhp:100,types:['Water'],getTypes(){return this.types;}};
+ const battle={requestState:'idle',p1:{active:[{hp:100,maxhp:100,moveSlots:[{id:'willowisp'},{id:'scald'}]}],sideConditions:{}},
+  p2:{active:[opponent],sideConditions:{}}};
+ const ai=new TrainerAI({}, {tactics:1,switching:1,battlePlan:'control'},
+  {seed:[1,2,3,4],battleProvider:()=>battle,team:[{species:'Arcanine'}]});
+ ai.ownActive={species:'Arcanine'};ai.foeSpecies='Blastoise';ai.prng.random=()=>.95;
+ assert.equal(ai.chooseMove({},[{choice:'move 1',move:{id:'willowisp'}},
+  {choice:'move 2',move:{id:'scald'}}]),'move 2');
+});
+test('team preview picks a suitable living lead from own team and visible opposing species',()=>{
+ const team=[{name:'첫째',species:'Jolteon',moves:['thunderbolt']},
+  {name:'둘째',species:'Togekiss',moves:['dazzlinggleam']},
+  {name:'셋째',species:'Magikarp',moves:['splash']}];
+ const ai=new TrainerAI({}, {tactics:20,switching:20},{seed:[1,2,3,4],team});
+ ai.opponentPreview=['Garchomp'];
+ const lead=ai.chooseTeamPreview(team.map(mon=>({details:mon.species,ident:'p1: '+mon.name,condition:'100/100'})));
+ assert.equal(lead,'team 2');
+});

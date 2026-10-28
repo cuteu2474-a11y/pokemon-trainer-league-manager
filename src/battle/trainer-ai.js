@@ -2,7 +2,7 @@ import {conditionedTrainer} from '../core/squad-condition.js';
 import {battlePlan,planPreference} from './battle-plans.js';
 import {trainerPersonality} from './battle-autonomy.js';
 import {RandomPlayerAI,Dex} from '@pkmn/sim';
-import {selectTacticalMove,searchBudget,evaluateMove} from './tactical-search.js';
+import {selectTacticalMove,searchBudget,evaluateMove,wastedStatusMove} from './tactical-search.js';
 import {rolloutActions} from './showdown-rollout.js';
 import {traitValue,assessMoveTraits,switchTraitBonus} from './trait-decision.js';
 
@@ -47,6 +47,8 @@ export class TrainerAI extends RandomPlayerAI{
     this.secondaryPlan=this.profile.secondaryPlan||null;
     this.adviceWeight=Number(this.profile.adviceWeight)||0;
     this.foeSpecies=null;
+    this.foeStatus='';
+    this.opponentPreview=[];
     this.team=options.team||[];
     this.ownActive=null;
     this.request=null;
@@ -67,15 +69,32 @@ export class TrainerAI extends RandomPlayerAI{
     }
   }
   receiveLine(line){
-    if(line.startsWith('|switch|')||line.startsWith('|drag|')){
+    const foeSide=this.side==='p1'?'p2':'p1';
+    if(line.startsWith('|poke|')){
+      const parts=line.split('|');
+      if(parts[2]===foeSide){
+        const species=(parts[3]||'').split(',')[0];
+        if(Dex.species.get(species).exists&&!this.opponentPreview.includes(species))
+          this.opponentPreview.push(species);
+      }
+    }else if(line.startsWith('|switch|')||line.startsWith('|drag|')){
       const parts=line.split('|'),actor=parts[2]||'';
-      if(actor.startsWith(this.side==='p1'?'p2':'p1'))this.foeSpecies=(parts[3]||'').split(',')[0];
+      if(actor.startsWith(foeSide)){
+        this.foeSpecies=(parts[3]||'').split(',')[0];
+        this.foeStatus='';
+      }
+    }else if(line.startsWith('|-status|')){
+      const parts=line.split('|');
+      if((parts[2]||'').startsWith(foeSide))this.foeStatus=parts[3]||'';
+    }else if(line.startsWith('|-curestatus|')){
+      const parts=line.split('|');
+      if((parts[2]||'').startsWith(foeSide))this.foeStatus='';
     }
     return super.receiveLine(line);
   }
   receiveRequest(request){
     const slot=request.side?.pokemon?.findIndex(mon=>mon.active);
-    if(slot>=0)this.ownActive=this.team[slot]||null;
+    if(slot>=0)this.ownActive=this.findOwned(request.side.pokemon[slot],slot+1);
     this.request=request;
     if(request.active?.length){
       // RandomPlayerAI controls voluntary switch selection using this.move.
@@ -83,6 +102,56 @@ export class TrainerAI extends RandomPlayerAI{
       this.move=this.moveProbability(request);
     }
     return super.receiveRequest(request);
+  }
+  findOwned(pokemon,slot){
+    const label=(pokemon?.ident||'').split(': ').slice(1).join(': ');
+    return this.team.find(mon=>mon.name===label)||
+      this.team[Number(slot)-1]||null;
+  }
+  /* Evaluate one owned Pokémon using known types, current HP and real own moves.
+     This never examines the opponent's hidden moves, items or battle set. */
+  candidateScore(pokemon,slot,foeTypes=[],hazards=0){
+    const own=this.findOwned(pokemon,slot);
+    const species=Dex.species.get(pokemon?.details?.split(',')[0]||own?.species||'');
+    if(!species.exists)return -1e6;
+    const condition=String(pokemon?.condition||'');
+    if(condition.endsWith(' fnt')||Number.parseInt(condition,10)===0)return -1e6;
+    const hp=Number.parseInt(condition,10),max=Number.parseInt(condition.split('/')[1]||'',10);
+    const health=Number.isFinite(max)&&max>0?limit(hp/max,0,1):1;
+    const bestAgainst=types=>{
+      let best=0;
+      const ownMoves=own?.moves||[];
+      for(const id of ownMoves){
+        const move=Dex.moves.get(id);
+        if(!move.exists||move.category==='Status'||move.basePower<=0)continue;
+        const effectiveness=types.length?typeMultiplier(move.type,types):1;
+        const accuracy=typeof move.accuracy==='number'?move.accuracy/100:1;
+        const stab=species.types.includes(move.type)?1.35:1;
+        best=Math.max(best,Math.min(250,move.basePower*accuracy*stab*effectiveness));
+      }
+      return best;
+    };
+    // Do not inflate the lead evaluation with imagined opposing moves.
+    const defense=foeTypes.length?Math.max(...foeTypes.map(t=>typeMultiplier(t,species.types))):1;
+    const offense=bestAgainst(foeTypes);
+    const versatility=own?.moves?.filter(id=>Dex.moves.get(id).category!=='Status').length||0;
+    const conditionPenalty=String(pokemon?.condition||'').match(/\b(par|brn|slp|frz)\b/)?.[1] ? 15:0;
+    return 45*health+Math.min(90,offense)*.50+Math.min(versatility,4)*3+
+      (defense===0?42:29/Math.max(.5,defense))-hazards*120-conditionPenalty;
+  }
+  chooseTeamPreview(team){
+    if(!Array.isArray(team)||team.length<2)return super.chooseTeamPreview(team);
+    const enemy=this.opponentPreview.map(s=>Dex.species.get(s)).filter(s=>s.exists);
+    const ranked=team.map((pokemon,i)=>{
+      const foes=enemy.length?enemy:[null];
+      const score=foes.reduce((sum,foe)=>sum+
+        this.candidateScore(pokemon,i+1,foe?.types||[]),0)/foes.length;
+      return {slot:i+1,score};
+    }).filter(x=>x.score>-1e5).sort((a,b)=>b.score-a.score||a.slot-b.slot);
+    if(!ranked.length)return super.chooseTeamPreview(team);
+    const first=ranked[0].slot;
+    this.record('lead',String(first),'공개된 상대와 잔존 전력에 따른 선발');
+    return 'team '+first;
   }
   matchup(){
     const own=Dex.species.get(this.ownActive?.species||'');
@@ -164,9 +233,19 @@ export class TrainerAI extends RandomPlayerAI{
     const fraction=mon=>mon?.maxhp>0?limit(mon.hp/mon.maxhp,0,1):1;
     const context={foeTypes,ownTypes,ownAbility:this.ownActive?.ability,ownItem:this.ownActive?.item,
       ownHpFraction:fraction(own),foeHpFraction:fraction(foe),
-      foeStatus:foe?.status||'',ownBoosts:own?.boosts||{},
+      foeStatus:foe?.status||this.foeStatus||'',foeVolatiles:foe?.volatiles||{},
+      ownBoosts:own?.boosts||{},
       foeSideConditions:battle?.[this.side==='p1'?'p2':'p1']?.sideConditions||{}};
     const battleSlots=battle?.[this.side]?.active?.[0]?.moveSlots||[];
+    // A wasted burn/poison/sleep/paralysis on an already afflicted target must
+    // not re-enter the decision through rollout, personality, or novice randomness.
+    const eligible=moves.filter(entry=>{
+      const slot=Number(entry.choice?.match(/^move ([1-4])/)?.[1])-1;
+      const move=Dex.moves.get(battleSlots[slot]?.id||entry.move?.id||entry.move?.move||entry.move||'');
+      return !wastedStatusMove(move,{status:context.foeStatus,types:foeTypes,
+        volatiles:context.foeVolatiles});
+    });
+    if(eligible.length&&eligible.length<moves.length)moves=eligible;
     const legalMoveData=moves.map(entry=>{
       const slotNumber=Number(entry.choice?.match(/^move ([1-4])/)?.[1])-1;
       return Dex.moves.get(battleSlots[slotNumber]?.id||entry.move?.id||entry.move?.move||entry.move||'');
@@ -291,8 +370,10 @@ export class TrainerAI extends RandomPlayerAI{
         health,offense:attack,hazards:rock+spikes});
       const candidate=this.team.find(mon=>mon.name===entry.pokemon.ident?.split(': ').slice(1).join(': '));
       const fatiguePenalty=Math.max(0,Math.min(100,Number(candidate?.fatigue)||0))*.08;
+      const ownMoves=this.candidateScore(entry.pokemon,entry.slot,foeTypes,rock+spikes);
       const score=-fatiguePenalty+(threat===0?32:30/(Math.max(.25,threat)))+
-        (attack===0?0:Math.min(4,attack)*15)+health*(preserve?34:20)+traits.bonus;
+        (attack===0?0:Math.min(4,attack)*8)+health*(preserve?34:20)+
+        ownMoves*.42+traits.bonus;
       return {entry,i,score,quality:traits.quality};
     }).sort((a,b)=>b.score-a.score||a.i-b.i);
     // Weaker evaluators are allowed to be less precise, but never pick an invalid slot.
