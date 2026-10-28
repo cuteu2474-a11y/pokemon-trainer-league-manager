@@ -40,3 +40,14 @@
 .pr-manager-ability-stats>div strong{color:#aeeaff}
 @media(max-width:760px){.pm-grid{grid-template-columns:1fr}.pm-top{align-items:flex-start}.pm-tier-list{grid-template-columns:repeat(3,minmax(0,1fr))}.pm-tier{padding:11px}.pm-tier strong{font-size:14px}.pm-tier span,.pm-tier small{font-size:10px}}
 @media(max-width:480px){.pm-shell{padding:12px}.pm-top{gap:8px}.pm-back{white-space:nowrap;padding:9px;font-size:11px}.pm-tier-list{gap:6px}.pm-tier{padding:8px}.pm-stepper{gap:6px}.pm-stat-meta{gap:8px}.pm-stat-meta small{max-width:175px}.pm-renown{flex-wrap:wrap}.pr-manager-ability-stats{grid-template-columns:1fr}}
+
+/* Minimal-copy setup: no redundant subtitles or white explanatory footnotes. */
+#player-manager-setup small,#player-manager-setup .pm-hint,#player-manager-setup .pm-top p,#player-manager-setup .pm-panel>p,#player-manager-setup .pm-score p,#player-manager-setup .pm-stat-meta small,#player-manager-setup .pm-renown small{display:none!important}
+.pm-top h1{margin:0;color:#fff}
+.pm-top{padding-bottom:13px;margin-bottom:18px}
+.pm-panel h2{margin-bottom:15px}
+.pm-stat-meta>div:first-child{gap:0}
+.pm-tier span{font-size:14px;color:#ddefff}
+.pm-stat-meta strong{font-size:15px}
+.pm-renown{margin-top:16px}
+@media(max-width:760px){.pm-tier span{font-size:12px}}

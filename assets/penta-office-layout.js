@@ -247,6 +247,11 @@ const oldClub=window.renderClubTrainers;
 if(typeof oldClub==='function')window.renderClubTrainers=function(...args){const r=oldClub.apply(this,args);removeOldPreview();return r;};
 window.PentaOfficeLayout={apply,removeOldPreview};
 removeOldPreview();apply();
+/* Shared game microcopy cleanup, also active on club selection and setup. */
+const minimalCopyScript=document.createElement('script');
+minimalCopyScript.src='assets/ui-copy-cleanup.js?v=microcopy-1';minimalCopyScript.async=false;
+document.body.append(minimalCopyScript);
+
 /* Post-club-selection player manager creation (AI personalities stay separate). */
 const setupScript=document.createElement('script');
 setupScript.src='assets/manager-creation.js?v=manager-v1';setupScript.async=false;
