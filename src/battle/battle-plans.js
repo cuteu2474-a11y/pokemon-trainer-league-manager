@@ -1,4 +1,5 @@
 import {Dex} from '@pkmn/sim';
+import {wastedSelfMove} from './tactical-search.js';
 export const PLAN_LABELS = Object.freeze({balanced:'균형',offense:'공세',control:'견제',endurance:'유지력',tempo:'속공'});
 export function battlePlan(trainer={}) {
   if (Object.hasOwn(PLAN_LABELS,trainer.battlePlan)) return trainer.battlePlan;
@@ -53,15 +54,19 @@ export function planPreference(move,battle,side,plan='balanced'){
         (move.status==='brn'&&foe.types.includes('Fire')))return -70;
       return plan==='control'?18:plan==='endurance'?7:0;
     }
-    const boosts=move.boosts||move.self?.boosts;
+    const boosts=move.target==='self'?move.boosts||move.self?.boosts:move.self?.boosts;
     if(boosts){
-      const useful=Object.entries(boosts).some(([stat,n])=>n>0&&(own.boosts?.[stat]||0)<3);
+      const useful=Object.entries(boosts).some(([stat,n])=>n>0&&(own.boosts?.[stat]||0)<6);
       if(!useful||health<=.30)return -45;
       return plan==='offense'?15:plan==='tempo'?8:4;
     }
     if(move.sideCondition){
-      const target=battle[side==='p1'?'p2':'p1'];
-      if(target.sideConditions?.[move.sideCondition])return -45;
+      // Reuse Showdown's layer cap and choose the actual target side:
+      // own screens are not opponent hazards, and Spikes can be stacked.
+      if(wastedSelfMove(move,{
+        ownSideConditions:battle[side]?.sideConditions||{},
+        foeSideConditions:battle[side==='p1'?'p2':'p1']?.sideConditions||{}
+      }))return -45;
       return plan==='control'?13:5;
     }
   }

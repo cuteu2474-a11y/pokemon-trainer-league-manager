@@ -1,3 +1,5 @@
+import {Dex} from '@pkmn/sim';
+import {planPreference} from '../src/battle/battle-plans.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {searchBudget,knownModifier,evaluateMove,selectTacticalMove,wastedStatusMove,wastedSelfMove} from '../src/battle/tactical-search.js';
@@ -85,4 +87,27 @@ test('existing own screen and nearly fainted foe alter legal status move score',
  const toxic={choice:'move 2',move:{id:'toxic'}};
  assert.ok(evaluateMove(toxic,{foeTypes:['Normal'],foeHpFraction:.1})<
    evaluateMove(toxic,{foeTypes:['Normal'],foeHpFraction:1}));
+});
+
+test('coaching preference honors hazard layers, screen owner, and +6 boost cap',()=>{
+ const own={hp:100,maxhp:100,boosts:{atk:4}};
+ const enemy={hp:100,maxhp:100,types:['Normal']};
+ const battle={p1:{active:[own],sideConditions:{}},
+   p2:{active:[enemy],sideConditions:{spikes:{layers:1}}}};
+ const spikes=Dex.moves.get('spikes');
+ const reflect=Dex.moves.get('reflect');
+ const dance=Dex.moves.get('swordsdance');
+ assert.equal(planPreference(spikes,battle,'p1','control'),13);
+ battle.p2.sideConditions.spikes.layers=3;
+ assert.equal(planPreference(spikes,battle,'p1','control'),-45);
+ battle.p1.sideConditions.reflect={duration:2};
+ delete battle.p2.sideConditions.spikes;
+ assert.equal(planPreference(reflect,battle,'p1','control'),-45);
+ delete battle.p1.sideConditions.reflect;
+ battle.p2.sideConditions.reflect={duration:2};
+ assert.equal(planPreference(reflect,battle,'p1','control'),13);
+ assert.ok(planPreference(dance,battle,'p1','offense')>0,
+  'a +4 boost can still increase to +6');
+ own.boosts.atk=6;
+ assert.ok(planPreference(dance,battle,'p1','offense')<0);
 });

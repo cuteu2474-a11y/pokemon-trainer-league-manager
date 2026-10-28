@@ -269,3 +269,18 @@ test('entry hazard estimate respects Magic Guard and Air Balloon',()=>{
  assert.equal(entryHazardFraction({stealthrock:{layers:1}},['Fire'],'','Magic Guard'),0);
  assert.equal(entryHazardFraction({spikes:{layers:3}},['Electric'],'Air Balloon'),0);
 });
+
+test('expert can stack Spikes up to three layers, then changes legal choice',()=>{
+ const own={hp:100,maxhp:100,boosts:{},moveSlots:[{id:'spikes'},{id:'splash'}]};
+ const foe={hp:100,maxhp:100,status:'',types:['Normal']};
+ const battle={requestState:'idle',p1:{active:[own],sideConditions:{}},
+   p2:{active:[foe],sideConditions:{spikes:{layers:1}}}};
+ const ai=new TrainerAI({}, {tactics:20,switching:20},
+   {seed:[1,2,3,4],battleProvider:()=>battle,team:[{species:'Clodsire'}]});
+ ai.ownActive={species:'Clodsire',moves:['spikes','splash']};
+ ai.foeSpecies='Eevee';
+ const entries=[{choice:'move 1',move:{id:'spikes'}},{choice:'move 2',move:{id:'splash'}}];
+ assert.equal(ai.chooseMove({},entries),'move 1','the second layer is not redundant');
+ battle.p2.sideConditions.spikes.layers=3;
+ assert.equal(ai.chooseMove({},entries),'move 2','a fourth layer must be suppressed');
+});

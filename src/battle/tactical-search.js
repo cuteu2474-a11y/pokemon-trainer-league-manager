@@ -67,7 +67,14 @@ export function wastedSelfMove(move,{ownHpFraction=1,ownStatus='',ownBoosts={},
  if(move.sideCondition){
    const target=move.target==='allySide'||move.target==='allyTeam'?
      ownSideConditions:foeSideConditions;
-   if(target[move.sideCondition])return true;
+   const existing=target[move.sideCondition];
+   if(existing){
+     // Spikes and Toxic Spikes are intentionally stackable in Showdown.
+     // A partially installed hazard is not a wasted action.
+     const maxLayers=move.sideCondition==='spikes'?3:
+       move.sideCondition==='toxicspikes'?2:1;
+     if(maxLayers===1||Number(existing.layers||1)>=maxLayers)return true;
+   }
  }
  return false;
 }
