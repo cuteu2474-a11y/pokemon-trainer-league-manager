@@ -338,41 +338,91 @@ function patchTrainers(root,club){
  if(toolbar)toolbar.classList.add('pr-old-toolbar');
  const table=frame.querySelector('.trainer-detail-table');if(table)patchTable(table,club);
 }
-/* FM-style secretary rail: actual pending decisions, not decorative or dismissible alerts. */
+/* Secretary board: required decisions vs optional recommendations; all routes are live. */
+let secretaryFilter='all';
+let secretaryCollapsed=false;
 function secretaryView(){
  const aside=document.createElement('aside');aside.className='pr-secretary-rail';
  aside.setAttribute('aria-label','비서 업무 목록');
- const heading=document.createElement('div');heading.className='pr-secretary-head';
+ const build=window.PentaSecretaryTasks;
+ const required=build?.build?.(game,myClub())||[];
+ const advice=build?.suggest?.(game,myClub())||[];
+ const upcoming=build?.agenda?.(game);
+ const titleBar=document.createElement('div');titleBar.className='pr-secretary-head';
+ const caption=document.createElement('div');caption.className='pr-secretary-heading';
  const title=document.createElement('strong');title.className='pr-secretary-title';title.textContent='비서 업무';
- const tasks=window.PentaSecretaryTasks?.build?.(game,myClub())||[];
- const count=document.createElement('span');count.className='pr-secretary-count';count.textContent='처리 필요 '+tasks.length;
- heading.append(title,count);aside.append(heading);
- const items=document.createElement('div');items.className='pr-secretary-items';
- if(!tasks.length){
-  const empty=document.createElement('div');empty.className='pr-secretary-empty';
-  const check=document.createElement('strong');check.textContent='처리할 업무 없음';
-  const sub=document.createElement('span');sub.textContent='결정이 필요한 일이 생기면 여기에 표시됩니다.';
-  empty.append(check,sub);items.append(empty);
- }else{
-  for(const task of tasks){
-   const btn=document.createElement('button');btn.type='button';
-   btn.className='pr-secretary-item'+(task.urgent?' is-urgent':'');
-   const label=document.createElement('strong');label.textContent=task.title;
-   const detail=document.createElement('span');detail.textContent=task.detail;
-   const foot=document.createElement('span');foot.className='pr-secretary-open';
-   foot.textContent='확인하기';foot.setAttribute('aria-hidden','true');
-   btn.append(label,detail,foot);
-   btn.onclick=()=>{
-    if(task.route==='match'){
-     if(typeof window.MatchdayPreparation?.render==='function')window.MatchdayPreparation.render();
-     else window.ManagementUI?.openMatch?.();
-    }else if(task.route==='research')window.ManagementUI?.retryResearch?.();
-    else if(typeof window.setTab==='function')window.setTab(task.route);
-   };
-   items.append(btn);
-  }
+ const summary=document.createElement('span');summary.className='pr-secretary-summary';
+ summary.textContent='처리 '+required.length+'건 · 권장 '+advice.length+'건';
+ caption.append(title,summary);
+ const collapse=document.createElement('button');collapse.type='button';
+ collapse.className='pr-secretary-collapse';
+ collapse.textContent=secretaryCollapsed?'펼치기':'접기';
+ collapse.setAttribute('aria-expanded',String(!secretaryCollapsed));
+ collapse.onclick=()=>{secretaryCollapsed=!secretaryCollapsed;window.renderOffice?.();};
+ titleBar.append(caption,collapse);aside.append(titleBar);
+ if(secretaryCollapsed)return aside;
+ const filters=document.createElement('div');filters.className='pr-secretary-filters';
+ const list=document.createElement('div');list.className='pr-secretary-items';
+ const display=[];
+ const addItem=(task)=>{
+  const item=document.createElement('button');item.type='button';
+  item.className='pr-secretary-item '+(task.urgent?'is-urgent':'is-recommended');
+  const top=document.createElement('div');top.className='pr-secretary-item-top';
+  const tier=document.createElement('span');tier.className='pr-secretary-tier';tier.textContent=task.urgent?'처리 필요':'권장';
+  top.append(tier);
+  if(task.deadline){const time=document.createElement('span');time.className='pr-secretary-deadline';time.textContent=task.deadline;top.append(time);}
+  const name=document.createElement('strong');name.textContent=task.title;
+  const detail=document.createElement('span');detail.className='pr-secretary-detail';detail.textContent=task.detail;
+  const action=document.createElement('span');action.className='pr-secretary-open';action.textContent=task.action||'확인하기';
+  item.append(top,name,detail,action);
+  item.onclick=()=>{
+   if(task.route==='match'){
+    if(typeof window.MatchdayPreparation?.render==='function')window.MatchdayPreparation.render();
+    else window.ManagementUI?.openMatch?.();
+   }else if(task.route==='research')window.ManagementUI?.retryResearch?.();
+   else if(typeof window.setTab==='function')window.setTab(task.route);
+  };
+  return item;
+ };
+ const sections=[['all','전체',required.length+advice.length],['required','필수',required.length],['advice','권장',advice.length]];
+ for(const [key,label,count] of sections){
+  const button=document.createElement('button');button.type='button';
+  button.className='pr-secretary-filter'+(secretaryFilter===key?' active':'');
+  button.textContent=label+' '+count;
+  button.setAttribute('aria-pressed',String(secretaryFilter===key));
+  button.onclick=()=>{secretaryFilter=key;window.renderOffice?.();};
+  filters.append(button);
  }
- aside.append(items);return aside;
+ aside.append(filters);
+ if(secretaryFilter!=='advice'&&required.length){
+  const label=document.createElement('strong');label.className='pr-secretary-group-label';label.textContent='처리할 업무';
+  display.push(label,...required.map(addItem));
+ }
+ if(secretaryFilter!=='required'&&advice.length){
+  const label=document.createElement('strong');label.className='pr-secretary-group-label';label.textContent='비서 권장';
+  display.push(label,...advice.map(addItem));
+ }
+ if(!display.length){
+  const empty=document.createElement('div');empty.className='pr-secretary-empty';
+  const headline=document.createElement('strong');headline.textContent=secretaryFilter==='advice'?'추가 권장 사항 없음':'처리할 업무 없음';
+  const hint=document.createElement('span');hint.textContent='새로운 결정이 필요하면 이곳에 표시됩니다.';
+  empty.append(headline,hint);display.push(empty);
+ }
+ list.append(...display);aside.append(list);
+ if(upcoming){
+  const footer=document.createElement('div');footer.className='pr-secretary-next';
+  const eyebrow=document.createElement('strong');eyebrow.textContent='다음 경기';
+  const info=document.createElement('span');info.textContent=upcoming.label;
+  const details=document.createElement('span');details.textContent=upcoming.detail;
+  const button=document.createElement('button');button.type='button';
+  button.textContent='일정 확인';
+  button.onclick=()=>{
+   if(upcoming.action==='match')window.MatchdayPreparation?.render?.();
+   else window.setTab?.(upcoming.action);
+  };
+  footer.append(eyebrow,info,details,button);aside.append(footer);
+ }
+ return aside;
 }
 function apply(){
  const root=document.getElementById('dashboard');
@@ -392,7 +442,7 @@ function apply(){
  panel.after(secretaryView());
  removeOldPreview();
 }
-const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=secretary-sidebar-11';document.head.append(css);
+const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=secretary-v2-12';document.head.append(css);
 const previous=window.renderOffice;
 if(typeof previous==='function')window.renderOffice=function(...args){
  const value=previous.apply(this,args);
@@ -410,7 +460,7 @@ window.PentaOfficeLayout={apply,removeOldPreview};
 removeOldPreview();apply();
 /* Load the assistant's read-only task source before first view. */
 const secretaryScript=document.createElement('script');secretaryScript.async=false;
-secretaryScript.src='assets/penta-secretary-tasks.js?v=1';
+secretaryScript.src='assets/penta-secretary-tasks.js?v=2';
 secretaryScript.onload=()=>{if(typeof game!=='undefined'&&game)window.PentaOfficeLayout?.apply?.();};
 document.body.append(secretaryScript);
 

@@ -36,3 +36,32 @@ test('expired or past-season offers do not appear',()=>{
  game.aiOffers=[{status:'pending',season:1,expires:1},{status:'pending',season:0,expires:4}];
  assert.deepEqual(build(game,club),[]);
 });
+
+test('secretary advice reflects only real fatigue, morale and upcoming match state',()=>{
+ const {game,club}=base();game.week=4;game.round=0;
+ club.fatigue=62;club.morale=23;
+ const a=globalThis.PentaSecretaryTasks.suggest(game,club);
+ assert.deepEqual(a.map(t=>t.id),['fatigue','morale','pre-match']);
+ assert.ok(a.every(t=>t.urgent===false));
+ assert.deepEqual(globalThis.PentaSecretaryTasks.agenda(game),
+  {round:1,week:5,weeksUntil:1,label:'1라운드 · 5주차',detail:'1주 후 예정',action:'fixtures'});
+});
+test('finance arrears are surfaced as a required actionable task only when positive',()=>{
+ const {game,club}=base();club.id='team-a';
+ game.finance={books:{'team-a':{arrears:350000}}};
+ assert.deepEqual(build(game,club).map(t=>t.id),['finance']);
+ assert.match(build(game,club)[0].detail,/350,000원/);
+});
+test('agenda respects the winter break and does not invent an opponent',()=>{
+ const {game}=base();game.round=9;game.week=14;
+ const next=globalThis.PentaSecretaryTasks.agenda(game);
+ assert.equal(next.week,16);
+ assert.equal(next.weeksUntil,2);
+ assert.ok(!JSON.stringify(next).includes('상대'));
+ game.round=18;assert.equal(globalThis.PentaSecretaryTasks.agenda(game),null);
+});
+test('pending match is a current fixture rather than a second recommendation',()=>{
+ const {game,club}=base();game.pendingMatch={phase:'prepare'};
+ assert.equal(globalThis.PentaSecretaryTasks.agenda(game).action,'match');
+ assert.equal(globalThis.PentaSecretaryTasks.suggest(game,club).length,0);
+});

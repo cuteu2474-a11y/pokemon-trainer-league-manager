@@ -357,3 +357,29 @@
  }
  #dashboard.pr-office .pr-secretary-items{max-height:none}
 }
+
+/* Secretary v2: prioritized real decisions, optional advice, and next fixture. */
+#dashboard.pr-office .pr-secretary-head{gap:9px;align-items:center;padding:15px 12px}
+#dashboard.pr-office .pr-secretary-heading{display:flex;min-width:0;flex-direction:column;gap:5px}
+#dashboard.pr-office .pr-secretary-summary{font-size:13px;font-weight:650;color:#b9d8ec;line-height:1.4}
+#dashboard.pr-office .pr-secretary-collapse{flex:none;border:1px solid #6489a6;background:#1c4567;color:#fff;font-size:12px;font-weight:700;border-radius:6px;min-height:31px;padding:5px 8px;cursor:pointer}
+#dashboard.pr-office .pr-secretary-filters{display:flex;gap:6px;padding:11px 11px 0}
+#dashboard.pr-office .pr-secretary-filter{flex:1;min-width:0;min-height:35px;cursor:pointer;border:1px solid #456b8b;background:#102d4b;border-radius:7px;color:#c8e5f3;font-size:13px;font-weight:800;padding:5px 2px}
+#dashboard.pr-office .pr-secretary-filter.active{border-color:#95d9ff;background:#205b81;color:#fff}
+#dashboard.pr-office .pr-secretary-items{padding-top:11px;gap:9px}
+#dashboard.pr-office .pr-secretary-group-label{display:block;color:#f1faff;font-size:13px;letter-spacing:0;font-weight:800;padding:3px 2px 0}
+#dashboard.pr-office .pr-secretary-item{gap:8px}
+#dashboard.pr-office .pr-secretary-item.is-recommended{border-left-color:#6dbab2}
+#dashboard.pr-office .pr-secretary-item-top{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap}
+#dashboard.pr-office .pr-secretary-tier{font-size:12px;padding:3px 7px;border-radius:5px;background:#38536a;color:#dcecf5;font-weight:800}
+#dashboard.pr-office .is-urgent .pr-secretary-tier{background:#775537;color:#ffe9c7}
+#dashboard.pr-office .pr-secretary-deadline{font-size:12px;font-weight:800;color:#ffd59e}
+#dashboard.pr-office .pr-secretary-next{border-top:1px solid #3c6686;padding:13px 14px 15px;display:flex;flex-direction:column;gap:6px;background:#102b47}
+#dashboard.pr-office .pr-secretary-next strong{color:#e6f8ff;font-size:14px}
+#dashboard.pr-office .pr-secretary-next span{font-size:13px;color:#cae6f6;line-height:1.4}
+#dashboard.pr-office .pr-secretary-next button{margin-top:5px;align-self:flex-start;border:1px solid #65a4cb;border-radius:7px;background:#205878;color:#fff;font-size:13px;font-weight:800;min-height:35px;padding:7px 12px;cursor:pointer}
+#dashboard.pr-office .pr-secretary-next button:hover,#dashboard.pr-office .pr-secretary-collapse:hover{background:#2b6d99}
+@media(max-width:760px){
+ #dashboard.pr-office .pr-secretary-items{max-height:none}
+ #dashboard.pr-office .pr-secretary-filter{padding:8px}
+}
