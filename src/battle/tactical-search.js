@@ -31,35 +31,67 @@ export function knownModifier({ability, item} = {}, move = {}) {
 }
 /* Avoid spending a legal turn on primary-status moves that cannot affect a
    publicly known target. Damaging secondary effects are NOT suppressed. */
-export function wastedStatusMove(move,{status='',types=[],volatiles={}}={}){
+export function wastedStatusMove(move,{status='',types=[],volatiles={},ability=''}={}){
  if(!move?.exists||move.category!=='Status')return false;
+ // Only enemy-targeted status moves are judged against the foe's condition.
+ if(['self','allySide','allyTeam','adjacentAlly','adjacentAllyOrSelf'].includes(move.target))return false;
  const direct=Boolean(move.status);
  const delayed=move.id==='yawn'||move.volatileStatus==='yawn';
  if(!direct&&!delayed)return false;
  if(status||delayed&&volatiles?.yawn)return true;
  if(direct&&!Dex.getImmunity(move.type,types))return true;
+ // Only publicly identified abilities may be used for this immunity check.
+ const a=String(ability||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+ const absorption={Electric:['voltabsorb','lightningrod','motordrive'],
+   Fire:['flashfire'],Water:['waterabsorb','stormdrain','dryskin'],Grass:['sapsipper']};
+ if(direct&&absorption[move.type]?.includes(a))return true;
  if(['psn','tox'].includes(move.status)&&types.some(t=>t==='Poison'||t==='Steel'))return true;
  if(move.status==='brn'&&types.includes('Fire'))return true;
  if(move.status==='par'&&types.includes('Electric'))return true;
  if(move.status==='frz'&&types.includes('Ice'))return true;
  return false;
 }
+/** Skip locally verifiable no-effect actions only when another legal move exists.
+ * Side conditions belong to the side targeted by the move, not always the foe.
+ * Recovery with a secondary effect (e.g. Strength Sap) is deliberately exempt.
+ */
+export function wastedSelfMove(move,{ownHpFraction=1,ownStatus='',ownBoosts={},
+  ownSideConditions={},foeSideConditions={}}={}){
+ if(!move?.exists||move.category!=='Status')return false;
+ const pureHealing=Boolean(move.heal)&&!['strengthsap','wish','rest'].includes(move.id);
+ if(pureHealing&&ownHpFraction>=.995)return true;
+ if(move.id==='rest'&&ownHpFraction>=.995&&!ownStatus)return true;
+ const boosts=move.target==='self'?move.boosts||move.self?.boosts:move.self?.boosts;
+ const positive=Object.entries(boosts||{}).filter(([,amount])=>amount>0);
+ if(positive.length&&positive.every(([stat])=>Number(ownBoosts[stat]||0)>=6))return true;
+ if(move.sideCondition){
+   const target=move.target==='allySide'||move.target==='allyTeam'?
+     ownSideConditions:foeSideConditions;
+   if(target[move.sideCondition])return true;
+ }
+ return false;
+}
+
 export function evaluateMove(entry, {foeTypes = [], ownAbility, ownItem, ownTypes = [],
-  foeHpFraction = 1, ownHpFraction = 1, foeStatus = '', foeVolatiles = {},
-  ownBoosts = {}, foeSideConditions = {}} = {}) {
+  foeHpFraction = 1, ownHpFraction = 1, ownStatus = '', foeStatus = '', foeAbility = '',
+  foeVolatiles = {}, ownBoosts = {}, ownSideConditions = {},
+  foeSideConditions = {}} = {}) {
   const data = Dex.moves.get(entry.move?.id || entry.move?.move || entry.move || '');
   if (!data.exists) return 0;
   const accuracy = typeof data.accuracy === 'number' ? data.accuracy / 100 : 1;
   if (data.category === 'Status') {
+    if(wastedSelfMove(data,{ownHpFraction,ownStatus,ownBoosts,ownSideConditions,foeSideConditions}))return -120;
     // Recovery value must depend on the user's missing HP.
     if (data.heal||['recover','roost','rest','slackoff','softboiled','synthesis','moonlight','morningsun','strengthsap'].includes(data.id))
       return ownHpFraction>=.95?-80:Math.max(6,78*(1-ownHpFraction));
-    if (wastedStatusMove(data,{status:foeStatus,types:foeTypes,volatiles:foeVolatiles}))return -120;
-    if (data.status || data.id==='yawn')return 30*accuracy;
+    if (wastedStatusMove(data,{status:foeStatus,types:foeTypes,
+      volatiles:foeVolatiles,ability:foeAbility}))return -120;
+    // A status-only move rarely beats a safe attack against an almost fainted foe.
+    if (data.status || data.id==='yawn')return (foeHpFraction<=.15?5:30)*accuracy;
     const boosts=data.boosts||data.self?.boosts;
     if (boosts) return Object.entries(boosts).some(([stat,value])=>
       value>0&&Number(ownBoosts[stat]||0)<6)&&ownHpFraction>.28?33:-45;
-    if (data.sideCondition)return foeSideConditions[data.sideCondition]?-55:29;
+    if (data.sideCondition)return 29;
     if (data.volatileStatus||data.weather||data.pseudoWeather)return 26;
     return 12;
   }

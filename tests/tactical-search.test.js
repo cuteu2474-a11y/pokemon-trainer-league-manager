@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {searchBudget,knownModifier,evaluateMove,selectTacticalMove,wastedStatusMove} from '../src/battle/tactical-search.js';
+import {searchBudget,knownModifier,evaluateMove,selectTacticalMove,wastedStatusMove,wastedSelfMove} from '../src/battle/tactical-search.js';
 import {simulateSixVsSix} from '../src/battle/showdown.js';
 
 test('tactics increase bounded rollout budget',()=>{
@@ -58,4 +58,31 @@ test('a damaging move with possible secondary status is never discarded',()=>{
  const scald={exists:true,id:'scald',type:'Water',category:'Special',basePower:80,
   secondaries:[{chance:30,status:'brn'}]};
  assert.equal(wastedStatusMove(scald,{types:['Normal'],status:'par'}),false);
+});
+ 
+test('expert can exclude pointless full-HP healing, capped boosts and repeated screens',()=>{
+ const recover={exists:true,id:'recover',category:'Status',heal:[1,2]};
+ const boost={exists:true,id:'swordsdance',category:'Status',target:'self',boosts:{atk:2}};
+ const reflect={exists:true,id:'reflect',category:'Status',sideCondition:'reflect',target:'allySide'};
+ assert.equal(wastedSelfMove(recover,{ownHpFraction:1}),true);
+ assert.equal(wastedSelfMove(recover,{ownHpFraction:.4}),false);
+ assert.equal(wastedSelfMove(boost,{ownBoosts:{atk:6}}),true);
+ assert.equal(wastedSelfMove(boost,{ownBoosts:{atk:5}}),false);
+ assert.equal(wastedSelfMove(reflect,{ownSideConditions:{reflect:{duration:3}}}),true);
+ assert.equal(wastedSelfMove(reflect,{foeSideConditions:{reflect:{duration:3}}}),false);
+});
+test('publicly known absorption immunity prevents ineffective primary status',()=>{
+ const burn={exists:true,id:'willowisp',type:'Fire',category:'Status',status:'brn'};
+ const scald={exists:true,id:'scald',type:'Water',category:'Special',secondaries:[{status:'brn'}]};
+ assert.equal(wastedStatusMove(burn,{types:['Normal'],ability:'Flash Fire'}),true);
+ assert.equal(wastedStatusMove(burn,{types:['Normal'],ability:''}),false);
+ assert.equal(wastedStatusMove(scald,{types:['Normal'],ability:'Water Absorb'}),false);
+});
+test('existing own screen and nearly fainted foe alter legal status move score',()=>{
+ const reflect={choice:'move 1',move:{id:'reflect'}};
+ assert.ok(evaluateMove(reflect,{ownSideConditions:{reflect:{duration:2}}})<0);
+ assert.ok(evaluateMove(reflect,{foeSideConditions:{reflect:{duration:2}}})>0);
+ const toxic={choice:'move 2',move:{id:'toxic'}};
+ assert.ok(evaluateMove(toxic,{foeTypes:['Normal'],foeHpFraction:.1})<
+   evaluateMove(toxic,{foeTypes:['Normal'],foeHpFraction:1}));
 });

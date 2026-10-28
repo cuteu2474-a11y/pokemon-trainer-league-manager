@@ -2,7 +2,7 @@ import {conditionedTrainer} from '../core/squad-condition.js';
 import {battlePlan,planPreference} from './battle-plans.js';
 import {trainerPersonality} from './battle-autonomy.js';
 import {RandomPlayerAI,Dex} from '@pkmn/sim';
-import {selectTacticalMove,searchBudget,evaluateMove,wastedStatusMove} from './tactical-search.js';
+import {selectTacticalMove,searchBudget,evaluateMove,wastedStatusMove,wastedSelfMove} from './tactical-search.js';
 import {rolloutActions,robustResponseScore} from './showdown-rollout.js';
 import {traitValue,assessMoveTraits,switchTraitBonus} from './trait-decision.js';
 
@@ -32,9 +32,9 @@ const sidename=(move)=>move?.id||move?.name||'unknown';
 /** Estimated switch-in hazard damage. The real Showdown engine remains authoritative. */
 export function entryHazardFraction(conditions={},types=[],item='',ability=''){
  const norm=v=>String(v||'').toLowerCase().replace(/[^a-z0-9]/g,'');
- if(norm(item)==='heavydutyboots')return 0;
+ if(norm(item)==='heavydutyboots'||norm(ability)==='magicguard')return 0;
  const rocks=conditions.stealthrock?.layers?.125*typeMultiplier('Rock',types):0;
- const grounded=!types.includes('Flying')&&norm(ability)!=='levitate';
+ const grounded=!types.includes('Flying')&&norm(ability)!=='levitate'&&norm(item)!=='airballoon';
  const spikes=conditions.spikes?.layers&&grounded?
    Math.min(.25,(Number(conditions.spikes.layers)||1)*.0834):0;
  return Math.min(1,rocks+spikes);
@@ -107,7 +107,9 @@ export class TrainerAI extends RandomPlayerAI{
       if(actor.startsWith(foeSide)){
         this.foeIdentity=actor;
         this.foeSpecies=(parts[3]||'').split(',')[0];
-        this.foeStatus='';
+        // Switching publicly reveals both remaining HP and an existing status.
+        // The engine need not emit a new |-status| event for an old burn/paralysis.
+        this.foeStatus=(parts[4]||'').match(/(?:^|\s)(brn|par|psn|tox|slp|frz)(?=\s|$)/)?.[1]||'';
       }
     }else if(line.startsWith('|move|')){
       if(actor.startsWith(foeSide)){
@@ -253,13 +255,18 @@ export class TrainerAI extends RandomPlayerAI{
     };
     const currentDanger=danger(ownTypes);
     const ownBattle=battle?.[this.side]?.active?.[0];
+    const ownSideConditions=battle?.[this.side]?.sideConditions||{};
+    const foeAbility=this.publicOpponentKnowledge.get(this.foeIdentity)?.ability||'';
     const context={foeTypes,ownTypes,ownAbility:own?.ability,ownItem:own?.item,
-      ownHpFraction:health,foeStatus:this.foeStatus,
-      ownBoosts:ownBattle?.boosts||{},foeSideConditions:{}};
+      ownHpFraction:health,ownStatus:ownBattle?.status||'',
+      foeStatus:this.foeStatus,foeAbility,
+      ownBoosts:ownBattle?.boosts||{},ownSideConditions,
+      foeSideConditions:battle?.[this.side==='p1'?'p2':'p1']?.sideConditions||{}};
     const available=moveRequest.moves||[];
     const bestMove=Math.max(-80,...available.filter(m=>!m.disabled).map((m,i)=>{
       const move=Dex.moves.get(m.id||m.move||'');
-      if(wastedStatusMove(move,{status:this.foeStatus,types:foeTypes}))return -120;
+      if(wastedStatusMove(move,{status:this.foeStatus,types:foeTypes,ability:foeAbility})||
+        wastedSelfMove(move,context))return -120;
       return evaluateMove({choice:`move ${i+1}`,move:{id:move.id}},context);
     }));
     const current=this.candidateScore(active,activeSlot+1,foeTypes);
@@ -334,10 +341,13 @@ export class TrainerAI extends RandomPlayerAI{
     const {ownTypes,foeTypes}=this.matchup();
     const own=battle?.[this.side]?.active?.[0],foe=battle?.[this.side==='p1'?'p2':'p1']?.active?.[0];
     const fraction=mon=>mon?.maxhp>0?limit(mon.hp/mon.maxhp,0,1):1;
+    const knownFoe=this.publicOpponentKnowledge.get(this.foeIdentity);
     const context={foeTypes,ownTypes,ownAbility:this.ownActive?.ability,ownItem:this.ownActive?.item,
       ownHpFraction:fraction(own),foeHpFraction:fraction(foe),
-      foeStatus:foe?.status||this.foeStatus||'',foeVolatiles:foe?.volatiles||{},
+      ownStatus:own?.status||'',foeStatus:this.foeStatus||foe?.status||'',
+      foeAbility:knownFoe?.ability||'',foeVolatiles:foe?.volatiles||{},
       ownBoosts:own?.boosts||{},
+      ownSideConditions:battle?.[this.side]?.sideConditions||{},
       foeSideConditions:battle?.[this.side==='p1'?'p2':'p1']?.sideConditions||{}};
     const battleSlots=battle?.[this.side]?.active?.[0]?.moveSlots||[];
     // A wasted burn/poison/sleep/paralysis on an already afflicted target must
@@ -346,7 +356,8 @@ export class TrainerAI extends RandomPlayerAI{
       const slot=Number(entry.choice?.match(/^move ([1-4])/)?.[1])-1;
       const move=Dex.moves.get(battleSlots[slot]?.id||entry.move?.id||entry.move?.move||entry.move||'');
       return !wastedStatusMove(move,{status:context.foeStatus,types:foeTypes,
-        volatiles:context.foeVolatiles});
+        volatiles:context.foeVolatiles,ability:context.foeAbility})&&
+        !wastedSelfMove(move,context);
     });
     if(eligible.length&&eligible.length<moves.length)moves=eligible;
     const legalMoveData=moves.map(entry=>{

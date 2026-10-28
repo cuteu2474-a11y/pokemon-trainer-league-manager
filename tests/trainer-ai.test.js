@@ -235,3 +235,37 @@ test('without a publicly revealed enemy move AI uses the safe non-clone path',()
  assert.equal(ai.decisions.rollouts,0);
  assert.equal(ai.decisions.rolloutFallbacks,0);
 });
+ 
+test('public switch log preserves an existing status on the arriving opponent',()=>{
+ const ai=new TrainerAI({}, {tactics:20}, {seed:[1,2,3,4]});
+ ai.receiveLine('|switch|p2a: 전기쥐|Pikachu, L50|71/100 par');
+ assert.equal(ai.foeStatus,'par');
+ ai.receiveLine('|-curestatus|p2a: 전기쥐|par');
+ assert.equal(ai.foeStatus,'');
+ ai.receiveLine('|drag|p2a: 불개|Arcanine, L50|80/100 brn');
+ assert.equal(ai.foeStatus,'brn');
+});
+test('trainer avoids pointless healing and capped boosts when a damaging move exists',()=>{
+ const own={hp:100,maxhp:100,status:'',boosts:{atk:6},
+   moveSlots:[{id:'recover'},{id:'swordsdance'},{id:'tackle'}]};
+ const foe={hp:80,maxhp:100,status:'',types:['Normal'],getTypes(){return this.types;}};
+ const battle={requestState:'idle',p1:{active:[own],sideConditions:{}},
+   p2:{active:[foe],sideConditions:{}}};
+ const ai=new TrainerAI({}, {tactics:20,switching:20,battlePlan:'endurance'},
+   {seed:[1,2,3,4],battleProvider:()=>battle,team:[{species:'Snorlax'}]});
+ ai.ownActive={species:'Snorlax'};ai.foeSpecies='Eevee';
+ assert.equal(ai.chooseMove({},[{choice:'move 1',move:{id:'recover'}},
+   {choice:'move 2',move:{id:'swordsdance'}},
+   {choice:'move 3',move:{id:'tackle'}}]),'move 3');
+});
+test('known foe ability suppresses immune status move without suppressing attacks',()=>{
+ const ai=new TrainerAI({}, {tactics:20,battlePlan:'control'}, {seed:[1,2,3,4]});
+ ai.ownActive={species:'Arcanine'};ai.foeSpecies='Eevee';ai.foeIdentity='p2a: 상대';
+ ai.publicOpponentKnowledge.set('p2a: 상대',{ability:'flashfire',moveUses:new Map()});
+ assert.equal(ai.chooseMove({},[{choice:'move 1',move:{id:'willowisp'}},
+   {choice:'move 2',move:{id:'tackle'}}]),'move 2');
+});
+test('entry hazard estimate respects Magic Guard and Air Balloon',()=>{
+ assert.equal(entryHazardFraction({stealthrock:{layers:1}},['Fire'],'','Magic Guard'),0);
+ assert.equal(entryHazardFraction({spikes:{layers:3}},['Electric'],'Air Balloon'),0);
+});
