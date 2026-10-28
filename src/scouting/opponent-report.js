@@ -212,3 +212,41 @@ export function analyzeOpponent({home,away,playerClubId,season=1,round=1}={}){
     typeDistribution:types,tendency,matrix,recommendedOrder,matches,
     note:'실제 대전 결과나 확정 승률이 아니라 현재 공개된 포켓몬과 전술 성향에 따른 비교 분석입니다. KOF 연승전에서는 추천된 순서대로 1:1 대결이 일어나는 것은 아닙니다.'};
 }
+
+/**
+ * AI coaches get the same 120-order optimization as the player, without
+ * receiving unrevealed opposing moves, potential, IV/CA, trust or tactics.
+ * These are match recommendations, not unconditional trainer commands.
+ */
+export function prepareAICoach({home,away,aiClubId,season=1,round=1}={}){
+ if(!home||!away||String(home.id)===String(away.id)||
+    (String(aiClubId)!==String(home.id)&&String(aiClubId)!==String(away.id)))
+   throw new RangeError('AI 감독의 소속 구단이 경기 상대가 아닙니다.');
+ const own=String(aiClubId)===String(home.id)?home:away;
+ const opponent=own===home?away:home;
+ if(!Array.isArray(opponent.trainers)||opponent.trainers.length!==5||
+    opponent.trainers.some(t=>!t||!Array.isArray(t.pokemon)||t.pokemon.length!==6))
+   throw new RangeError('상대의 주전 트레이너 5명과 각 포켓몬 6마리가 필요합니다.');
+ const publicRoster={
+  id:opponent.id,name:opponent.name,
+  trainers:opponent.trainers.map(t=>({
+   name:t.name,
+   tactics:10,switching:10,
+   pokemon:t.pokemon.map(mon=>({name:mon.name,species:mon.species})),
+  })),
+ };
+ const analysis=analyzeOpponent({
+  home:own,away:publicRoster,playerClubId:own.id,season,round
+ });
+ const order=analysis.recommendedOrder;
+ return {
+  engine:'ai-coach-preparation',version:1,aiClubId:own.id,
+  opponentId:opponent.id,season,round,order,
+  // Index is the original roster slot, not the new position in the lineup.
+  directives:analysis.matches.map(m=>({
+   trainerIndex:m.trainerIndex,plan:m.plan,behavior:m.behavior,
+   assessment:m.advantage,reason:m.reason,
+  })),
+  visibleInformation:'공개 포켓몬 종·타입과 AI 자신의 선수단 전력',
+ };
+}

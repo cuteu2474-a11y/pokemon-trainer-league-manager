@@ -1,4 +1,4 @@
-import {analyzeOpponent} from '../src/scouting/opponent-report.js';
+import {analyzeOpponent,prepareAICoach} from '../src/scouting/opponent-report.js';
 
 export default async function handler(req,res){
   res.setHeader('Cache-Control','no-store');
@@ -11,7 +11,7 @@ export default async function handler(req,res){
   }
   try{
     const body=typeof req.body==='string'?JSON.parse(req.body):req.body;
-    const result=analyzeOpponent(body);
+    const result=body?.mode==='ai-coach'?prepareAICoach(body):analyzeOpponent(body);
     res.statusCode=200;
     res.end(JSON.stringify(result));
   }catch(error){

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {analyzeOpponent,pairingScore,typeEffectiveness,recommendOrder} from '../src/scouting/opponent-report.js';
+import {analyzeOpponent,prepareAICoach,pairingScore,typeEffectiveness,recommendOrder} from '../src/scouting/opponent-report.js';
 import handler from '../api/opponent-scout.js';
 
 const mon=(name,ca=110)=>({name,level:50,ca,pa:ca+20,moves:[]});
@@ -102,4 +102,43 @@ test('scouting API returns report, respects HTTP methods and rejects invalid ros
   await handler({method:'POST',body:{}},res);
   assert.equal(res.statusCode,400);
   assert.ok(res.body.error);
+});
+
+test('AI head coach prepares a legal 120-order lineup with independent tactical advice',()=>{
+ const {home,away}=fixture(),before=JSON.stringify([home,away]);
+ const result=prepareAICoach({home,away,aiClubId:away.id,season:2,round:8});
+ assert.equal(result.engine,'ai-coach-preparation');
+ assert.equal(result.aiClubId,away.id);
+ assert.deepEqual([...result.order].sort(),[0,1,2,3,4]);
+ assert.equal(result.directives.length,5);
+ assert.deepEqual(result.directives.map(d=>d.trainerIndex),result.order);
+ assert.ok(result.directives.every(d=>['balanced','offense','control','endurance','tempo'].includes(d.plan)));
+ assert.ok(result.directives.every(d=>['kill','switch','matchup','preserve','pp','status','analysis'].includes(d.behavior)));
+ assert.equal(JSON.stringify([home,away]),before,'no real roster or player order may be modified');
+});
+test('AI preparation cannot read secret opponent moves, player skills or ability stats',()=>{
+ const {home,away}=fixture();
+ const first=prepareAICoach({home,away,aiClubId:away.id});
+ for(const t of home.trainers){
+  t.tactics=20;t.switching=1;t.autonomyAI={preferredPlay:'offense',playTraits:['킬각 포착']};
+  for(const p of t.pokemon){
+   p.ca=20;p.pa=200;p.moves=['explosion','toxic','thunderbolt','recover'];
+   p.item='Choice Scarf';p.ability='Intimidate';
+  }
+ }
+ const second=prepareAICoach({home,away,aiClubId:away.id});
+ assert.deepEqual(second.order,first.order);
+ assert.deepEqual(second.directives,first.directives);
+});
+test('AI coaching is validated, and its API returns only the required preparation',async()=>{
+ const makeRes=()=>({statusCode:0,headers:{},setHeader(k,v){this.headers[k]=v;},end(v){this.body=JSON.parse(v);}});
+ const {home,away}=fixture();
+ const res=makeRes();
+ await handler({method:'POST',body:{mode:'ai-coach',home,away,aiClubId:away.id}},res);
+ assert.equal(res.statusCode,200);
+ assert.equal(res.body.engine,'ai-coach-preparation');
+ assert.equal(res.body.order.length,5);
+ assert.equal(res.body.opponents,undefined);
+ assert.equal(res.body.matrix,undefined);
+ assert.throws(()=>prepareAICoach({home,away,aiClubId:200}),/소속 구단/);
 });

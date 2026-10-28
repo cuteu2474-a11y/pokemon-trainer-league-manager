@@ -111,7 +111,42 @@
         if(game!==g||pending()!==p)throw Error('준비 중인 경기가 변경됐습니다.');
         window.PokemonExpedition?.resolvePlayer();window.PokemonAbilities?.ensureAll();MatchRegistration.ensureRosterIds(game);
         const order=[...p.order],mine=myClub().id,identity=[0,1,2,3,4];
-        const request={home:copy(game.clubs[p.home]),away:copy(game.clubs[p.away]),homeOrder:p.home===mine?order:identity,awayOrder:p.away===mine?order:identity,seed:[game.seed>>>0,p.season,p.round,7919]};
+        const request={home:copy(game.clubs[p.home]),away:copy(game.clubs[p.away]),
+          homeOrder:p.home===mine?order:identity,awayOrder:p.away===mine?order:identity,
+          seed:[game.seed>>>0,p.season,p.round,7919]};
+        // Ask the same scouting service to prepare the AI coach. It sees only
+        // public opponent Pokémon identities, never hidden moves/stats or the
+        // player's chosen order. The result is signed by freezeMatch below.
+        const aiSide=p.home===mine?'away':'home',aiClub=request[aiSide];
+        try{
+          const scoutResponse=await fetch('/api/opponent-scout',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({mode:'ai-coach',home:request.home,away:request.away,
+              aiClubId:aiClub.id,season:p.season,round:p.round}),
+          });
+          if(!scoutResponse.ok)throw Error('AI 감독의 상대 분석이 완료되지 않았습니다.');
+          const scouting=await scoutResponse.json();
+          const aiOrder=scouting?.order;
+          if(scouting.engine!=='ai-coach-preparation'||String(scouting.aiClubId)!==String(aiClub.id)||
+             !Array.isArray(aiOrder)||aiOrder.length!==5||
+             new Set(aiOrder).size!==5||aiOrder.some(n=>!Number.isInteger(n)||n<0||n>=5))
+            throw Error('AI 감독의 출전 명단 분석 결과가 올바르지 않습니다.');
+          request[aiSide+'Order']=aiOrder.slice();
+          for(const instruction of scouting.directives||[]){
+            const t=aiClub.trainers[instruction.trainerIndex];
+            if(!t||!['balanced','offense','control','endurance','tempo'].includes(instruction.plan)||
+               !['kill','switch','matchup','preserve','pp','status','analysis'].includes(instruction.behavior))continue;
+            // The AI head coach makes recommendations; trainers retain autonomy.
+            t.directorAdvice=instruction.plan;
+            t.directorBehaviorAdvice=instruction.behavior;
+          }
+          p.aiCoachPrepared=true;
+        }catch(error){
+          // Preserve playability when scouting cannot be reached.
+          p.aiCoachPrepared=false;
+          p.aiCoachFallback='상대 AI 감독의 기본 출전 순서를 적용했습니다.';
+        }
+        if(game!==g||pending()!==p)throw Error('경기 준비 중 데이터가 변경됐습니다.');
         request[p.home===mine?'home':'away'].trainers.forEach((t,i)=>{
           t.enhancement=copy(p.enhancements?.[i]||{kind:'none'});
           t.directorAdvice=p.plans?.[i]||null;t.directorBehaviorAdvice=p.behaviors?.[i]||null;
