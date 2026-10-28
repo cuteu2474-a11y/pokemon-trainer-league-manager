@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {TrainerAI, trainerSkill, scoreMove, typeMultiplier} from '../src/battle/trainer-ai.js';
+import {TrainerAI, trainerSkill, scoreMove, typeMultiplier, entryHazardFraction} from '../src/battle/trainer-ai.js';
 import {simulateSixVsSix} from '../src/battle/showdown.js';
 
 const gp={hp:94,atk:0,def:31,spa:94,spd:0,spe:94};
@@ -122,4 +122,31 @@ test('expert switch cooldown prevents repeated immediate counter switches',()=>{
   {active:true,details:'Pikachu',ident:'p1: 빠른돌',condition:'80/100'},
   {active:false,details:'Togekiss',ident:'p1: 비행군',condition:'100/100'}
  ]}}),1);
+});
+
+test('hazards forecast switch HP and respect known immunity items',()=>{
+ assert.ok(entryHazardFraction({stealthrock:{layers:1}},['Fire','Flying'])>=.49);
+ assert.equal(entryHazardFraction({stealthrock:{layers:1}},['Fire','Flying'],'Heavy-Duty Boots'),0);
+ assert.equal(entryHazardFraction({spikes:{layers:3}},['Electric'],'','Levitate'),0);
+});
+test('expert keeps a living bench over a hazard-fainting counter',()=>{
+ const ai=new TrainerAI({}, {tactics:20,switching:20}, {seed:[1,2,3,4],
+  team:[{name:'Charizard',species:'Charizard',moves:['flamethrower']},
+        {name:'Blastoise',species:'Blastoise',moves:['surf']}],
+  battleProvider:()=>({p1:{sideConditions:{stealthrock:{layers:1}}}})});
+ ai.side='p1';ai.foeSpecies='Venusaur';
+ const choice=ai.chooseSwitch(undefined,[
+  {slot:1,pokemon:{details:'Charizard',ident:'p1: Charizard',condition:'20/100'}},
+  {slot:2,pokemon:{details:'Blastoise',ident:'p1: Blastoise',condition:'75/100'}}
+ ]);
+ assert.equal(choice,2);
+});
+test('without a publicly revealed enemy move AI uses the safe non-clone path',()=>{
+ const ai=new TrainerAI({}, {tactics:20,switching:20}, {seed:[1,2,3,4],
+  team:[{name:'Pikachu',species:'Pikachu',moves:['thunderbolt']}],
+  battleProvider:()=>({requestState:'move',p1:{active:[{hp:100,maxhp:100,moveSlots:[{id:'thunderbolt'}]}]},p2:{active:[{hp:100,maxhp:100,moveSlots:[{id:'surf'}]}]}})});
+ ai.side='p1';ai.ownActive=ai.team[0];ai.foeSpecies='Blastoise';
+ ai.chooseMove({},[{choice:'move 1',move:{id:'thunderbolt'}}]);
+ assert.equal(ai.decisions.rollouts,0);
+ assert.equal(ai.decisions.rolloutFallbacks,0);
 });

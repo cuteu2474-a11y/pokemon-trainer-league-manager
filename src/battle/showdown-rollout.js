@@ -39,8 +39,11 @@ export function summarizeResponses(samples=[]){
    .reduce((sum,x)=>sum+x.score,0)/samples.filter(x=>Number.isFinite(x?.score)).length:-Infinity,
   worst:averages.length?Math.min(...averages):-Infinity};
 }
-export function rolloutActions(battle, {sideId='p1', choices, opponentChoices, depth=1, samples=1} = {}) {
+export function rolloutActions(battle, {sideId='p1', choices, opponentChoices,
+  requirePublicChoices=false, depth=1, samples=1} = {}) {
   if (!battle?.toJSON || !Array.isArray(choices) || !choices.length) throw new TypeError('Battle and legal choices required');
+  if(requirePublicChoices&&(!Array.isArray(opponentChoices)||opponentChoices.length===0))
+    throw new TypeError('Revealed opponent responses required');
   if (!Number.isInteger(depth) || depth < 1 || depth > 3 || !Number.isInteger(samples) || samples < 1 || samples > 12)
     throw new RangeError('Rollout budget exceeded');
   const baseline = battle.toJSON();
@@ -57,8 +60,9 @@ export function rolloutActions(battle, {sideId='p1', choices, opponentChoices, d
       const available=legalRolloutMoves(clone,foeId);
       const known=Array.isArray(opponentChoices)?opponentChoices.filter(choice=>
         available.some(move=>move.choice===choice)):[];
-      const enemy=(known.length?known:available.map(x=>x.choice))[
-        i%Math.max(1,(known.length?known:available).length)]||undefined;
+      if(requirePublicChoices&&!known.length)continue;
+      const possible=known.length?known:available.map(x=>x.choice);
+      const enemy=possible[i%Math.max(1,possible.length)];
       if (!enemy) continue;
       try {
         const foeBefore=clone[foeId].active?.[0];

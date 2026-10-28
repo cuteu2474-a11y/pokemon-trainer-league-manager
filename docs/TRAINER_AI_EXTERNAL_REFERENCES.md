@@ -43,3 +43,14 @@ engines cannot be dropped in without changing these game rules.
 - Unrevealed opponent moves are **still approximated by the existing cloned
   battle fallback**. This is not yet a fully information-safe search engine;
   replacement with sampled public-species movesets remains future work.
+
+## Gameplay patch: information boundaries and hazard-safe switches
+- Cloned battle rollouts require at least one opponent move previously revealed
+  in the public Showdown log. A hidden move may no longer be selected as an
+  opponent response by fallback when public-only mode is requested.
+- Before revelation, the trainer uses the preexisting public-type heuristic.
+- Own-side Stealth Rock/Spikes are deducted before bench switch ranking. Own
+  Heavy-Duty Boots and Levitate are considered. Actual battle damage is unchanged.
+- Limitation: a cloned battle still carries private opposing item/stat details.
+  This change prevents hidden *moveset selection*, not all imperfect-information
+  leakage. Full blind simulation is a separate task.

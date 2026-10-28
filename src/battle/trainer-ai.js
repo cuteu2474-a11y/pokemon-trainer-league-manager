@@ -28,6 +28,18 @@ export function scoreMove(move,opponentTypes=[]){
   return power*accuracy*effect*(data.priority>0?1.15:1);
 }
 const sidename=(move)=>move?.id||move?.name||'unknown';
+
+/** Estimated switch-in hazard damage. The real Showdown engine remains authoritative. */
+export function entryHazardFraction(conditions={},types=[],item='',ability=''){
+ const norm=v=>String(v||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+ if(norm(item)==='heavydutyboots')return 0;
+ const rocks=conditions.stealthrock?.layers?.125*typeMultiplier('Rock',types):0;
+ const grounded=!types.includes('Flying')&&norm(ability)!=='levitate';
+ const spikes=conditions.spikes?.layers&&grounded?
+   Math.min(.25,(Number(conditions.spikes.layers)||1)*.0834):0;
+ return Math.min(1,rocks+spikes);
+}
+
 /** Engine policy changes the preference among legal actions, never resolves damage. */
 export class TrainerAI extends RandomPlayerAI{
   constructor(stream,trainer={},options={}){
@@ -197,13 +209,17 @@ export class TrainerAI extends RandomPlayerAI{
     if(this.lastVoluntarySwitchTurn!==null&&Number.isInteger(liveBattle?.turn)&&
       liveBattle.turn<=this.lastVoluntarySwitchTurn+1)return 1;
     // Switching without a safer living replacement wastes a full turn.
+    const hazards=this.battleProvider?.()?.[this.side]?.sideConditions||{};
     const counter=bench.some(mon=>{
-      const species=Dex.species.get(mon.details?.split(',')[0]||mon.ident?.split(': ').slice(1).join(': ')||'');
+      const owned=this.findOwned(mon,request.side.pokemon.indexOf(mon)+1);
+      const species=Dex.species.get(mon.details?.split(',')[0]||owned?.species||'');
       if(!species.exists)return false;
       const threat=Math.max(...foeTypes.map(t=>typeMultiplier(t,species.types)));
       const attack=Math.max(...species.types.map(t=>typeMultiplier(t,foeTypes)));
       const hp=Number.parseInt(mon.condition||'',10),max=Number.parseInt((mon.condition||'').split('/')[1]||'',10);
-      return (max>0?hp/max:1)>.30&&threat<danger&&(threat<=1||attack>immediate);
+      const safeFraction=(max>0?hp/max:1)-
+        entryHazardFraction(hazards,species.types,owned?.item,owned?.ability);
+      return safeFraction>.30&&threat<danger&&(threat<=1||attack>immediate);
     });
     const careful=['control','endurance'].includes(this.plan);
     let chance=.025+(mismatch?.22:0)+(health<.37?.13:0)+(careful?.07:0);
@@ -312,18 +328,20 @@ export class TrainerAI extends RandomPlayerAI{
       this.record('move',choice,'판단 실패 · 비슷한 선택지 중 선택');
       return choice;
     }
-    // The high-analysis trainer evaluates legal Showdown turn rollouts first.
-    if(battle?.requestState==='move'&&battle[this.side]?.active?.[0]?.hp&&clarity>=.40){
+    // No hidden opponent move-set search before a move was publicly revealed.
+    const publicCountermoves=this.observedOpponentChoices(battle);
+    if(battle?.requestState==='move'&&battle[this.side]?.active?.[0]?.hp&&
+       clarity>=.40&&publicCountermoves.length){
       try{
         const choices=moves.map(x=>x.choice).filter(x=>/^move [1-4](?:$|\s)/.test(x));
         const {depth,samples}=searchBudget(this.profile.analysis);
-        const revealed=this.observedOpponentChoices(battle);
-        // Assess every revealed counter at least twice when affordable.
-        const count=revealed.length&&this.profile.analysis>=18?
-          Math.min(8,Math.max(4,revealed.length*2)):Math.min(samples+(insight?1:0),4);
+        // Public-only mode cannot silently simulate unrevealed opponent moves.
+        const count=this.profile.analysis>=18?
+          Math.min(8,Math.max(4,publicCountermoves.length*2)):
+          Math.min(samples+(insight?1:0),4);
         const ranked=rolloutActions(battle,{
           sideId:this.side,choices,depth,samples:count,
-          ...(revealed.length?{opponentChoices:revealed}:{}),
+          opponentChoices:publicCountermoves,requirePublicChoices:true,
         });
         for(const candidate of ranked){
           const index=Number(candidate.choice.split(' ')[1])-1;
@@ -413,18 +431,16 @@ export class TrainerAI extends RandomPlayerAI{
       const currentThreat=foeTypes.length&&ownTypes.length?
         Math.max(...foeTypes.map(type=>typeMultiplier(type,ownTypes))):1;
       const state=this.battleProvider?.()?.[this.side]?.sideConditions||{};
-      const rock=state.stealthrock?.layers?
-        .125*typeMultiplier('Rock',species.types):0;
-      const spikes=state.spikes?.layers&& !species.types.includes('Flying')?
-        Math.min(.25,(Number(state.spikes.layers)||1)*.0834):0;
+      const owned=this.findOwned(entry.pokemon,entry.slot);
+      const entryDamage=entryHazardFraction(state,species.types,owned?.item,owned?.ability);
+      const healthAfterEntry=Math.max(0,health-entryDamage);
       const traits=switchTraitBonus(this.profile,{currentThreat,nextThreat:threat,
-        health,offense:attack,hazards:rock+spikes});
-      const candidate=this.team.find(mon=>mon.name===entry.pokemon.ident?.split(': ').slice(1).join(': '));
-      const fatiguePenalty=Math.max(0,Math.min(100,Number(candidate?.fatigue)||0))*.08;
-      const ownMoves=this.candidateScore(entry.pokemon,entry.slot,foeTypes,rock+spikes);
+        health:healthAfterEntry,offense:attack,hazards:entryDamage});
+      const fatiguePenalty=Math.max(0,Math.min(100,Number(owned?.fatigue)||0))*.08;
+      const ownMoves=this.candidateScore(entry.pokemon,entry.slot,foeTypes,entryDamage);
       const score=-fatiguePenalty+(threat===0?32:30/(Math.max(.25,threat)))+
-        (attack===0?0:Math.min(4,attack)*8)+health*(preserve?34:20)+
-        ownMoves*.42+traits.bonus;
+        (attack===0?0:Math.min(4,attack)*8)+healthAfterEntry*(preserve?34:20)+
+        ownMoves*.42+traits.bonus-(healthAfterEntry===0?500:0);
       return {entry,i,score,quality:traits.quality};
     }).sort((a,b)=>b.score-a.score||a.i-b.i);
     // Weaker evaluators are allowed to be less precise, but never pick an invalid slot.
@@ -443,8 +459,11 @@ export class TrainerAI extends RandomPlayerAI{
     const n=Number.parseInt(best.pokemon.condition||'',10);
     const d=Number.parseInt((best.pokemon.condition||'').split('/')[1]||'',10);
     const nextHP=Number.isFinite(n)&&Number.isFinite(d)&&d>0?n/d:1;
+    const candidateOwned=this.findOwned(best.pokemon,best.slot);
+    const hazard=entryHazardFraction(this.battleProvider?.()?.[this.side]?.sideConditions||{},
+      candidateSpecies.types||[],candidateOwned?.item,candidateOwned?.ability);
     const validQuality=active!==undefined&&foeTypes.length>0&&ownTypes.length>0&&
-      currentThreat>=2&&nextThreat<currentThreat&&nextHP>.25;
+      currentThreat>=2&&nextThreat<currentThreat&&nextHP-hazard>.25;
     const endangered=activePokemon?.maxhp>0&&activePokemon.hp/activePokemon.maxhp<.45;
     this.record('switch',String(best.slot),active===undefined?'기절 교체 · 잔존 전력 평가':
       '불리한 상성·HP 위험에 따른 자율 교체',

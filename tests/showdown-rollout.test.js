@@ -33,3 +33,12 @@ test('cloned Showdown turn evaluates actions without mutating original',{timeout
 test('rollout budgets are bounded',()=>{
   assert.throws(()=>rolloutActions(battle(),{choices:['move 1'],depth:4}),RangeError);
 });
+
+test('public rollouts never substitute secret moves for missing revealed choices',()=>{
+ const sim=battle();
+ assert.throws(()=>rolloutActions(sim,{choices:['move 1'],opponentChoices:[],
+   requirePublicChoices:true}),TypeError);
+ const ranks=rolloutActions(sim,{choices:['move 1'],
+   opponentChoices:['move 99'],requirePublicChoices:true,depth:1,samples:2});
+ assert.equal(ranks[0].runs,0);
+});
