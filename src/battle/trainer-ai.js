@@ -35,7 +35,14 @@ export class TrainerAI extends RandomPlayerAI{
     const skill=trainerSkill(trainer);
     super(stream,{move:Math.min(1,.70+skill.tactics*.015),seed:options.seed});
     this.skill=skill;
-    this.profile=trainer.aiProfile?{...trainer.aiProfile,moveSkill:trainer.moveJudgment,switchSkill:trainer.switchJudgment,analysis:trainer.battleAnalysis}:trainerPersonality(trainer);
+    const preset=trainer.aiProfile||{},base=trainerPersonality(trainer);
+    const rating=(...args)=>Math.max(1,Math.min(20,Number(args.find(v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v)))??10)));
+    // Prepared personalities already include ratings: never erase these with undefined.
+    this.profile={...base,...preset,
+      moveSkill:rating(trainer.moveJudgment,preset.moveSkill,skill.tactics),
+      switchSkill:rating(trainer.switchJudgment,preset.switchSkill,skill.switching),
+      analysis:rating(trainer.battleAnalysis,preset.analysis,skill.tactics),
+      preservation:rating(trainer.resourceManagement??trainer.management,preset.preservation,skill.switching)};
     this.plan=trainer.battlePlan?battlePlan(trainer):(this.profile.plan||'balanced');
     this.secondaryPlan=this.profile.secondaryPlan||null;
     this.adviceWeight=Number(this.profile.adviceWeight)||0;
@@ -84,7 +91,9 @@ export class TrainerAI extends RandomPlayerAI{
   }
   moveProbability(request){
     const {ownTypes,foeTypes}=this.matchup();
-    if(!ownTypes.length||!foeTypes.length)return .98;
+    const bench=(request.side?.pokemon||[]).filter(mon=>!mon.active&&Number.parseInt(mon.condition||'',10)>0);
+    if(!bench.length)return 1;
+    if(!ownTypes.length||!foeTypes.length)return .985;
     const active=request.side.pokemon.find(mon=>mon.active);
     const hp=Number.parseInt(active?.condition||'',10);
     const max=Number.parseInt(active?.condition?.split('/')[1]||'',10);
@@ -92,6 +101,15 @@ export class TrainerAI extends RandomPlayerAI{
     const danger=Math.max(...foeTypes.map(type=>typeMultiplier(type,ownTypes)));
     const immediate=Math.max(...ownTypes.map(type=>typeMultiplier(type,foeTypes)));
     const mismatch=danger>=2&&immediate<=1;
+    // Switching without a safer living replacement wastes a full turn.
+    const counter=bench.some(mon=>{
+      const species=Dex.species.get(mon.details?.split(',')[0]||mon.ident?.split(': ').slice(1).join(': ')||'');
+      if(!species.exists)return false;
+      const threat=Math.max(...foeTypes.map(t=>typeMultiplier(t,species.types)));
+      const attack=Math.max(...species.types.map(t=>typeMultiplier(t,foeTypes)));
+      const hp=Number.parseInt(mon.condition||'',10),max=Number.parseInt((mon.condition||'').split('/')[1]||'',10);
+      return (max>0?hp/max:1)>.30&&threat<danger&&(threat<=1||attack>immediate);
+    });
     const careful=['control','endurance'].includes(this.plan);
     let chance=.025+(mismatch?.22:0)+(health<.37?.13:0)+(careful?.07:0);
     if(this.plan==='offense'||this.plan==='tempo')chance-=.03;
@@ -103,7 +121,9 @@ export class TrainerAI extends RandomPlayerAI{
     // Successful previous choices strengthen a habit even without fresh manager input.
     if(mismatch)chance+=.03*traitValue(this.profile,'matchup');
     if(this.remaining>1&&health<.45&&danger>=2)chance+=.035*traitValue(this.profile,'preserve');
-    return 1-limit(chance,0,.48);
+    if(counter&&mismatch)chance+=.19;
+    if(!counter)chance*=health<.24?.55:.16;
+    return 1-limit(chance,0,counter?.76:.28);
   }
   preference(move,battle){
     const primary=planPreference(move,battle,this.side,this.plan);
@@ -140,7 +160,12 @@ export class TrainerAI extends RandomPlayerAI{
     if(!moves.length)return super.chooseMove(active,moves);
     const battle=this.battleProvider?.();
     const {ownTypes,foeTypes}=this.matchup();
-    const context={foeTypes,ownTypes,ownAbility:this.ownActive?.ability,ownItem:this.ownActive?.item};
+    const own=battle?.[this.side]?.active?.[0],foe=battle?.[this.side==='p1'?'p2':'p1']?.active?.[0];
+    const fraction=mon=>mon?.maxhp>0?limit(mon.hp/mon.maxhp,0,1):1;
+    const context={foeTypes,ownTypes,ownAbility:this.ownActive?.ability,ownItem:this.ownActive?.item,
+      ownHpFraction:fraction(own),foeHpFraction:fraction(foe),
+      foeStatus:foe?.status||'',ownBoosts:own?.boosts||{},
+      foeSideConditions:battle?.[this.side==='p1'?'p2':'p1']?.sideConditions||{}};
     const battleSlots=battle?.[this.side]?.active?.[0]?.moveSlots||[];
     const legalMoveData=moves.map(entry=>{
       const slotNumber=Number(entry.choice?.match(/^move ([1-4])/)?.[1])-1;
@@ -157,8 +182,18 @@ export class TrainerAI extends RandomPlayerAI{
     const understands=this.prng.random()<
       limit((this.skill.tactics+analysisHabit/25+meetingBoost)/20,.05,.98);
     if(!understands){
-      const choice=super.chooseMove(active,moves);
-      this.record('move',choice,'판단 실패 · 안전한 합법적 선택');
+      // Weaker trainers sometimes pick the second-best viable action, not a
+      // random immune attack or a completely wasted status move.
+      const ranked=moves.map((entry,i)=>{
+        const move=Dex.moves.get(entry.move?.id||entry.move?.move||entry.move||'');
+        return {entry,i,value:evaluateMove(entry,context)+this.preference(move,battle)};
+      }).sort((x,y)=>y.value-x.value||x.i-y.i);
+      const best=ranked[0]?.value??0,tolerance=Math.max(8,(21-this.skill.tactics)*4);
+      const viable=ranked.filter(x=>x.value>=Math.max(1,best*.43)&&best-x.value<=tolerance);
+      const pool=viable.length?viable:ranked.slice(0,1);
+      const selected=pool[Math.min(pool.length-1,Math.floor(this.prng.random()*pool.length))];
+      const choice=selected?.entry.choice||super.chooseMove(active,moves);
+      this.record('move',choice,'판단 실패 · 비슷한 선택지 중 선택');
       return choice;
     }
     // The high-analysis trainer evaluates legal Showdown turn rollouts first.

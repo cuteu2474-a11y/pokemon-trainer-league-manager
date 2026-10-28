@@ -29,21 +29,35 @@ export function knownModifier({ability, item} = {}, move = {}) {
   if (boosted[it] === type) factor *= 1.2;
   return factor;
 }
-export function evaluateMove(entry, {foeTypes = [], ownAbility, ownItem, ownTypes = [], foeHpFraction = 1} = {}) {
+export function evaluateMove(entry, {foeTypes = [], ownAbility, ownItem, ownTypes = [],
+  foeHpFraction = 1, ownHpFraction = 1, foeStatus = '', ownBoosts = {}, foeSideConditions = {}} = {}) {
   const data = Dex.moves.get(entry.move?.id || entry.move?.move || entry.move || '');
   if (!data.exists) return 0;
   const accuracy = typeof data.accuracy === 'number' ? data.accuracy / 100 : 1;
   if (data.category === 'Status') {
-    if (data.heal) return 32 * (1 - foeHpFraction * 0.2);
-    if (data.boosts || data.self?.boosts) return 33;
-    if (data.status || data.volatileStatus || data.sideCondition || data.weather || data.pseudoWeather) return 29;
+    // Recovery value must depend on the user's missing HP.
+    if (data.heal||['recover','roost','rest','slackoff','softboiled','synthesis','moonlight','morningsun','strengthsap'].includes(data.id))
+      return ownHpFraction>=.95?-80:Math.max(6,78*(1-ownHpFraction));
+    if (data.status) {
+      if (foeStatus||!Dex.getImmunity(data.type,foeTypes)||
+          (['tox','psn'].includes(data.status)&&foeTypes.some(t=>['Poison','Steel'].includes(t)))||
+          (data.status==='brn'&&foeTypes.includes('Fire'))||
+          (data.status==='par'&&foeTypes.includes('Electric'))||
+          (data.status==='frz'&&foeTypes.includes('Ice')))return -75;
+      return 30*accuracy;
+    }
+    const boosts=data.boosts||data.self?.boosts;
+    if (boosts) return Object.entries(boosts).some(([stat,value])=>
+      value>0&&Number(ownBoosts[stat]||0)<6)&&ownHpFraction>.28?33:-45;
+    if (data.sideCondition)return foeSideConditions[data.sideCondition]?-55:29;
+    if (data.volatileStatus||data.weather||data.pseudoWeather)return 26;
     return 12;
   }
   const effectiveness = foeTypes.reduce((v,t)=>v * (Dex.getImmunity(data.type,[t]) ? 2 ** Dex.getEffectiveness(data.type,[t]) : 0),1);
   const stab = ownTypes.includes(data.type) ? 1.5 : 1;
   const power = data.basePower || 40;
   const multiplier = knownModifier({ability:ownAbility,item:ownItem},data);
-  const priority = data.priority > 0 ? 1.12 : 1;
+  const priority = data.priority > 0 ? (foeHpFraction<=.30?1.35:1.12) : 1;
   return power * accuracy * effectiveness * stab * multiplier * priority;
 }
 /** Bounded rollouts over uncertain enemy responses, not perfect-information search. */

@@ -31,3 +31,25 @@ test('Showdown integrates AI decisions in a full 6v6 battle',{timeout:30000},asy
   assert.equal(result.winner,'Club A');
   assert.ok(result.aiDecisions.p1.moves>0);
 });
+
+test('prepared AI preserves profile skills when optional explicit overrides are absent',()=>{
+ const ai=new TrainerAI({}, {tactics:12,switching:12,aiProfile:{moveSkill:19,switchSkill:18,analysis:17,preservation:16}}, {seed:[1,2,3,4]});
+ assert.equal(ai.profile.moveSkill,19);
+ assert.equal(ai.profile.switchSkill,18);
+ assert.equal(ai.profile.analysis,17);
+ assert.equal(ai.profile.preservation,16);
+});
+test('novice picks a viable attack over a move with known type immunity',()=>{
+ const ai=new TrainerAI({}, {tactics:1,switching:1}, {seed:[1,2,3,4]});
+ ai.ownActive={species:'Pikachu'};ai.foeSpecies='Gyarados';ai.prng.random=()=>.9;
+ assert.equal(ai.chooseMove({},[{choice:'move 1',move:{id:'earthquake'}},{choice:'move 2',move:{id:'thunderbolt'}}]),'move 2');
+});
+test('switching considers availability of a safe reserve rather than random turns',()=>{
+ const ai=new TrainerAI({}, {tactics:15,switching:18}, {seed:[1,2,3,4]});
+ ai.ownActive={species:'Pikachu'};ai.foeSpecies='Garchomp';
+ const active={active:true,condition:'75/100'};
+ const noCounter=ai.moveProbability({side:{pokemon:[active,{condition:'100/100',details:'Jolteon'}]}});
+ const counter=ai.moveProbability({side:{pokemon:[active,{condition:'100/100',details:'Togekiss'}]}});
+ assert.ok(counter<noCounter);
+ assert.equal(ai.moveProbability({side:{pokemon:[active]}}),1);
+});

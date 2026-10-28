@@ -32,3 +32,17 @@ test('battle uses item-aware bounded AI without accessing opponent hidden sets',
   assert.equal(result.winner,'Club A');
   assert.ok(result.aiDecisions.p1.moves>0);
 });
+
+test('healing value depends on user HP, not opponent HP',()=>{
+ const recover={choice:'move 1',move:{id:'recover'}};
+ assert.ok(evaluateMove(recover,{ownHpFraction:.25,foeHpFraction:1})>evaluateMove(recover,{ownHpFraction:.90,foeHpFraction:.1}));
+ assert.ok(evaluateMove(recover,{ownHpFraction:1})<0);
+});
+test('status heuristics reject type immunity, already-statused foes and fully raised stats',()=>{
+ const wave={choice:'move 1',move:{id:'thunderwave'}};
+ assert.ok(evaluateMove(wave,{foeTypes:['Ground']})<0);
+ assert.ok(evaluateMove(wave,{foeTypes:['Water'],foeStatus:'par'})<0);
+ const boost={choice:'move 1',move:{id:'swordsdance'}};
+ assert.ok(evaluateMove(boost,{ownBoosts:{atk:0}})>0);
+ assert.ok(evaluateMove(boost,{ownBoosts:{atk:6}})<0);
+});
