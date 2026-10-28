@@ -284,6 +284,8 @@
  #dashboard.pr-office .pr-social-post h3{font-size:15px}
 }
 
+/* The dashboard must still disappear for match prep, overlays and club selection. */
+#dashboard.pr-office[hidden]{display:none!important}
 /* Permanent secretary work queue on the right, independent of the selected screen. */
 #dashboard.pr-office{
  display:grid;grid-template-columns:minmax(0,1fr) 300px;
