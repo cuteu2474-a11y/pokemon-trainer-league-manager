@@ -383,3 +383,55 @@
  #dashboard.pr-office .pr-secretary-items{max-height:none}
  #dashboard.pr-office .pr-secretary-filter{padding:8px}
 }
+
+/* Secretary v3: actionable inbox, snooze and direct weekly policy. */
+#dashboard.pr-office .pr-secretary-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+#dashboard.pr-office .pr-secretary-filter{font-size:12px;min-height:37px}
+#dashboard.pr-office .pr-secretary-card{
+ border:1px solid #426c89;border-left:3px solid #e0ae65;border-radius:8px;
+ background:#143653;overflow:hidden;display:flex;flex-direction:column;
+}
+#dashboard.pr-office .pr-secretary-card.is-recommended{border-left-color:#6dbab2}
+#dashboard.pr-office .pr-secretary-task-main{
+ width:100%;display:flex;flex-direction:column;gap:9px;text-align:left;
+ background:transparent;border:0;color:#fff;cursor:pointer;padding:12px 12px 9px;
+ font-family:inherit;white-space:normal;
+}
+#dashboard.pr-office .pr-secretary-task-main:hover{background:#1c4567}
+#dashboard.pr-office .pr-secretary-task-main strong{font-size:15px;line-height:1.4;color:#fff}
+#dashboard.pr-office .pr-secretary-detail{font-size:13px;line-height:1.5;color:#bfd9ea}
+#dashboard.pr-office .pr-secretary-card-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:space-between;padding:0 12px 11px}
+#dashboard.pr-office .pr-secretary-card-actions button{font-family:inherit;border-radius:6px;cursor:pointer;min-height:32px;padding:6px 8px;font-size:12px;font-weight:750}
+#dashboard.pr-office .pr-secretary-action{background:#205878;border:1px solid #5e9dc4;color:#dcf3ff}
+#dashboard.pr-office .pr-secretary-defer{background:#233c50;border:1px solid #5d7487;color:#bed7e7}
+#dashboard.pr-office .pr-secretary-card-actions button:hover{border-color:#a4ddff}
+#dashboard.pr-office .pr-secretary-inbox-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 1px}
+#dashboard.pr-office .pr-secretary-inbox-actions strong{font-size:14px;color:#f1faff}
+#dashboard.pr-office .pr-secretary-inbox-actions button,#dashboard.pr-office .pr-secretary-see-news{
+ min-height:33px;border-radius:6px;border:1px solid #4e8caa;background:#1c5172;color:#eaf8ff;
+ font-size:13px;font-weight:700;padding:7px 10px;cursor:pointer;
+}
+#dashboard.pr-office .pr-secretary-inbox-actions button:disabled{opacity:.48;cursor:default}
+#dashboard.pr-office .pr-secretary-news{
+ display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:6px;
+ background:#102e48;border:1px solid #426a8b;color:#eaf7ff;border-radius:7px;
+ padding:11px;cursor:pointer;white-space:normal;font-family:inherit;
+}
+#dashboard.pr-office .pr-secretary-news.is-unread{border-left:3px solid #a7d6ff;background:#16405f}
+#dashboard.pr-office .pr-secretary-news>span{font-size:12px;color:#bed8e9;line-height:1.4}
+#dashboard.pr-office .pr-secretary-news strong{font-size:14px;line-height:1.45;color:#f2fbff}
+#dashboard.pr-office .pr-secretary-see-news{width:100%;margin-top:3px}
+#dashboard.pr-office .pr-secretary-no-news{font-size:14px;text-align:center;color:#d8e9f7;padding:15px 0;margin:0}
+#dashboard.pr-office .pr-secretary-training{border-top:1px solid #375e7d;padding:10px 12px}
+#dashboard.pr-office .pr-secretary-training>summary{cursor:pointer;font-size:14px;font-weight:750;color:#f1faff;padding:5px 2px}
+#dashboard.pr-office .pr-secretary-training-content{display:flex;flex-direction:column;gap:12px;padding:14px 0 5px}
+#dashboard.pr-office .pr-secretary-training-content label{font-size:13px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:#d4efff}
+#dashboard.pr-office .pr-secretary-training-content select{min-height:38px;max-width:100%;padding:8px;background:#0b213a;border:1px solid #5286a9;color:#fff;border-radius:7px;font-size:14px}
+#dashboard.pr-office .pr-secretary-training-content .pr-secretary-recovery{flex-direction:row;align-items:center;gap:9px}
+#dashboard.pr-office .pr-secretary-training-content .pr-secretary-recovery input{width:16px;height:16px}
+#dashboard.pr-office .pr-secretary-training-content p{font-size:13px;line-height:1.5;color:#bbd7e9;margin:0}
+@media(max-width:1050px) and (min-width:761px){
+ #dashboard.pr-office .pr-secretary-filters{gap:4px;padding:8px 8px 0}
+ #dashboard.pr-office .pr-secretary-filter{font-size:11px}
+ #dashboard.pr-office .pr-secretary-task-main{padding:10px}
+}

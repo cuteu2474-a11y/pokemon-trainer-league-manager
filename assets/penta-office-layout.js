@@ -338,89 +338,169 @@ function patchTrainers(root,club){
  if(toolbar)toolbar.classList.add('pr-old-toolbar');
  const table=frame.querySelector('.trainer-detail-table');if(table)patchTable(table,club);
 }
-/* Secretary board: required decisions vs optional recommendations; all routes are live. */
+/* FM-style actionable assistant, with persistent inbox and safe advice deferral. */
 let secretaryFilter='all';
 let secretaryCollapsed=false;
+let secretaryTrainingExpanded=false;
+function secretaryOpenRoute(route){
+ if(route==='match'){
+  if(typeof window.MatchdayPreparation?.render==='function')window.MatchdayPreparation.render();
+  else window.ManagementUI?.openMatch?.();
+ }else if(route==='research')window.ManagementUI?.retryResearch?.();
+ else if(route==='news')window.PentaOfficeLayout?.openNews?.();
+ else if(typeof window.setTab==='function')window.setTab(route);
+}
 function secretaryView(){
  const aside=document.createElement('aside');aside.className='pr-secretary-rail';
  aside.setAttribute('aria-label','비서 업무 목록');
- const build=window.PentaSecretaryTasks;
- const required=build?.build?.(game,myClub())||[];
- const advice=build?.suggest?.(game,myClub())||[];
- const upcoming=build?.agenda?.(game);
+ const api=window.PentaSecretaryTasks,mail=window.PentaSecretaryInbox;
+ const club=myClub();
+ const required=api?.build?.(game,club)||[];
+ const allAdvice=api?.suggest?.(game,club)||[];
+ const advice=mail?.visibleAdvice?.(game,allAdvice)||allAdvice;
+ const upcoming=api?.agenda?.(game);
+ const news=window.PentaNewsFeed?.build?.(game,club)||[];
+ const recent=mail?.recent?.(game,news,12)||[];
+ const unread=recent.filter(x=>x.unread).length;
  const titleBar=document.createElement('div');titleBar.className='pr-secretary-head';
  const caption=document.createElement('div');caption.className='pr-secretary-heading';
  const title=document.createElement('strong');title.className='pr-secretary-title';title.textContent='비서 업무';
  const summary=document.createElement('span');summary.className='pr-secretary-summary';
- summary.textContent='처리 '+required.length+'건 · 권장 '+advice.length+'건';
+ summary.textContent='필수 '+required.length+' · 권장 '+advice.length+' · 새 소식 '+unread;
  caption.append(title,summary);
- const collapse=document.createElement('button');collapse.type='button';
- collapse.className='pr-secretary-collapse';
+ const collapse=document.createElement('button');collapse.type='button';collapse.className='pr-secretary-collapse';
  collapse.textContent=secretaryCollapsed?'펼치기':'접기';
  collapse.setAttribute('aria-expanded',String(!secretaryCollapsed));
- collapse.onclick=()=>{secretaryCollapsed=!secretaryCollapsed;window.renderOffice?.();};
+ collapse.onclick=()=>{secretaryCollapsed=!secretaryCollapsed;window.PentaOfficeLayout?.apply?.();};
  titleBar.append(caption,collapse);aside.append(titleBar);
  if(secretaryCollapsed)return aside;
  const filters=document.createElement('div');filters.className='pr-secretary-filters';
  const list=document.createElement('div');list.className='pr-secretary-items';
- const display=[];
- const addItem=(task)=>{
-  const item=document.createElement('button');item.type='button';
-  item.className='pr-secretary-item '+(task.urgent?'is-urgent':'is-recommended');
+ const appendTask=(task)=>{
+  const row=document.createElement('article');row.className='pr-secretary-card'+(task.urgent?' is-urgent':' is-recommended');
+  const main=document.createElement('button');main.type='button';main.className='pr-secretary-task-main';
   const top=document.createElement('div');top.className='pr-secretary-item-top';
-  const tier=document.createElement('span');tier.className='pr-secretary-tier';tier.textContent=task.urgent?'처리 필요':'권장';
-  top.append(tier);
-  if(task.deadline){const time=document.createElement('span');time.className='pr-secretary-deadline';time.textContent=task.deadline;top.append(time);}
+  const type=document.createElement('span');type.className='pr-secretary-tier';type.textContent=task.urgent?'필수':'권장';
+  top.append(type);
+  if(task.deadline){
+   const time=document.createElement('span');time.className='pr-secretary-deadline';time.textContent=task.deadline;top.append(time);
+  }
   const name=document.createElement('strong');name.textContent=task.title;
   const detail=document.createElement('span');detail.className='pr-secretary-detail';detail.textContent=task.detail;
-  const action=document.createElement('span');action.className='pr-secretary-open';action.textContent=task.action||'확인하기';
-  item.append(top,name,detail,action);
-  item.onclick=()=>{
-   if(task.route==='match'){
-    if(typeof window.MatchdayPreparation?.render==='function')window.MatchdayPreparation.render();
-    else window.ManagementUI?.openMatch?.();
-   }else if(task.route==='research')window.ManagementUI?.retryResearch?.();
-   else if(typeof window.setTab==='function')window.setTab(task.route);
-  };
-  return item;
+  main.append(top,name,detail);
+  main.onclick=()=>secretaryOpenRoute(task.route);
+  row.append(main);
+  const footer=document.createElement('div');footer.className='pr-secretary-card-actions';
+  const action=document.createElement('button');action.type='button';action.className='pr-secretary-action';
+  action.textContent=task.action||'확인하기';action.onclick=()=>secretaryOpenRoute(task.route);
+  footer.append(action);
+  if(!task.urgent&&mail){
+   const defer=document.createElement('button');defer.type='button';defer.className='pr-secretary-defer';
+   defer.textContent='2주 미루기';
+   defer.onclick=()=>{
+    if(!mail.defer(game,task,2))return;
+    if(typeof persist==='function')persist();
+    window.PentaOfficeLayout?.apply?.();
+   };
+   footer.append(defer);
+  }
+  row.append(footer);return row;
  };
- const sections=[['all','전체',required.length+advice.length],['required','필수',required.length],['advice','권장',advice.length]];
- for(const [key,label,count] of sections){
+ for(const [key,label,count] of [
+  ['all','전체',required.length+advice.length],
+  ['required','필수',required.length],
+  ['advice','권장',advice.length],
+  ['news','소식',unread]]){
   const button=document.createElement('button');button.type='button';
   button.className='pr-secretary-filter'+(secretaryFilter===key?' active':'');
   button.textContent=label+' '+count;
   button.setAttribute('aria-pressed',String(secretaryFilter===key));
-  button.onclick=()=>{secretaryFilter=key;window.renderOffice?.();};
+  button.onclick=()=>{secretaryFilter=key;window.PentaOfficeLayout?.apply?.();};
   filters.append(button);
  }
  aside.append(filters);
- if(secretaryFilter!=='advice'&&required.length){
-  const label=document.createElement('strong');label.className='pr-secretary-group-label';label.textContent='처리할 업무';
-  display.push(label,...required.map(addItem));
+ if(secretaryFilter==='news'){
+  const actions=document.createElement('div');actions.className='pr-secretary-inbox-actions';
+  const heading=document.createElement('strong');heading.textContent='리그 소식';
+  const markAll=document.createElement('button');markAll.type='button';markAll.textContent='모두 읽음';
+  markAll.disabled=unread===0;
+  markAll.onclick=()=>{
+   mail?.markSeen?.(game,recent);
+   if(typeof persist==='function')persist();
+   window.PentaOfficeLayout?.apply?.();
+  };
+  actions.append(heading,markAll);list.append(actions);
+  if(!recent.length){
+   const empty=document.createElement('p');empty.className='pr-secretary-no-news';empty.textContent='최근 리그 소식이 없습니다.';list.append(empty);
+  }else{
+   for(const item of recent){
+    const button=document.createElement('button');button.type='button';
+    button.className='pr-secretary-news'+(item.unread?' is-unread':'');
+    const meta=document.createElement('span');meta.textContent=item.label+' · '+item.meta;
+    const title=document.createElement('strong');title.textContent=item.title;
+    button.append(meta,title);
+    button.onclick=()=>{
+     mail?.markSeen?.(game,[item]);if(typeof persist==='function')persist();
+     secretaryOpenRoute('news');
+    };
+    list.append(button);
+   }
+  }
+  const seeNews=document.createElement('button');seeNews.type='button';seeNews.className='pr-secretary-see-news';
+  seeNews.textContent='뉴스 전체 보기';seeNews.onclick=()=>secretaryOpenRoute('news');
+  list.append(seeNews);
+ }else{
+  if(secretaryFilter!=='advice'&&required.length){
+   const heading=document.createElement('strong');heading.className='pr-secretary-group-label';heading.textContent='처리할 업무';
+   list.append(heading,...required.map(appendTask));
+  }
+  if(secretaryFilter!=='required'&&advice.length){
+   const heading=document.createElement('strong');heading.className='pr-secretary-group-label';heading.textContent='비서 권장';
+   list.append(heading,...advice.map(appendTask));
+  }
+  if(!list.childElementCount){
+   const empty=document.createElement('div');empty.className='pr-secretary-empty';
+   const name=document.createElement('strong');name.textContent=secretaryFilter==='advice'?'현재 권장 업무 없음':'처리할 업무 없음';
+   const detail=document.createElement('span');detail.textContent='새로운 결정이 필요하면 여기에 표시됩니다.';
+   empty.append(name,detail);list.append(empty);
+  }
  }
- if(secretaryFilter!=='required'&&advice.length){
-  const label=document.createElement('strong');label.className='pr-secretary-group-label';label.textContent='비서 권장';
-  display.push(label,...advice.map(addItem));
+ aside.append(list);
+ // Safe weekly settings: configure the existing automatic-week policy, never execute it.
+ if(secretaryFilter!=='news'&&typeof window.ManagementUI?.program==='function'){
+  const details=document.createElement('details');details.className='pr-secretary-training';
+  details.open=secretaryTrainingExpanded;
+  details.addEventListener('toggle',()=>{secretaryTrainingExpanded=details.open;});
+  const heading=document.createElement('summary');heading.textContent='자동 진행 훈련 설정';details.append(heading);
+  const content=document.createElement('div');content.className='pr-secretary-training-content';
+  const programs=typeof TLM_WEEKLY_PROGRAMS==='undefined'?[]:TLM_WEEKLY_PROGRAMS;
+  const control=document.createElement('label');control.textContent='훈련 프로그램';
+  const select=document.createElement('select');select.setAttribute('aria-label','훈련 프로그램');
+  for(const p of programs){
+   if(!p||!['tactics','power','scrimmage','recovery'].includes(p.id))continue;
+   const option=document.createElement('option');option.value=p.id;option.textContent=p.title;
+   select.append(option);
+  }
+  select.value=game.management?.program||'tactics';
+  select.onchange=()=>{secretaryTrainingExpanded=true;window.ManagementUI?.program?.(select.value);};
+  control.append(select);content.append(control);
+  const recovery=document.createElement('label');recovery.className='pr-secretary-recovery';
+  const checkbox=document.createElement('input');checkbox.type='checkbox';
+  checkbox.checked=game.management?.autoRecovery!==false;
+  checkbox.onchange=()=>{secretaryTrainingExpanded=true;window.ManagementUI?.recovery?.(checkbox.checked);};
+  recovery.append(checkbox,document.createTextNode('피로 45 이상이면 회복'));
+  content.append(recovery);
+  const note=document.createElement('p');note.textContent='다음 중요 일정까지 자동 진행할 때 적용됩니다.';
+  content.append(note);details.append(content);aside.append(details);
  }
- if(!display.length){
-  const empty=document.createElement('div');empty.className='pr-secretary-empty';
-  const headline=document.createElement('strong');headline.textContent=secretaryFilter==='advice'?'추가 권장 사항 없음':'처리할 업무 없음';
-  const hint=document.createElement('span');hint.textContent='새로운 결정이 필요하면 이곳에 표시됩니다.';
-  empty.append(headline,hint);display.push(empty);
- }
- list.append(...display);aside.append(list);
  if(upcoming){
   const footer=document.createElement('div');footer.className='pr-secretary-next';
-  const eyebrow=document.createElement('strong');eyebrow.textContent='다음 경기';
-  const info=document.createElement('span');info.textContent=upcoming.label;
-  const details=document.createElement('span');details.textContent=upcoming.detail;
-  const button=document.createElement('button');button.type='button';
-  button.textContent='일정 확인';
-  button.onclick=()=>{
-   if(upcoming.action==='match')window.MatchdayPreparation?.render?.();
-   else window.setTab?.(upcoming.action);
-  };
-  footer.append(eyebrow,info,details,button);aside.append(footer);
+  const heading=document.createElement('strong');heading.textContent='다음 경기';
+  const event=document.createElement('span');event.textContent=upcoming.label;
+  const detail=document.createElement('span');detail.textContent=upcoming.detail;
+  const button=document.createElement('button');button.type='button';button.textContent='일정 확인';
+  button.onclick=()=>secretaryOpenRoute(upcoming.action);
+  footer.append(heading,event,detail,button);aside.append(footer);
  }
  return aside;
 }
@@ -442,7 +522,7 @@ function apply(){
  panel.after(secretaryView());
  removeOldPreview();
 }
-const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=secretary-v2-12';document.head.append(css);
+const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=assistant-inbox-13';document.head.append(css);
 const previous=window.renderOffice;
 if(typeof previous==='function')window.renderOffice=function(...args){
  const value=previous.apply(this,args);
@@ -456,11 +536,20 @@ const previousSetTab=window.setTab;
 if(typeof previousSetTab==='function'){
  window.setTab=function(...args){newsActive=false;return previousSetTab.apply(this,args);};
 }
-window.PentaOfficeLayout={apply,removeOldPreview};
+window.PentaOfficeLayout={apply,removeOldPreview,openNews:()=>{
+ newsActive=true;newsFilter='all';newsMode='all';
+ apply();
+}};
 removeOldPreview();apply();
+/* Saved secretary inbox, advice reminders and read-state helpers. */
+const inboxScript=document.createElement('script');inboxScript.async=false;
+inboxScript.src='assets/penta-secretary-inbox.js?v=1';
+inboxScript.onload=()=>{if(typeof game!=='undefined'&&game)window.PentaOfficeLayout?.apply?.();};
+document.body.append(inboxScript);
+
 /* Load the assistant's read-only task source before first view. */
 const secretaryScript=document.createElement('script');secretaryScript.async=false;
-secretaryScript.src='assets/penta-secretary-tasks.js?v=2';
+secretaryScript.src='assets/penta-secretary-tasks.js?v=3';
 secretaryScript.onload=()=>{if(typeof game!=='undefined'&&game)window.PentaOfficeLayout?.apply?.();};
 document.body.append(secretaryScript);
 

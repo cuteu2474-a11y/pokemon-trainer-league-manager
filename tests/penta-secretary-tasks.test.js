@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../assets/penta-secretary-tasks.js';
+import '../assets/penta-secretary-inbox.js';
 const build=globalThis.PentaSecretaryTasks.build;
 const trainer=(name,pokemonCount=6)=>({name,pokemon:Array.from({length:pokemonCount},(_,i)=>({name:'P'+i}))});
 const base=()=>({game:{season:1,week:2,aiOffers:[]},club:{trainers:[0,1,2,3,4].map(i=>trainer('T'+i)),reserveTrainers:[],trainerAcademy:[]}});
@@ -64,4 +65,39 @@ test('pending match is a current fixture rather than a second recommendation',()
  const {game,club}=base();game.pendingMatch={phase:'prepare'};
  assert.equal(globalThis.PentaSecretaryTasks.agenda(game).action,'match');
  assert.equal(globalThis.PentaSecretaryTasks.suggest(game,club).length,0);
+});
+
+test('recommended work can be deferred for two game weeks without hiding required work',()=>{
+ const api=globalThis.PentaSecretaryInbox;
+ const {game,club}=base();game.week=4;game.round=0;club.fatigue=60;
+ const advice=globalThis.PentaSecretaryTasks.suggest(game,club);
+ const fatigue=advice.find(t=>t.id==='fatigue');
+ assert.ok(fatigue&&!fatigue.urgent);
+ assert.equal(api.defer(game,fatigue,2),true);
+ assert.ok(!api.visibleAdvice(game,advice).some(t=>t.id==='fatigue'));
+ assert.equal(api.defer(game,{id:'match',urgent:true},2),false);
+ game.week=6;
+ assert.ok(api.visibleAdvice(game,advice).some(t=>t.id==='fatigue'));
+});
+test('news unread state survives save roundtrip, including reindexed news IDs',()=>{
+ const api=globalThis.PentaSecretaryInbox;
+ const {game}=base();
+ const a={id:'club:1',kind:'coach',title:'김감독 취임',meta:'1시즌',description:'금빛시티'};
+ const b={...a,id:'club:0'};
+ assert.equal(api.unreadCount(game,[a]),1);
+ api.markSeen(game,[a]);
+ const loaded=JSON.parse(JSON.stringify(game));
+ assert.equal(api.unreadCount(loaded,[b]),0);
+ assert.equal(api.recent(loaded,[b])[0].unread,false);
+ assert.equal(api.unreadCount(loaded,[{...a,title:'다른 소식'}]),1);
+});
+test('snoozing a suggestion does not change actual team state or progress',()=>{
+ const api=globalThis.PentaSecretaryInbox;
+ const {game,club}=base();game.week=3;club.morale=23;
+ const before=JSON.stringify(club);
+ const task=globalThis.PentaSecretaryTasks.suggest(game,club).find(t=>t.id==='morale');
+ api.defer(game,task,1);
+ assert.equal(JSON.stringify(club),before);
+ assert.equal(game.week,3);
+ assert.ok(api.visibleAdvice(game,[task]).length===0);
 });
