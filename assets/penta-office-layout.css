@@ -218,3 +218,38 @@
  #dashboard.pr-office .pr-manager-ability-stats>.pr-manager-stat{min-height:80px;padding:11px;font-size:12px}
  #dashboard.pr-office .pr-manager-ability-stats>.pr-manager-stat strong{font-size:20px}
 }
+
+/* Clean weekly operations: no legacy home feeds, AI manager news, operating guide or activity log. */
+#dashboard.pr-office>.dashpanel.pr-weekly-view{min-height:0}
+#dashboard.pr-office .pr-weekly-workspace{display:flex;flex-direction:column;gap:18px;min-width:0;width:100%}
+#dashboard.pr-office .pr-weekly-title h2{color:#fff;font-size:22px;margin:0}
+#dashboard.pr-office .pr-weekly-scoreboard{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:100%}
+#dashboard.pr-office .pr-weekly-score{display:flex;flex-direction:column;min-width:0;gap:9px;padding:18px;border:1px solid #396c94;border-radius:10px;background:linear-gradient(145deg,#173d5d,#0f2946)}
+#dashboard.pr-office .pr-weekly-score-label{font-size:13px;font-weight:750;color:#c2e4f8}
+#dashboard.pr-office .pr-weekly-score-value{font-size:25px;font-weight:800;color:#fff}
+#dashboard.pr-office .pr-weekly-score-note{font-size:13px;line-height:1.4;color:#b4d6e9;overflow-wrap:anywhere}
+#dashboard.pr-office .pr-weekly-settings{min-width:0;width:100%}
+#dashboard.pr-office .pr-weekly-settings .management-policy{display:flex;flex-direction:column;gap:16px;width:100%;margin:0;padding:24px;box-sizing:border-box;background:linear-gradient(145deg,#133553,#0b2643);border:1px solid #396c94;border-radius:11px}
+#dashboard.pr-office .pr-weekly-settings .management-policy h3{font-size:18px;color:#fff;margin:0}
+#dashboard.pr-office .pr-weekly-settings .management-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0}
+#dashboard.pr-office .pr-weekly-settings .management-controls label{display:flex;flex-direction:column;justify-content:center;gap:10px;min-width:0;font-size:14px;color:#dcefff;font-weight:750}
+#dashboard.pr-office .pr-weekly-settings .management-controls label:has(input[type="checkbox"]){flex-direction:row;align-items:center;justify-content:flex-start;padding:12px;border-radius:8px;background:#133b56;border:1px solid #356786;gap:12px}
+#dashboard.pr-office .pr-weekly-settings .management-controls select{box-sizing:border-box;width:100%;min-width:0;min-height:45px;padding:9px 12px;border:1px solid #5a91b2;background:#091e35;color:#f4faff;border-radius:8px;font-size:13px}
+#dashboard.pr-office .pr-weekly-settings .management-controls:has(button){display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:12px}
+#dashboard.pr-office .pr-weekly-settings .management-controls button{min-height:40px;padding:9px 15px;font-size:13px}
+#dashboard.pr-office .pr-weekly-settings .management-policy>[role="status"]{font-size:14px;line-height:1.5;color:#ffe3a2;border-left:3px solid #e6b65f;padding:10px;background:#483c2b;margin:0}
+#dashboard.pr-office .pr-weekly-decision{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:13px 16px;border:1px solid #c39b5e;background:#493724;border-radius:8px;color:#fff}
+#dashboard.pr-office .pr-weekly-decision strong{font-size:14px;line-height:1.4}
+#dashboard.pr-office .pr-weekly-decision-button{border:1px solid #ddbd75;border-radius:7px;background:#75572c;color:#fff;padding:9px 15px;font-size:13px;font-weight:750;cursor:pointer}
+@media(max-width:900px){
+ #dashboard.pr-office .pr-weekly-settings .management-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #dashboard.pr-office .pr-weekly-scoreboard{gap:9px}
+ #dashboard.pr-office .pr-weekly-score{padding:13px}
+}
+@media(max-width:650px){
+ #dashboard.pr-office .pr-weekly-workspace{gap:12px}
+ #dashboard.pr-office .pr-weekly-scoreboard{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #dashboard.pr-office .pr-weekly-settings .management-policy{padding:14px}
+ #dashboard.pr-office .pr-weekly-settings .management-controls{grid-template-columns:minmax(0,1fr)}
+ #dashboard.pr-office .pr-weekly-score-value{font-size:21px}
+}
