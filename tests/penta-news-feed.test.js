@@ -28,6 +28,6 @@ test('completed draws, zero scores and transfer records are displayed',()=>{
  assert.match(n.find(x=>x.kind==='transfer').meta,/6주차/);
 });
 test('unconfirmed match results and out-of-division matches are excluded',()=>{
- const g=sample();g.results=[[{home:1,away:2},{home:2,away:3,aScore:5,bScore:0}]];
+ const g=sample();g.results=[[{home:1,away:2},{home:1,away:2,aScore:null,bScore:null},{home:2,away:3,aScore:5,bScore:0}]];
  assert.equal(build(g,a).filter(n=>n.kind==='match').length,0);
 });

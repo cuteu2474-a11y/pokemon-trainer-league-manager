@@ -3,7 +3,7 @@
 'use strict';
 if(root.PentaNewsFeed)return;
 const kinds={match:'경기',transfer:'이적',club:'구단'};
-const safeNumber=v=>Number.isFinite(Number(v))?Number(v):null;
+const safeNumber=v=>v===null||v===undefined||(typeof v==='string'&&!v.trim())?null:Number.isFinite(Number(v))?Number(v):null;
 const maxRows=(n,cap)=>Math.max(0,Math.min(cap,Number(n)||0));
 function build(game,club){
  if(!game||!Array.isArray(game.clubs))return [];
