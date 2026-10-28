@@ -1,5 +1,7 @@
 # 개발 작업 목록
 
+> **최신 인수인계(2026-10-28):** [DEVELOPMENT_HANDOFF.md](DEVELOPMENT_HANDOFF.md). 최신 코드 상태, 트레이너 AI 우선순위, 미검증 항목을 먼저 확인하세요. 아래 2026-10-27 작업 기록은 당시 상태로 유지합니다.
+
 기준일: 2026년 10월 27일  
 코드 검토 기준: [edd392a](https://github.com/cuteu2474-a11y/pokemon-trainer-league-manager/commit/edd392ac6fca82d1136b4b5d13960bfa3ced36de)
 

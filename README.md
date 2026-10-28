@@ -14,6 +14,7 @@
 
 | 문서 | 내용 |
 | --- | --- |
+| [최신 개발 인수인계](docs/DEVELOPMENT_HANDOFF.md) | 2026-10-28 코드 기준, 트레이너 AI 우선순위·미검증 항목·이어받기 지침 |
 | [개발 작업 목록](docs/DEVELOPMENT_TODO.md) | 개발 순서, 수정 사항, 상세 구현 계획, 완료 기준, 확정 규칙 |
 | [게임 개요](docs/GAME_DESIGN.md) | 단장의 역할과 게임 진행 구조 |
 | [구현 현황](docs/ui-integration-status.md) | 현재 연결된 기능과 남은 차이 |
