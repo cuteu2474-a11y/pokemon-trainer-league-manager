@@ -435,3 +435,14 @@
  #dashboard.pr-office .pr-secretary-filter{font-size:11px}
  #dashboard.pr-office .pr-secretary-task-main{padding:10px}
 }
+
+/* Secretary: state-driven briefing, trainer targeting and pinned decisions. */
+#dashboard.pr-office .pr-secretary-briefing{padding:12px;border-bottom:1px solid #3a6380;display:flex;flex-direction:column;gap:10px}
+#dashboard.pr-office .pr-secretary-briefing>strong{font-size:15px;color:#fff}
+#dashboard.pr-office .pr-secretary-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#dashboard.pr-office .pr-secretary-metric{display:flex;flex-direction:column;gap:6px;min-width:0;padding:10px;background:#153753;border:1px solid #3b6686;border-radius:7px}
+#dashboard.pr-office .pr-secretary-metric span{font-size:13px;color:#c7dfef}
+#dashboard.pr-office .pr-secretary-metric strong{font-size:16px;line-height:1.3;color:#fff;overflow-wrap:anywhere}
+#dashboard.pr-office .pr-secretary-pin{background:#294558;color:#e3f3fa;border:1px solid #61849d}
+#dashboard.pr-office .pr-secretary-pin[aria-pressed=true]{background:#68532b;color:#ffebbb;border-color:#d6b875}
+#dashboard.pr-office .pr-secretary-quick-recovery{font:inherit;font-size:13px;font-weight:750;min-height:39px;width:100%;border-radius:7px;border:1px solid #8ac9b4;background:#235c4d;color:#f0fff9;padding:9px;cursor:pointer}

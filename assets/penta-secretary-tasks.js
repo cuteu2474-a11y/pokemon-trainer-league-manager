@@ -90,5 +90,25 @@ function suggest(game,club){
  }
  return advice.sort((a,b)=>b.priority-a.priority);
 }
-root.PentaSecretaryTasks={build,suggest,agenda};
+
+function briefing(game,club){
+ if(!game||!club)return null;
+ const season=n(game.season)||1,week=n(game.week)||1;
+ const done=list(game.weeklyPrograms).find(p=>Number(p?.season)===season&&Number(p?.week)===week);
+ const fatigue=Number(club.fatigue),morale=Number(club.morale);
+ return {ready:list(club.trainers).filter(t=>t&&list(t.pokemon).length===6).length,
+  fatigue:Number.isFinite(fatigue)?Math.round(fatigue):null,
+  morale:Number.isFinite(morale)?Math.round(morale):null,
+  activity:done?String(done.title||'완료'):'미실행'};
+}
+function trainingTargets(club){
+ if(!club)return [];
+ const members=[...list(club.trainers).map((t,i)=>({t,i,group:'주전'})),
+  ...list(club.reserveTrainers).map((t,i)=>({t,i,group:'후보'}))];
+ return members.filter(x=>x.t).map(({t,i,group})=>({
+  id:String(t.uid??('legacy:'+t.id+':'+t.name)),
+  label:group+' '+(i+1)+' · '+String(t.name||'트레이너')
+ }));
+}
+root.PentaSecretaryTasks={build,suggest,agenda,briefing,trainingTargets};
 })(typeof window==='undefined'?globalThis:window);

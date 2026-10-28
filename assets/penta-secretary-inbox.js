@@ -11,12 +11,12 @@ function clock(game){
 }
 function read(game){
  const s=obj(game?.secretaryInbox);
- return {snoozed:obj(s.snoozed),seen:arr(s.seen)};
+ return {snoozed:obj(s.snoozed),seen:arr(s.seen),pinned:arr(s.pinned)};
 }
 function store(game){
  if(!game||typeof game!=='object')return null;
  const current=read(game);
- game.secretaryInbox={version:1,snoozed:{...current.snoozed},seen:[...current.seen]};
+ game.secretaryInbox={version:2,snoozed:{...current.snoozed},seen:[...current.seen],pinned:[...current.pinned]};
  return game.secretaryInbox;
 }
 // Advisory tasks can be deferred. Required tasks are never snoozable.
@@ -65,5 +65,19 @@ function markSeen(game,items){
  s.seen=[...before].slice(-220);
  return s.seen.length;
 }
-root.PentaSecretaryInbox={clock,read,defer,visibleAdvice,key,recent,unreadCount,markSeen};
+
+function pinned(game,id){return read(game).pinned.includes(id);}
+function togglePinned(game,task){
+ if(!game||!task?.id)return false;
+ const s=store(game),set=new Set(s.pinned);
+ if(set.has(task.id))set.delete(task.id);else set.add(task.id);
+ s.pinned=[...set].slice(-40);
+ return set.has(task.id);
+}
+function order(game,tasks){
+ const p=new Set(read(game).pinned);
+ return arr(tasks).slice().sort((a,b)=>Number(p.has(b.id))-Number(p.has(a.id))||
+  (Number(b.priority)||0)-(Number(a.priority)||0));
+}
+root.PentaSecretaryInbox={clock,read,defer,visibleAdvice,key,recent,unreadCount,markSeen,pinned,togglePinned,order};
 })(typeof window==='undefined'?globalThis:window);

@@ -101,3 +101,26 @@ test('snoozing a suggestion does not change actual team state or progress',()=>{
  assert.equal(game.week,3);
  assert.ok(api.visibleAdvice(game,[task]).length===0);
 });
+
+test('briefing reflects real gameplay and target chooser uses ManagementUI identity',()=>{
+ const {game,club}=base();club.fatigue=52;club.morale=70;
+ game.weeklyPrograms=[{season:1,week:2,title:'전술 분석'}];
+ const before=JSON.stringify({game,club});
+ const report=globalThis.PentaSecretaryTasks.briefing(game,club);
+ assert.equal(report.ready,5);assert.equal(report.fatigue,52);
+ assert.equal(report.morale,70);assert.equal(report.activity,'전술 분석');
+ const targets=globalThis.PentaSecretaryTasks.trainingTargets(club);
+ assert.equal(targets.length,5);assert.equal(targets[0].id,'legacy:undefined:T0');
+ assert.equal(JSON.stringify({game,club}),before);
+});
+test('pins survive save, reorder pending work, and never finish tasks',()=>{
+ const api=globalThis.PentaSecretaryInbox;
+ const {game,club}=base();game.week=4;
+ game.aiOffers=[{status:'pending',season:1,expires:4}];
+ const tasks=build(game,club),market=tasks.find(x=>x.id==='market');
+ assert.equal(api.togglePinned(game,market),true);
+ assert.equal(api.order(game,tasks)[0].id,'market');
+ assert.equal(api.pinned(JSON.parse(JSON.stringify(game)),'market'),true);
+ assert.equal(build(game,club).length,tasks.length);
+ assert.equal(api.togglePinned(game,market),false);
+});

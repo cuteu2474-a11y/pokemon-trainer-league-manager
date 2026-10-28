@@ -355,9 +355,12 @@ function secretaryView(){
  aside.setAttribute('aria-label','비서 업무 목록');
  const api=window.PentaSecretaryTasks,mail=window.PentaSecretaryInbox;
  const club=myClub();
- const required=api?.build?.(game,club)||[];
+ const rawRequired=api?.build?.(game,club)||[];
  const allAdvice=api?.suggest?.(game,club)||[];
- const advice=mail?.visibleAdvice?.(game,allAdvice)||allAdvice;
+ const rawAdvice=mail?.visibleAdvice?.(game,allAdvice)||allAdvice;
+ const required=mail?.order?.(game,rawRequired)||rawRequired;
+ const advice=mail?.order?.(game,rawAdvice)||rawAdvice;
+ const briefing=api?.briefing?.(game,club);
  const upcoming=api?.agenda?.(game);
  const news=window.PentaNewsFeed?.build?.(game,club)||[];
  const recent=mail?.recent?.(game,news,12)||[];
@@ -404,6 +407,13 @@ function secretaryView(){
    };
    footer.append(defer);
   }
+  if(mail){
+   const pin=document.createElement('button');pin.type='button';pin.className='pr-secretary-pin';
+   pin.textContent=mail.pinned(game,task.id)?'★ 고정됨':'☆ 고정';
+   pin.setAttribute('aria-pressed',String(mail.pinned(game,task.id)));
+   pin.onclick=()=>{mail.togglePinned(game,task);if(typeof persist==='function')persist();window.PentaOfficeLayout?.apply?.();};
+   footer.append(pin);
+  }
   row.append(footer);return row;
  };
  for(const [key,label,count] of [
@@ -419,6 +429,20 @@ function secretaryView(){
   filters.append(button);
  }
  aside.append(filters);
+ if(briefing&&secretaryFilter!=='news'){
+  const section=document.createElement('section');section.className='pr-secretary-briefing';
+  const title=document.createElement('strong');title.textContent='이번 주 브리핑';
+  const grid=document.createElement('div');grid.className='pr-secretary-metrics';
+  const values=[['출전 준비',briefing.ready+'/5'],['피로',briefing.fatigue===null?'—':briefing.fatigue+'/100'],
+    ['사기',briefing.morale===null?'—':briefing.morale+'/100'],['주간 활동',briefing.activity]];
+  for(const [key,value] of values){
+   const item=document.createElement('div');item.className='pr-secretary-metric';
+   const label=document.createElement('span');label.textContent=key;
+   const number=document.createElement('strong');number.textContent=value;
+   item.append(label,number);grid.append(item);
+  }
+  section.append(title,grid);aside.append(section);
+ }
  if(secretaryFilter==='news'){
   const actions=document.createElement('div');actions.className='pr-secretary-inbox-actions';
   const heading=document.createElement('strong');heading.textContent='리그 소식';
@@ -484,6 +508,26 @@ function secretaryView(){
   select.value=game.management?.program||'tactics';
   select.onchange=()=>{secretaryTrainingExpanded=true;window.ManagementUI?.program?.(select.value);};
   control.append(select);content.append(control);
+  const trainers=window.PentaSecretaryTasks?.trainingTargets?.(club)||[];
+  if(trainers.length){
+   const targetLabel=document.createElement('label');targetLabel.textContent='훈련 대상';
+   const target=document.createElement('select');target.setAttribute('aria-label','자동 훈련 대상');
+   const automatic=document.createElement('option');automatic.value='';automatic.textContent='전술 능력이 낮은 트레이너 우선';
+   target.append(automatic);
+   for(const trainer of trainers){
+    const item=document.createElement('option');item.value=trainer.id;item.textContent=trainer.label;target.append(item);
+   }
+   const selected=game.management?.target||'';
+   target.value=trainers.some(x=>x.id===selected)?selected:'';
+   target.onchange=()=>{secretaryTrainingExpanded=true;window.ManagementUI?.target?.(target.value);};
+   targetLabel.append(target);content.append(targetLabel);
+  }
+  if(Number(club.fatigue)>=45&&game.management?.program!=='recovery'){
+   const quick=document.createElement('button');quick.type='button';quick.className='pr-secretary-quick-recovery';
+   quick.textContent='비서 권장: 훈련을 회복으로 설정';
+   quick.onclick=()=>{secretaryTrainingExpanded=true;window.ManagementUI?.program?.('recovery');};
+   content.append(quick);
+  }
   const recovery=document.createElement('label');recovery.className='pr-secretary-recovery';
   const checkbox=document.createElement('input');checkbox.type='checkbox';
   checkbox.checked=game.management?.autoRecovery!==false;
@@ -522,7 +566,7 @@ function apply(){
  panel.after(secretaryView());
  removeOldPreview();
 }
-const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=assistant-inbox-13';document.head.append(css);
+const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=secretary-briefing-14';document.head.append(css);
 const previous=window.renderOffice;
 if(typeof previous==='function')window.renderOffice=function(...args){
  const value=previous.apply(this,args);
@@ -543,13 +587,13 @@ window.PentaOfficeLayout={apply,removeOldPreview,openNews:()=>{
 removeOldPreview();apply();
 /* Saved secretary inbox, advice reminders and read-state helpers. */
 const inboxScript=document.createElement('script');inboxScript.async=false;
-inboxScript.src='assets/penta-secretary-inbox.js?v=1';
+inboxScript.src='assets/penta-secretary-inbox.js?v=2';
 inboxScript.onload=()=>{if(typeof game!=='undefined'&&game)window.PentaOfficeLayout?.apply?.();};
 document.body.append(inboxScript);
 
 /* Load the assistant's read-only task source before first view. */
 const secretaryScript=document.createElement('script');secretaryScript.async=false;
-secretaryScript.src='assets/penta-secretary-tasks.js?v=3';
+secretaryScript.src='assets/penta-secretary-tasks.js?v=4';
 secretaryScript.onload=()=>{if(typeof game!=='undefined'&&game)window.PentaOfficeLayout?.apply?.();};
 document.body.append(secretaryScript);
 
