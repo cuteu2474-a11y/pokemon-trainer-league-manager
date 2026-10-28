@@ -85,8 +85,8 @@ test('reinforced battle analysis changes voluntary reasoning probability without
   assert.equal(experienced.profile.behaviorAdvice,null);
   baseline.chooseMove({},moves);
   experienced.chooseMove({},moves);
-  assert.ok(baseline.decisions.reasons['판단 실패 · 안전한 합법적 선택']>0);
-  assert.equal(experienced.decisions.reasons['판단 실패 · 안전한 합법적 선택']||0,0);
+  assert.ok(baseline.decisions.reasons['판단 실패 · 비슷한 선택지 중 선택']>0);
+  assert.equal(experienced.decisions.reasons['판단 실패 · 비슷한 선택지 중 선택']||0,0);
 });
 test('actual Showdown turn policy records analysis and choice reasons without changing battle laws',
   {timeout:45000},async()=>{
