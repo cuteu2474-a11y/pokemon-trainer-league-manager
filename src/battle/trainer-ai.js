@@ -49,6 +49,9 @@ export class TrainerAI extends RandomPlayerAI{
     this.foeSpecies=null;
     this.foeStatus='';
     this.opponentPreview=[];
+    this.foeIdentity='';
+    this.publicMoveHistory=new Map();
+    this.lastVoluntarySwitchTurn=null;
     this.team=options.team||[];
     this.ownActive=null;
     this.request=null;
@@ -80,8 +83,18 @@ export class TrainerAI extends RandomPlayerAI{
     }else if(line.startsWith('|switch|')||line.startsWith('|drag|')){
       const parts=line.split('|'),actor=parts[2]||'';
       if(actor.startsWith(foeSide)){
+        this.foeIdentity=actor;
         this.foeSpecies=(parts[3]||'').split(',')[0];
         this.foeStatus='';
+      }
+    }else if(line.startsWith('|move|')){
+      const parts=line.split('|'),actor=parts[2]||'';
+      if(actor.startsWith(foeSide)){
+        const move=Dex.moves.get(parts[3]||'');
+        if(move.exists){
+          if(!this.publicMoveHistory.has(actor))this.publicMoveHistory.set(actor,new Set());
+          this.publicMoveHistory.get(actor).add(move.id);
+        }
       }
     }else if(line.startsWith('|-status|')){
       const parts=line.split('|');
@@ -102,6 +115,16 @@ export class TrainerAI extends RandomPlayerAI{
       this.move=this.moveProbability(request);
     }
     return super.receiveRequest(request);
+  }
+  observedOpponentChoices(battle){
+    const enemySide=this.side==='p1'?'p2':'p1';
+    const seen=this.publicMoveHistory.get(this.foeIdentity);
+    const slots=battle?.[enemySide]?.active?.[0]?.moveSlots;
+    if(!seen?.size||!Array.isArray(slots))return [];
+    // Match only opponent moves that were actually revealed in public logs.
+    // Slot IDs are used to issue legal clone commands, not for move prediction.
+    return slots.flatMap((slot,i)=>
+      seen.has(slot.id)&&slot.pp>0&&!slot.disabled?['move '+(i+1)]:[]);
   }
   findOwned(pokemon,slot){
     const label=(pokemon?.ident||'').split(': ').slice(1).join(': ');
@@ -170,6 +193,9 @@ export class TrainerAI extends RandomPlayerAI{
     const danger=Math.max(...foeTypes.map(type=>typeMultiplier(type,ownTypes)));
     const immediate=Math.max(...ownTypes.map(type=>typeMultiplier(type,foeTypes)));
     const mismatch=danger>=2&&immediate<=1;
+    const liveBattle=this.battleProvider?.();
+    if(this.lastVoluntarySwitchTurn!==null&&Number.isInteger(liveBattle?.turn)&&
+      liveBattle.turn<=this.lastVoluntarySwitchTurn+1)return 1;
     // Switching without a safer living replacement wastes a full turn.
     const counter=bench.some(mon=>{
       const species=Dex.species.get(mon.details?.split(',')[0]||mon.ident?.split(': ').slice(1).join(': ')||'');
@@ -192,6 +218,15 @@ export class TrainerAI extends RandomPlayerAI{
     if(this.remaining>1&&health<.45&&danger>=2)chance+=.035*traitValue(this.profile,'preserve');
     if(counter&&mismatch)chance+=.19;
     if(!counter)chance*=health<.24?.55:.16;
+    // Experienced trainers decisively take a clearly favorable counter,
+    // except immediately after their last voluntary switch.
+    if(this.skill.switching===20&&this.profile.switchSkill>=19&&mismatch&&counter){
+      const activeSlot=request.side.pokemon.findIndex(mon=>mon.active);
+      const current=this.candidateScore(active,activeSlot+1,foeTypes);
+      const best=Math.max(...request.side.pokemon.map((mon,i)=>
+        mon.active?-1e6:this.candidateScore(mon,i+1,foeTypes)));
+      if(best>current+22)return 0;
+    }
     return 1-limit(chance,0,counter?.76:.28);
   }
   preference(move,battle){
@@ -282,8 +317,13 @@ export class TrainerAI extends RandomPlayerAI{
       try{
         const choices=moves.map(x=>x.choice).filter(x=>/^move [1-4](?:$|\s)/.test(x));
         const {depth,samples}=searchBudget(this.profile.analysis);
+        const revealed=this.observedOpponentChoices(battle);
+        // Assess every revealed counter at least twice when affordable.
+        const count=revealed.length&&this.profile.analysis>=18?
+          Math.min(8,Math.max(4,revealed.length*2)):Math.min(samples+(insight?1:0),4);
         const ranked=rolloutActions(battle,{
-          sideId:this.side,choices,depth,samples:Math.min(samples+(insight?1:0),4),
+          sideId:this.side,choices,depth,samples:count,
+          ...(revealed.length?{opponentChoices:revealed}:{}),
         });
         for(const candidate of ranked){
           const index=Number(candidate.choice.split(' ')[1])-1;
@@ -351,7 +391,11 @@ export class TrainerAI extends RandomPlayerAI{
   }
   chooseSwitch(active,switches){
     this.decisions.switches++;
-    if(active!==undefined)this.decisions.voluntarySwitches++;
+    if(active!==undefined){
+      this.decisions.voluntarySwitches++;
+      const turn=this.battleProvider?.()?.turn;
+      if(Number.isInteger(turn))this.lastVoluntarySwitchTurn=turn;
+    }
     if(!switches.length)return super.chooseSwitch(active,switches);
     const foe=Dex.species.get(this.foeSpecies||'');
     const foeTypes=foe.exists?foe.types:[];

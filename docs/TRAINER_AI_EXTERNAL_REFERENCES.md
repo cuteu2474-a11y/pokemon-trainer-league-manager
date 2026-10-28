@@ -30,3 +30,16 @@ engines cannot be dropped in without changing these game rules.
   rollout outcome, with an explicit risk budget.
 - The search never changes Pokémon stats, Showdown legality, or battle rules.
 - Keep the upstream MIT attribution with any future direct source reuse.
+
+## Applied in the next trainer-AI integration
+- Observed opponent moves (from public Showdown battle log) are recorded by
+  active Pokémon identity. Once revealed, the opponent-response rollout
+  simulates only those shown moves and compares **mean payoff per reply**.
+- The worst-response mean is used instead of a single unlucky low roll.
+  A status ailment is modestly priced into the search state evaluation.
+- Trainers with switching skill 20 can commit to an obvious strong counter
+  instead of leaving every such decision to a coin flip. A one-turn cooldown
+  avoids rapid back-and-forth switching.
+- Unrevealed opponent moves are **still approximated by the existing cloned
+  battle fallback**. This is not yet a fully information-safe search engine;
+  replacement with sampled public-species movesets remains future work.

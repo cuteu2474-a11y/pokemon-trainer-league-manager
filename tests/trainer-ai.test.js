@@ -97,3 +97,29 @@ test('highest tactical skill always uses deliberate reasoning regardless of RNG 
  assert.equal(choice,'move 2');
  assert.equal(ai.decisions.reasons['판단 실패 · 비슷한 선택지 중 선택']||0,0);
 });
+
+test('observed opponent response search never includes unrevealed move slots',()=>{
+ const ai=new TrainerAI({}, {tactics:20,switching:20},{seed:[1,2,3,4]});
+ ai.side='p1';ai.receiveLine('|switch|p2a: 수룡|Blastoise, L50|100/100');
+ ai.receiveLine('|move|p2a: 수룡|Surf|p1a: Pikachu');
+ const battle={p2:{active:[{moveSlots:[
+  {id:'surf',pp:10},{id:'icebeam',pp:10},{id:'toxic',pp:10}
+ ]}]}};
+ assert.deepEqual(ai.observedOpponentChoices(battle),['move 1']);
+ ai.receiveLine('|move|p2a: 수룡|Ice Beam|p1a: Pikachu');
+ assert.deepEqual(ai.observedOpponentChoices(battle),['move 1','move 2']);
+});
+test('expert switch cooldown prevents repeated immediate counter switches',()=>{
+ const battle={turn:5};
+ const ai=new TrainerAI({}, {tactics:20,switching:20,moveJudgment:20,switchJudgment:20},{
+  seed:[1,2,3,4],battleProvider:()=>battle,team:[
+   {species:'Pikachu',name:'빠른돌',moves:['thunderbolt']},
+   {species:'Togekiss',name:'비행군',moves:['dazzlinggleam']}
+  ]});
+ ai.ownActive=ai.team[0];ai.foeSpecies='Garchomp';
+ ai.lastVoluntarySwitchTurn=5;
+ assert.equal(ai.moveProbability({side:{pokemon:[
+  {active:true,details:'Pikachu',ident:'p1: 빠른돌',condition:'80/100'},
+  {active:false,details:'Togekiss',ident:'p1: 비행군',condition:'100/100'}
+ ]}}),1);
+});
