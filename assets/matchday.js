@@ -2335,3 +2335,12 @@
   script.async=false;
   document.body.append(script);
 })();
+
+/* Approved Penta Rivals office redesign loader. */
+(function loadPentaOfficeLayout(){
+  if(typeof document==='undefined'||!document.body||window.PentaOfficeLayout)return;
+  const script=document.createElement('script');
+  script.src='assets/penta-office-layout.js';
+  script.async=false;
+  document.body.appendChild(script);
+})();
