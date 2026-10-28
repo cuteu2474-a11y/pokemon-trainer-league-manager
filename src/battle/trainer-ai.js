@@ -66,6 +66,7 @@ export class TrainerAI extends RandomPlayerAI{
     this.opponentPreview=[];
     this.foeIdentity='';
     this.publicMoveHistory=new Map();
+    this.publicOpponentKnowledge=new Map();
     this.lastVoluntarySwitchTurn=null;
     this.preferredSwitchSlot=null;
     this.lastActionComparison=null;
@@ -90,34 +91,56 @@ export class TrainerAI extends RandomPlayerAI{
   }
   receiveLine(line){
     const foeSide=this.side==='p1'?'p2':'p1';
+    const parts=line.split('|'),actor=parts[2]||'';
+    const known=()=>{
+      if(!this.publicOpponentKnowledge.has(actor))
+        this.publicOpponentKnowledge.set(actor,{moveUses:new Map()});
+      return this.publicOpponentKnowledge.get(actor);
+    };
     if(line.startsWith('|poke|')){
-      const parts=line.split('|');
       if(parts[2]===foeSide){
         const species=(parts[3]||'').split(',')[0];
         if(Dex.species.get(species).exists&&!this.opponentPreview.includes(species))
           this.opponentPreview.push(species);
       }
     }else if(line.startsWith('|switch|')||line.startsWith('|drag|')){
-      const parts=line.split('|'),actor=parts[2]||'';
       if(actor.startsWith(foeSide)){
         this.foeIdentity=actor;
         this.foeSpecies=(parts[3]||'').split(',')[0];
         this.foeStatus='';
       }
     }else if(line.startsWith('|move|')){
-      const parts=line.split('|'),actor=parts[2]||'';
       if(actor.startsWith(foeSide)){
         const move=Dex.moves.get(parts[3]||'');
         if(move.exists){
           if(!this.publicMoveHistory.has(actor))this.publicMoveHistory.set(actor,new Set());
           this.publicMoveHistory.get(actor).add(move.id);
+          const usage=known().moveUses;
+          usage.set(move.id,(usage.get(move.id)||0)+1);
         }
       }
+    }else if(actor.startsWith(foeSide)&&line.startsWith('|-item|')){
+      const item=Dex.items.get(parts[3]||'');
+      if(item.exists)known().item=item.id;
+    }else if(actor.startsWith(foeSide)&&line.startsWith('|-enditem|')){
+      known().item='';
+    }else if(actor.startsWith(foeSide)&&line.startsWith('|-endability|')){
+      known().ability='';
+    }else if(actor.startsWith(foeSide)&&(
+      line.startsWith('|-ability|')||line.startsWith('|-activate|')||
+      line.startsWith('|-immune|')||line.startsWith('|-start|'))){
+      const itemText=parts.slice(3).find(part=>/^\[from\] item: |^item: /i.test(part));
+      if(itemText){
+        const item=Dex.items.get(itemText.replace(/^\[from\] /i,'').replace(/^item: /i,''));
+        if(item.exists)known().item=item.id;
+      }
+      const text=parts.slice(3).find(part=>/^\[from\] ability: |^ability: /i.test(part))||
+        (line.startsWith('|-ability|')?parts[3]:'');
+      const ability=Dex.abilities.get(text.replace(/^\[from\] /i,'').replace(/^ability: /i,''));
+      if(ability.exists)known().ability=ability.id;
     }else if(line.startsWith('|-status|')){
-      const parts=line.split('|');
       if((parts[2]||'').startsWith(foeSide))this.foeStatus=parts[3]||'';
     }else if(line.startsWith('|-curestatus|')){
-      const parts=line.split('|');
       if((parts[2]||'').startsWith(foeSide))this.foeStatus='';
     }
     return super.receiveLine(line);
@@ -138,10 +161,15 @@ export class TrainerAI extends RandomPlayerAI{
     const seen=this.publicMoveHistory.get(this.foeIdentity);
     const slots=battle?.[enemySide]?.active?.[0]?.moveSlots;
     if(!seen?.size||!Array.isArray(slots))return [];
+    const usage=this.publicOpponentKnowledge.get(this.foeIdentity)?.moveUses;
     // Match only opponent moves that were actually revealed in public logs.
-    // Slot IDs are used to issue legal clone commands, not for move prediction.
-    return slots.flatMap((slot,i)=>
-      seen.has(slot.id)&&slot.pp>0&&!slot.disabled?['move '+(i+1)]:[]);
+    // Hidden PP/disable flags are not part of the player's observation.
+    // Slot IDs merely map a known name to a legal command in the blind clone.
+    return slots.flatMap((slot,i)=>{
+      const move=Dex.moves.get(slot.id);
+      const maxpp=move.noPPBoosts||move.id==='trumpcard'?move.pp:Math.floor(move.pp*8/5);
+      return seen.has(slot.id)&&maxpp>(usage?.get(slot.id)||0)?['move '+(i+1)]:[];
+    });
   }
   findOwned(pokemon,slot){
     const label=(pokemon?.ident||'').split(': ').slice(1).join(': ');
@@ -366,6 +394,10 @@ export class TrainerAI extends RandomPlayerAI{
         const ranked=rolloutActions(battle,{
           sideId:this.side,choices,depth:1,samples:count,
           opponentChoices:publicCountermoves,requirePublicChoices:true,publicOpponent:true,
+          publicOpponentKnowledge:{
+            ...this.publicOpponentKnowledge.get(this.foeIdentity),
+            moveUses:Object.fromEntries(this.publicOpponentKnowledge.get(this.foeIdentity)?.moveUses||[])
+          },
         });
         for(const candidate of ranked){
           const index=Number(candidate.choice.split(' ')[1])-1;

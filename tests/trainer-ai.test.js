@@ -159,6 +159,41 @@ test('observed opponent response search never includes unrevealed move slots',()
  ai.receiveLine('|move|p2a: 수룡|Ice Beam|p1a: Pikachu');
  assert.deepEqual(ai.observedOpponentChoices(battle),['move 1','move 2']);
 });
+
+test('public opponent knowledge tracks revealed ability, item, consumption and move uses',()=>{
+ const ai=new TrainerAI({}, {tactics:20,switching:20},{seed:[1,2,3,4]});
+ ai.receiveLine('|switch|p2a: 물뱀|Gyarados, L50|100/100');
+ ai.receiveLine('|-ability|p2a: 물뱀|Intimidate');
+ ai.receiveLine('|-item|p2a: 물뱀|Leftovers');
+ ai.receiveLine('|move|p2a: 물뱀|Tackle|p1a: Mewtwo');
+ ai.receiveLine('|move|p2a: 물뱀|Tackle|p1a: Mewtwo');
+ const info=ai.publicOpponentKnowledge.get('p2a: 물뱀');
+ assert.equal(info.ability,'intimidate');
+ assert.equal(info.item,'leftovers');
+ assert.equal(info.moveUses.get('tackle'),2);
+ ai.receiveLine('|-enditem|p2a: 물뱀|Leftovers|[from] move: Knock Off');
+ assert.equal(info.item,'');
+ ai.receiveLine('|-activate|p2a: 물뱀|ability: Lightning Rod');
+ assert.equal(info.ability,'lightningrod');
+ ai.receiveLine('|-activate|p2a: 물뱀|item: Quick Claw');
+ assert.equal(info.item,'quickclaw');
+ ai.receiveLine('|-item|p1a: 아군|Choice Specs');
+ assert.equal(info.item,'quickclaw','own-side information cannot change the opponent record');
+});
+
+test('opponent PP and disable flags remain private until public uses exhaust a move',()=>{
+ const ai=new TrainerAI({}, {tactics:20,switching:20},{seed:[1,2,3,4]});
+ ai.receiveLine('|switch|p2a: 수룡|Gyarados, L50|100/100');
+ ai.receiveLine('|move|p2a: 수룡|Tackle|p1a: Pikachu');
+ const battle={p2:{active:[{moveSlots:[{id:'splash',pp:64,disabled:false},
+  {id:'tackle',pp:0,disabled:true}]}]}};
+ assert.deepEqual(ai.observedOpponentChoices(battle),['move 2']);
+ for(let i=1;i<56;i++)ai.receiveLine('|move|p2a: 수룡|Tackle|p1a: Pikachu');
+ battle.p2.active[0].moveSlots[1].pp=12;
+ battle.p2.active[0].moveSlots[1].disabled=false;
+ assert.deepEqual(ai.observedOpponentChoices(battle),[],
+  'publicly exhausted uses, not secret battle PP, remove a forecast response');
+});
 test('expert switch cooldown prevents repeated immediate counter switches',()=>{
  const battle={turn:5};
  const ai=new TrainerAI({}, {tactics:20,switching:20,moveJudgment:20,switchJudgment:20},{

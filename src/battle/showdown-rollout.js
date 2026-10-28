@@ -1,15 +1,17 @@
 import {installEnhancementRules} from './enhancement.js';
 import {installLeagueRules} from '../core/league-rules.js';
 import {installFormHooks} from './gp-battle-stream.js';
-import {Battle} from '@pkmn/sim';
+import {Battle,Dex} from '@pkmn/sim';
 import {installLevelFreeDamage} from './level-free-damage.js';
 import {calculateLevelFreeStats} from '../core/stat-potential.js';
 
-/** Blind forecast: neutral species-derived CA and no unrevealed item/ability.
+/** Blind forecast: species-derived CA and only publicly observed item/ability.
  * Live battle data is never mutated. This is a deliberately approximate
  * possible opponent, not the actual private set passed to the trainer. */
-export function maskPrivateOpponent(clone,foeId){
-  const neutralCA={hp:100,atk:100,def:100,spa:100,spd:100,spe:100};
+export function maskPrivateOpponent(clone,foeId,{knowledge={},knownChoices=[],sampleCA=100}={}){
+  const neutralCA=Object.fromEntries(['hp','atk','def','spa','spd','spe'].map(stat=>[stat,sampleCA]));
+  const active=clone[foeId]?.active?.[0];
+  const knownSlots=new Set(knownChoices.map(choice=>Number(/^move (\d+)/.exec(choice)?.[1])-1));
   for(const mon of clone[foeId]?.pokemon||[]){
     const base=mon.species?.baseStats;
     if(!base)continue;
@@ -23,17 +25,43 @@ export function maskPrivateOpponent(clone,foeId){
     mon.maxhp=stats.hp;mon.baseMaxhp=stats.hp;
     mon.hp=hpFraction>0?Math.max(1,Math.round(stats.hp*hpFraction)):0;
     mon.speed=stats.spe;
-    mon.item='';mon.baseAbility='';mon.ability='';mon.lastItem='';
-    if(mon.itemState)mon.itemState.id='';
-    if(mon.abilityState)mon.abilityState.id='';
+    const revealed=mon===active;
+    const item=revealed&&knowledge.item!==undefined&&knowledge.item!==null?
+      Dex.items.get(knowledge.item).id:'';
+    const ability=revealed&&knowledge.ability!==undefined&&knowledge.ability!==null?
+      Dex.abilities.get(knowledge.ability).id:'';
+    mon.item=item;mon.baseAbility=ability;mon.ability=ability;mon.lastItem='';
+    if(mon.itemState)mon.itemState.id=item;
+    if(mon.abilityState)mon.abilityState.id=ability;
     // Form changes in a forecast must not restore the real hidden GP values.
     mon.leagueMeta={species:mon.species.name,nature:'Hardy',statCA:neutralCA,
       statPA:{...neutralCA}};
     if(mon.set){
-      mon.set.item='';mon.set.ability='';
+      mon.set.item=item;mon.set.ability=ability;
       const stats=['hp','atk','def','spa','spd','spe'];
       mon.set.evs=Object.fromEntries(stats.map(stat=>[stat,0]));
       mon.set.ivs=Object.fromEntries(stats.map(stat=>[stat,31]));
+    }
+    if(revealed&&knownSlots.size){
+      // The clone may hold unrevealed moves and exact PP/disable state. Neither
+      // is an observation. Use the revealed slot mapping solely for commands.
+      for(let i=0;i<(mon.moveSlots?.length||0);i++){
+        const shown=knownSlots.has(i);
+        const id=shown?mon.moveSlots[i].id:'splash';
+        const move=Dex.moves.get(id);
+        const maxpp=move.noPPBoosts||move.id==='trumpcard'?move.pp:
+          Math.floor(move.pp*8/5);
+        const uses=shown?Math.max(0,Number(knowledge.moveUses?.[id])||0):0;
+        const pp=Math.max(0,maxpp-uses);
+        for(const slot of [mon.moveSlots[i],mon.baseMoveSlots?.[i]]){
+          if(!slot)continue;
+          slot.id=move.id;slot.move=move.name;slot.pp=pp;slot.maxpp=maxpp;
+          slot.disabled=pp<=0;slot.disabledSource='';
+        }
+      }
+      if(mon.set)mon.set.moves=mon.moveSlots.map(slot=>slot.id);
+      if(!item)delete mon.volatiles.choicelock;
+      mon.maybeLocked=false;mon.maybeDisabled=false;
     }
   }
 }
@@ -74,7 +102,7 @@ export function summarizeResponses(samples=[]){
   worst:averages.length?Math.min(...averages):-Infinity};
 }
 export function rolloutActions(battle, {sideId='p1', choices, opponentChoices,
-  requirePublicChoices=false, publicOpponent=false, depth=1, samples=1} = {}) {
+  requirePublicChoices=false, publicOpponent=false, publicOpponentKnowledge={},depth=1, samples=1} = {}) {
   if (!battle?.toJSON || !Array.isArray(choices) || !choices.length) throw new TypeError('Battle and legal choices required');
   if(requirePublicChoices&&(!Array.isArray(opponentChoices)||opponentChoices.length===0))
     throw new TypeError('Revealed opponent responses required');
@@ -95,7 +123,12 @@ export function rolloutActions(battle, {sideId='p1', choices, opponentChoices,
       // Each search branch must own its log, including separate samples.
       const clone=installLevelFreeDamage(Battle.fromJSON(structuredClone(baseline)));
       installLeagueRules(clone);installFormHooks(clone);installEnhancementRules(clone);
-      if(publicOpponent)maskPrivateOpponent(clone,foeId);
+      if(publicOpponent)maskPrivateOpponent(clone,foeId,{
+        knowledge:publicOpponentKnowledge,knownChoices:opponentChoices,
+        // Every response is sampled under several possible *publicly unknown*
+        // CA values, never the true opposing GP. No extra randomness is read.
+        sampleCA:[85,100,115][Math.floor(i/Math.max(1,opponentChoices.length))%3]
+      });
       const available=legalRolloutMoves(clone,foeId);
       const known=Array.isArray(opponentChoices)?opponentChoices.filter(choice=>
         available.some(move=>move.choice===choice)):[];

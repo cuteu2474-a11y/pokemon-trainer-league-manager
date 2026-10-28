@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Battle} from '@pkmn/sim';
-import {rolloutActions,evaluateBattle} from '../src/battle/showdown-rollout.js';
+import {rolloutActions,evaluateBattle,maskPrivateOpponent} from '../src/battle/showdown-rollout.js';
 import {packGPTeam} from '../src/battle/gp-battle-stream.js';
 import {convertPokemon,injectBattleTeams} from '../src/battle/gp-adapter.js';
 const gp={hp:94,atk:0,def:31,spa:94,spd:0,spe:94};
@@ -54,9 +54,37 @@ test('blind rollout does not change when private opposing item, ability and GP s
  enemy.item='assaultvest';enemy.ability='multiscale';
  enemy.storedStats.spd*=3;enemy.baseStoredStats.spd*=3;
  enemy.storedStats.atk*=2;enemy.baseStoredStats.atk*=2;
+ enemy.moveSlots[1].pp=0;enemy.moveSlots[1].disabled=true;
  const second=rolloutActions(sim,params);
  assert.ok(first[0].runs>0);
  assert.deepEqual(second,first,'unrevealed private values cannot influence action scores');
+});
+
+test('blind prediction keeps only revealed move slots and uses public PP estimates',()=>{
+ const sim=battle();
+ const clone=Battle.fromJSON(structuredClone(sim.toJSON()));
+ maskPrivateOpponent(clone,'p2',{knownChoices:['move 2'],
+  knowledge:{moveUses:{tackle:2}},sampleCA:85});
+ const active=clone.p2.active[0];
+ assert.equal(active.moveSlots[0].id,'splash');
+ assert.equal(active.moveSlots[1].id,'tackle');
+ assert.equal(active.moveSlots[1].pp,54,'Tackle max 56 PP minus two observed uses');
+ assert.equal(active.storedStats.atk,clone.p2.pokemon[1].storedStats.atk);
+ assert.ok(active.storedStats.atk!==sim.p2.active[0].storedStats.atk);
+});
+
+test('publicly revealed opponent item and ability affect the forecast, secret ones do not',()=>{
+ const sim=battle();
+ const params={choices:['move 1'],opponentChoices:['move 2'],
+  requirePublicChoices:true,publicOpponent:true,depth:1,samples:3};
+ const neutral=rolloutActions(sim,params)[0];
+ const vested=rolloutActions(sim,{...params,
+  publicOpponentKnowledge:{item:'assaultvest'}})[0];
+ const immune=rolloutActions(sim,{...params,
+  publicOpponentKnowledge:{ability:'lightningrod'}})[0];
+ assert.ok(neutral.runs>0&&vested.runs>0&&immune.runs>0);
+ assert.ok(vested.score<neutral.score,'revealed Assault Vest mitigates our special attack');
+ assert.ok(immune.score<neutral.score,'revealed Lightning Rod blocks the Electric move');
 });
 
 test('blind rollout rejects hidden-choice fallback and multi-turn future knowledge',()=>{
