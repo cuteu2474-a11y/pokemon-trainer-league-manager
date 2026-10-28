@@ -165,7 +165,20 @@ function managerProfileView(root,club){
   const dt=document.createElement('dt');dt.textContent=label;
   const dd=document.createElement('dd');dd.textContent=value;rows.append(dt,dd);
  }
- detail.append(name,rows);card.append(detail);page.append(heading,card);return page;
+ detail.append(name,rows);
+ const setup=game.managerProfile;
+ if(setup&&setup.attributes){
+  const summary=document.createElement('section');summary.className='pr-manager-ability-summary';
+  const title=document.createElement('h3');title.textContent=setup.careerLabel+' · 감독 능력치';
+  const list=document.createElement('div');list.className='pr-manager-ability-stats';
+  const labels=[['tactics','전술 이해'],['communication','소통 능력'],['development','육성 능력'],['negotiation','협상 능력'],['organization','조직 관리']];
+  for(const [key,label] of labels){const item=document.createElement('div');const name=document.createElement('span');name.textContent=label;const num=document.createElement('strong');num.textContent=String(setup.attributes[key]??5)+'/20';item.append(name,num);list.append(item);}
+  const fame=document.createElement('div');fame.className='pr-manager-ability-stats';const fameRow=document.createElement('div');const fameLabel=document.createElement('span');fameLabel.textContent='명성';const fameValue=document.createElement('strong');fameValue.textContent=String(setup.renown??setup.initialRenown??0)+'/100';fameRow.append(fameLabel,fameValue);fame.append(fameRow);
+  summary.append(title,list,fame);detail.append(summary);
+ }else{
+  const legacy=document.createElement('p');legacy.textContent='이전 저장의 감독 능력치는 아직 설정되지 않았습니다.';legacy.className='g-muted';detail.append(legacy);
+ }
+ card.append(detail);page.append(heading,card);return page;
 }
 function patchTable(table,club){
  if(table.querySelector('th.pr-roster-heading'))return;
@@ -234,6 +247,11 @@ const oldClub=window.renderClubTrainers;
 if(typeof oldClub==='function')window.renderClubTrainers=function(...args){const r=oldClub.apply(this,args);removeOldPreview();return r;};
 window.PentaOfficeLayout={apply,removeOldPreview};
 removeOldPreview();apply();
+/* Post-club-selection player manager creation (AI personalities stay separate). */
+const setupScript=document.createElement('script');
+setupScript.src='assets/manager-creation.js?v=manager-v1';setupScript.async=false;
+document.body.append(setupScript);
+
 Promise.all([
  fetch('src/web/species-ko.json').then(r=>r.ok?r.json():{}),
  fetch('src/web/species-sprites.json').then(r=>r.ok?r.json():{})
