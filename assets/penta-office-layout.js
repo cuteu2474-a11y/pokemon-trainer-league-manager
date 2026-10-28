@@ -29,16 +29,21 @@ function removeOldPreview(){
  document.querySelectorAll('#clubtrainers .ct-trainer-card .pkm-roster-mini,#clubtrainers [data-preview-index]>.pkm-roster-mini').forEach(e=>e.remove());
 }
 function navView(selected){
- const nav=document.createElement('nav');nav.className='pr-top-navigation';nav.setAttribute('aria-label','구단 관리 메뉴');
+ const stack=document.createElement('div');stack.className='pr-navigation-stack';
+ const primary=document.createElement('nav');primary.className='pr-top-navigation pr-primary-navigation';primary.setAttribute('aria-label','주요 구단 메뉴');
+ const secondary=document.createElement('nav');secondary.className='pr-secondary-navigation';secondary.setAttribute('aria-label','세부 관리 메뉴');
  links.forEach(([id,label,icon,main])=>{
-   const current=main?groupOf(selected)===(icon==='squad'?'squad':icon==='market'?'market':icon==='league'?'league':icon==='club'?'club':'home'):id===selected;
+   const current=main?groupOf(selected)===groupOf(id):id===selected;
    const btn=document.createElement('button');btn.type='button';
-   btn.className='pr-top-link'+(main?' pr-main-link':'')+(current?' active':'');
-   if(current)btn.setAttribute('aria-current','page');
-   btn.innerHTML='<span class="pr-nav-icon" aria-hidden="true">'+icons[icon]+'</span><span>'+safe(label)+'</span>';
-   btn.onclick=()=>setTab(id);nav.append(btn);
+   btn.className='pr-top-link'+(main?' pr-main-link':' pr-sub-link')+(current?' active':'');
+   if(current)btn.setAttribute('aria-current',main?'location':'page');
+   if(main)btn.innerHTML='<span class="pr-nav-icon" aria-hidden="true">'+icons[icon]+'</span><span>'+safe(label)+'</span>';
+   else{const text=document.createElement('span');text.textContent=label;btn.append(text);}
+   btn.onclick=()=>setTab(id);
+   (main?primary:secondary).append(btn);
  });
- return nav;
+ stack.append(primary,secondary);
+ return stack;
 }
 function bannerView(root,club){
  const banner=document.createElement('section');banner.className='pr-club-banner';banner.setAttribute('aria-label','구단 및 감독 정보');
@@ -110,13 +115,13 @@ function apply(){
  const club=typeof myClub==='function'?myClub():null;if(!club)return;
  const panel=root.querySelector(':scope > #dashpanel');if(!panel)return;
  root.classList.add('pr-office');
- root.querySelectorAll(':scope > .pr-top-navigation,:scope > .pr-club-banner').forEach(x=>x.remove());
+ root.querySelectorAll(':scope > .pr-navigation-stack,:scope > .pr-top-navigation,:scope > .pr-secondary-navigation,:scope > .pr-club-banner').forEach(x=>x.remove());
  const selected=typeof tab==='string'?tab:'home';
- root.prepend(navView(selected));root.insertBefore(bannerView(root,club),panel);
+ root.insertBefore(bannerView(root,club),panel);root.insertBefore(navView(selected),panel);
  if(selected==='team')patchTrainers(root,club);
  removeOldPreview();
 }
-const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css';document.head.append(css);
+const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=nav-hierarchy-2';document.head.append(css);
 const previous=window.renderOffice;
 if(typeof previous==='function')window.renderOffice=function(...args){
  const value=previous.apply(this,args);

@@ -3,23 +3,28 @@
 #game:has(#dashboard:not([hidden]))::after,#game:has(#dashboard:not([hidden]))>.topline{display:none!important}
 #dashboard.pr-office{width:calc(100% - 24px);max-width:1640px;margin:10px auto 20px;min-height:calc(100svh - 25px);padding:14px 15px 24px;background:transparent;border:0;border-radius:0;box-shadow:none;font-family:'Malgun Gothic','맑은 고딕',system-ui,sans-serif;color:#eaf6ff}
 #dashboard.pr-office>:is(.eyebrow,h1,p,.fp-manager-badge,.nav-slider-shell,.management-subnav,.dashnav){display:none!important}
-.pr-top-navigation{display:flex;align-items:stretch;gap:7px;width:100%;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#497ba0 transparent;overscroll-behavior-x:contain;margin:0 0 13px;padding:0 0 5px}
-.pr-top-link{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;flex:1 0 auto;min-width:85px;min-height:77px;padding:10px 11px;color:#d9ecff;background:linear-gradient(155deg,#153351,#0a1e39);border:1px solid #477098;border-radius:8px;font-size:12px;font-weight:800;line-height:1.2;white-space:nowrap;box-shadow:inset 0 1px #e3f7ff15;transition:border-color .12s,background .12s}
+.pr-navigation-stack{display:flex;flex-direction:column;gap:7px;margin:0 0 12px}
+.pr-top-navigation{display:flex;align-items:stretch;gap:8px;width:100%;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#497ba0 transparent;overscroll-behavior-x:contain;margin:0;padding:0 0 3px}
+.pr-top-link{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;flex:1 0 0;min-width:100px;min-height:62px;padding:8px 12px;color:#d9ecff;background:linear-gradient(155deg,#153351,#0a1e39);border:1px solid #477098;border-radius:8px;font-size:13px;font-weight:800;line-height:1.2;white-space:nowrap;box-shadow:inset 0 1px #e3f7ff15;transition:border-color .12s,background .12s}
 .pr-top-link:hover,.pr-top-link:focus-visible{border-color:#75c9f7;background:#1e5079}
 .pr-top-link.active{color:#fff;border-color:#75dafe;background:linear-gradient(150deg,#246b9d,#10477c);box-shadow:inset 0 1px #e8fcff66,0 0 13px #32aef065}
-.pr-nav-icon{display:block;font-size:23px;line-height:1;color:#b9e5ff;height:25px;font-family:'Segoe UI Symbol','Malgun Gothic',sans-serif}
+.pr-nav-icon{display:block;font-size:20px;line-height:1;color:#b9e5ff;height:21px;font-family:'Segoe UI Symbol','Malgun Gothic',sans-serif}
 .pr-top-link.active .pr-nav-icon{color:#76e5ff}
-.pr-top-link.pr-main-link{min-width:79px}
-.pr-club-banner{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:176px;padding:22px 32px;margin-bottom:14px;background:radial-gradient(ellipse 68% 125% at 36% 0%,#195b91 0%,#103b65 34%,#0b2749 61%,#091c35 100%);border:1px solid #3985b8;border-radius:12px;box-shadow:inset 0 1px #d5f2ff32}
-.pr-club-identity{display:flex;align-items:center;gap:24px;min-width:0}
-.pr-club-logo{width:124px;height:124px;flex:none;object-fit:contain;filter:drop-shadow(0 6px 9px #0007)}
-.pr-team-title h1{margin:0 0 12px;font-size:clamp(27px,3vw,40px);font-weight:900;line-height:1.25;color:#fff;letter-spacing:-.045em;text-shadow:0 3px 12px #0008}
-.pr-league-label{display:inline-flex;align-items:center;padding:6px 14px;font-size:13px;font-weight:850;color:#cff5ff;background:linear-gradient(#16527e,#0d2d50);border:1px solid #5ebbec;border-radius:7px}
-.pr-director{display:flex;align-items:center;gap:17px;min-width:205px;padding-left:28px;border-left:1px solid #478ab562}
-.pr-director .face-portrait{--fpw:98px;--fph:108px;border:1px solid #91d6ff;border-radius:8px;box-shadow:inset 0 1px #fff6,0 3px 8px #0008}
+.pr-top-link.pr-main-link{min-width:96px}
+.pr-secondary-navigation{display:flex;align-items:center;gap:7px;min-height:38px;padding:3px 0 4px 11px;border-left:2px solid #4783aa;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#497ba0 transparent;overscroll-behavior-x:contain}
+.pr-secondary-navigation .pr-sub-link{display:inline-flex;flex:0 0 auto;min-width:unset;min-height:31px;padding:6px 14px;gap:0;border:1px solid #456b89;border-radius:999px;background:rgba(28,61,91,.46);color:#b8d4e9;box-shadow:none;font-size:12px;font-weight:650}
+.pr-secondary-navigation .pr-sub-link:hover,.pr-secondary-navigation .pr-sub-link:focus-visible{background:#204f74;color:#fff;border-color:#64b9e6}
+.pr-secondary-navigation .pr-sub-link.active{background:#174e74;border-color:#7ed7ff;color:#fff;box-shadow:inset 0 0 0 1px #9de5ff36}
+.pr-club-banner{display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:116px;padding:13px 24px;margin-bottom:12px;background:radial-gradient(ellipse 68% 125% at 36% 0%,#195b91 0%,#103b65 34%,#0b2749 61%,#091c35 100%);border:1px solid #3985b8;border-radius:12px;box-shadow:inset 0 1px #d5f2ff32}
+.pr-club-identity{display:flex;align-items:center;gap:17px;min-width:0}
+.pr-club-logo{width:78px;height:78px;flex:none;object-fit:contain;filter:drop-shadow(0 6px 9px #0007)}
+.pr-team-title h1{margin:0 0 7px;font-size:clamp(22px,2.4vw,30px);font-weight:900;line-height:1.25;color:#fff;letter-spacing:-.045em;text-shadow:0 3px 12px #0008}
+.pr-league-label{display:inline-flex;align-items:center;padding:4px 10px;font-size:11px;font-weight:850;color:#cff5ff;background:linear-gradient(#16527e,#0d2d50);border:1px solid #5ebbec;border-radius:7px}
+.pr-director{display:flex;align-items:center;gap:11px;min-width:175px;padding-left:17px;border-left:1px solid #478ab562}
+.pr-director .face-portrait{--fpw:66px;--fph:72px;border:1px solid #91d6ff;border-radius:8px;box-shadow:inset 0 1px #fff6,0 3px 8px #0008}
 .pr-director .face-portrait img{object-position:center 16%}
-.pr-director-name{display:flex;flex-direction:column;gap:7px;line-height:1.3;color:#b9d7e9;font-size:15px}
-.pr-director-name strong{font-size:20px;color:#fff;max-width:200px;overflow-wrap:anywhere}
+.pr-director-name{display:flex;flex-direction:column;gap:3px;line-height:1.3;color:#b9d7e9;font-size:12px}
+.pr-director-name strong{font-size:16px;color:#fff;max-width:200px;overflow-wrap:anywhere}
 #dashboard.pr-office>.dashpanel{padding:21px 18px;min-height:470px;background:linear-gradient(155deg,#0f2947,#091c36);border:1px solid #386889;border-radius:11px;box-shadow:inset 0 1px #beecff24}
 #dashboard.pr-office .pr-trainer-header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:15px}
 #dashboard.pr-office .pr-trainer-header>div:first-child{margin-right:auto}
@@ -52,24 +57,31 @@
 #dashboard.pr-office .trainer-detail-table .row-btn{white-space:nowrap}
 @media(max-width:980px){
 #dashboard.pr-office{width:calc(100% - 16px);padding:9px}
-.pr-club-banner{min-height:150px;padding:17px 19px}
-.pr-club-logo{width:96px;height:96px}
-.pr-director{min-width:150px;padding-left:15px}
-.pr-top-link{min-width:80px}
+.pr-club-banner{min-height:98px;padding:10px 16px}
+.pr-club-logo{width:66px;height:66px}
+.pr-club-identity{gap:12px}
+.pr-director{min-width:138px;padding-left:12px}
+.pr-director .face-portrait{--fpw:54px;--fph:60px}
+.pr-top-link{min-width:84px}
+.pr-top-link.pr-main-link{min-width:84px}
 }
 @media(max-width:640px){
-.pr-top-navigation{gap:5px;margin-bottom:10px}
-.pr-top-link{min-width:72px;min-height:65px;font-size:11px;padding:7px 8px;gap:4px}
-.pr-nav-icon{font-size:19px;height:20px}
-.pr-club-banner{padding:12px 13px;min-height:110px;gap:10px}
-.pr-club-identity{gap:9px}
-.pr-club-logo{width:65px;height:65px}
-.pr-team-title h1{font-size:24px;margin-bottom:6px}
-.pr-league-label{padding:4px 9px;font-size:10px}
-.pr-director{min-width:112px;padding-left:9px;gap:8px}
-.pr-director .face-portrait{--fpw:54px;--fph:65px}
-.pr-director-name{font-size:11px}
-.pr-director-name strong{font-size:14px}
+.pr-navigation-stack{gap:5px;margin-bottom:10px}
+.pr-top-navigation{gap:5px;padding-bottom:2px}
+.pr-top-link{min-width:70px;min-height:54px;font-size:11px;padding:6px 8px;gap:4px}
+.pr-top-link.pr-main-link{min-width:70px}
+.pr-nav-icon{font-size:17px;height:18px}
+.pr-secondary-navigation{gap:5px;padding:2px 0 3px 7px;min-height:33px}
+.pr-secondary-navigation .pr-sub-link{min-height:29px;padding:5px 10px;font-size:11px}
+.pr-club-banner{padding:9px 11px;min-height:82px;gap:8px}
+.pr-club-identity{gap:8px}
+.pr-club-logo{width:48px;height:48px}
+.pr-team-title h1{font-size:20px;margin-bottom:4px}
+.pr-league-label{padding:3px 8px;font-size:10px}
+.pr-director{min-width:99px;padding-left:8px;gap:7px}
+.pr-director .face-portrait{--fpw:44px;--fph:50px}
+.pr-director-name{font-size:10px}
+.pr-director-name strong{font-size:13px}
 #dashboard.pr-office>.dashpanel{padding:12px 9px}
 #dashboard.pr-office .pr-filters{width:100%}
 #dashboard.pr-office .pr-filters input{min-width:100px;flex:1}
