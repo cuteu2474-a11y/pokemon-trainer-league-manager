@@ -1,0 +1,78 @@
+/* Approved Penta Rivals manager-office UI. Responsive and presentation-only. */
+#game:has(#dashboard:not([hidden])){background:radial-gradient(ellipse 85% 60% at 50% -15%,#174b77 0%,#0b294b 43%,#06162b 95%)!important}
+#game:has(#dashboard:not([hidden]))::after,#game:has(#dashboard:not([hidden]))>.topline{display:none!important}
+#dashboard.pr-office{width:calc(100% - 24px);max-width:1640px;margin:10px auto 20px;min-height:calc(100svh - 25px);padding:14px 15px 24px;background:transparent;border:0;border-radius:0;box-shadow:none;font-family:'Malgun Gothic','맑은 고딕',system-ui,sans-serif;color:#eaf6ff}
+#dashboard.pr-office>:is(.eyebrow,h1,p,.fp-manager-badge,.nav-slider-shell,.management-subnav,.dashnav){display:none!important}
+.pr-top-navigation{display:flex;align-items:stretch;gap:7px;width:100%;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#497ba0 transparent;overscroll-behavior-x:contain;margin:0 0 13px;padding:0 0 5px}
+.pr-top-link{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;flex:1 0 auto;min-width:85px;min-height:77px;padding:10px 11px;color:#d9ecff;background:linear-gradient(155deg,#153351,#0a1e39);border:1px solid #477098;border-radius:8px;font-size:12px;font-weight:800;line-height:1.2;white-space:nowrap;box-shadow:inset 0 1px #e3f7ff15;transition:border-color .12s,background .12s}
+.pr-top-link:hover,.pr-top-link:focus-visible{border-color:#75c9f7;background:#1e5079}
+.pr-top-link.active{color:#fff;border-color:#75dafe;background:linear-gradient(150deg,#246b9d,#10477c);box-shadow:inset 0 1px #e8fcff66,0 0 13px #32aef065}
+.pr-nav-icon{display:block;font-size:23px;line-height:1;color:#b9e5ff;height:25px;font-family:'Segoe UI Symbol','Malgun Gothic',sans-serif}
+.pr-top-link.active .pr-nav-icon{color:#76e5ff}
+.pr-top-link.pr-main-link{min-width:79px}
+.pr-club-banner{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:176px;padding:22px 32px;margin-bottom:14px;background:radial-gradient(ellipse 68% 125% at 36% 0%,#195b91 0%,#103b65 34%,#0b2749 61%,#091c35 100%);border:1px solid #3985b8;border-radius:12px;box-shadow:inset 0 1px #d5f2ff32}
+.pr-club-identity{display:flex;align-items:center;gap:24px;min-width:0}
+.pr-club-logo{width:124px;height:124px;flex:none;object-fit:contain;filter:drop-shadow(0 6px 9px #0007)}
+.pr-team-title h1{margin:0 0 12px;font-size:clamp(27px,3vw,40px);font-weight:900;line-height:1.25;color:#fff;letter-spacing:-.045em;text-shadow:0 3px 12px #0008}
+.pr-league-label{display:inline-flex;align-items:center;padding:6px 14px;font-size:13px;font-weight:850;color:#cff5ff;background:linear-gradient(#16527e,#0d2d50);border:1px solid #5ebbec;border-radius:7px}
+.pr-director{display:flex;align-items:center;gap:17px;min-width:205px;padding-left:28px;border-left:1px solid #478ab562}
+.pr-director .face-portrait{--fpw:98px;--fph:108px;border:1px solid #91d6ff;border-radius:8px;box-shadow:inset 0 1px #fff6,0 3px 8px #0008}
+.pr-director .face-portrait img{object-position:center 16%}
+.pr-director-name{display:flex;flex-direction:column;gap:7px;line-height:1.3;color:#b9d7e9;font-size:15px}
+.pr-director-name strong{font-size:20px;color:#fff;max-width:200px;overflow-wrap:anywhere}
+#dashboard.pr-office>.dashpanel{padding:21px 18px;min-height:470px;background:linear-gradient(155deg,#0f2947,#091c36);border:1px solid #386889;border-radius:11px;box-shadow:inset 0 1px #beecff24}
+#dashboard.pr-office .pr-trainer-header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:15px}
+#dashboard.pr-office .pr-trainer-header>div:first-child{margin-right:auto}
+#dashboard.pr-office .pr-trainer-header h2{padding:0;margin:0 0 1px;border:0;font-size:19px;color:#fff}
+#dashboard.pr-office .pr-trainer-header .g-muted{margin:0;color:#a5c3db;font-size:12px}
+#dashboard.pr-office .pr-filters{display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+#dashboard.pr-office .pr-filters :is(input,select){width:auto;min-width:126px;max-width:220px;min-height:40px;padding:8px 12px;background:#0c223d;border:1px solid #4c7798;border-radius:8px;color:#e2f5ff;font-size:12px}
+#dashboard.pr-office .pr-filters input{min-width:190px}
+#dashboard.pr-office .pr-filters .row-btn{min-height:40px;font-size:12px}
+#dashboard.pr-office .trainer-list-header>.g-btn{display:none}
+#dashboard.pr-office .trainer-explorer{background:transparent;border:0;border-radius:0;overflow:visible}
+#dashboard.pr-office .trainer-toolbar.pr-old-toolbar{display:none}
+#dashboard.pr-office .trainer-explorer-scroll{border:1px solid #416b8e;border-radius:9px;overflow:auto;max-height:none;scrollbar-color:#397090 #0c1f37}
+#dashboard.pr-office .trainer-detail-table{width:100%;min-width:1360px;font-size:12px;font-variant-numeric:tabular-nums;border-collapse:collapse;color:#d5edff}
+#dashboard.pr-office .trainer-detail-table th{padding:12px 9px;background:linear-gradient(#1c3a5b,#0e2a47);border-right:1px solid #2f5271;border-bottom:1px solid #4d83a6;font-size:10px;text-align:center;color:#b7d6e8;white-space:nowrap}
+#dashboard.pr-office .trainer-detail-table th:nth-child(2){text-align:left}
+#dashboard.pr-office .trainer-detail-table th.pr-roster-heading{min-width:251px;text-align:left;padding-left:15px}
+#dashboard.pr-office .trainer-detail-table td{height:86px;padding:10px 9px;background:transparent;border-right:1px solid #274a6b;border-bottom:1px solid #33516d;text-align:center;vertical-align:middle;font-weight:650;color:#d1e8f9}
+#dashboard.pr-office .trainer-detail-table tbody tr:nth-child(2n+1){background:#092140}
+#dashboard.pr-office .trainer-detail-table tbody tr:nth-child(2n){background:#102b49}
+#dashboard.pr-office .trainer-detail-table tbody tr:hover{background:#194467}
+#dashboard.pr-office .trainer-detail-table td.player-name{min-width:127px;text-align:left}
+#dashboard.pr-office .trainer-detail-table .face-row{display:flex;align-items:center;gap:8px}
+#dashboard.pr-office .trainer-detail-table .face-portrait{--fpw:48px;--fph:55px;flex:none;border-radius:6px}
+#dashboard.pr-office .trainer-detail-table .face-portrait img{object-position:center 15%}
+#dashboard.pr-office .trainer-detail-table .trainer-name-link{font-size:12px;font-weight:850}
+#dashboard.pr-office .trainer-detail-table td.pr-pokemon-cell{min-width:251px;padding:7px 10px}
+.pr-pokemon-strip{display:flex;justify-content:flex-start;align-items:center;gap:3px;min-height:50px}
+.pr-showdown-pixel{width:37px;height:41px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 2px 3px #0007);flex:none}
+#dashboard.pr-office .trainer-detail-table .row-btn{white-space:nowrap}
+@media(max-width:980px){
+#dashboard.pr-office{width:calc(100% - 16px);padding:9px}
+.pr-club-banner{min-height:150px;padding:17px 19px}
+.pr-club-logo{width:96px;height:96px}
+.pr-director{min-width:150px;padding-left:15px}
+.pr-top-link{min-width:80px}
+}
+@media(max-width:640px){
+.pr-top-navigation{gap:5px;margin-bottom:10px}
+.pr-top-link{min-width:72px;min-height:65px;font-size:11px;padding:7px 8px;gap:4px}
+.pr-nav-icon{font-size:19px;height:20px}
+.pr-club-banner{padding:12px 13px;min-height:110px;gap:10px}
+.pr-club-identity{gap:9px}
+.pr-club-logo{width:65px;height:65px}
+.pr-team-title h1{font-size:24px;margin-bottom:6px}
+.pr-league-label{padding:4px 9px;font-size:10px}
+.pr-director{min-width:112px;padding-left:9px;gap:8px}
+.pr-director .face-portrait{--fpw:54px;--fph:65px}
+.pr-director-name{font-size:11px}
+.pr-director-name strong{font-size:14px}
+#dashboard.pr-office>.dashpanel{padding:12px 9px}
+#dashboard.pr-office .pr-filters{width:100%}
+#dashboard.pr-office .pr-filters input{min-width:100px;flex:1}
+#dashboard.pr-office .trainer-detail-table th.pr-roster-heading,#dashboard.pr-office .trainer-detail-table td.pr-pokemon-cell{min-width:205px}
+.pr-showdown-pixel{width:30px;height:36px}
+}
