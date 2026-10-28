@@ -153,8 +153,9 @@ function managerProfileView(root,club){
  const page=document.createElement('section');page.className='pr-manager-profile';page.setAttribute('aria-label','감독 프로필');
  const heading=document.createElement('h2');heading.textContent='감독 프로필';
  const card=document.createElement('div');card.className='pr-manager-profile-card';
+ const identity=document.createElement('section');identity.className='pr-manager-profile-identity';
  const photo=root.querySelector('.pr-club-banner .pr-director .face-portrait')?.cloneNode(true);
- if(photo)card.append(photo);
+ if(photo)identity.append(photo);
  const detail=document.createElement('div');detail.className='pr-manager-profile-detail';
  const name=document.createElement('strong');name.textContent=game.manager||'감독';
  const rows=document.createElement('dl');
@@ -165,20 +166,30 @@ function managerProfileView(root,club){
   const dt=document.createElement('dt');dt.textContent=label;
   const dd=document.createElement('dd');dd.textContent=value;rows.append(dt,dd);
  }
- detail.append(name,rows);
+ detail.append(name,rows);identity.append(detail);card.append(identity);
  const setup=game.managerProfile;
- if(setup&&setup.attributes){
-  const summary=document.createElement('section');summary.className='pr-manager-ability-summary';
-  const title=document.createElement('h3');title.textContent=setup.careerLabel+' · 감독 능력치';
+ const summary=document.createElement('section');summary.className='pr-manager-ability-summary';
+ const title=document.createElement('h3');title.textContent=setup?.attributes?(setup.careerLabel||'감독')+' · 감독 능력치':'감독 능력치';
+ summary.append(title);
+ if(setup?.attributes){
   const list=document.createElement('div');list.className='pr-manager-ability-stats';
-  const labels=[['tactics','전술 이해'],['communication','소통 능력'],['development','육성 능력'],['negotiation','협상 능력'],['organization','조직 관리']];
-  for(const [key,label] of labels){const item=document.createElement('div');const name=document.createElement('span');name.textContent=label;const num=document.createElement('strong');num.textContent=String(setup.attributes[key]??5)+'/20';item.append(name,num);list.append(item);}
-  const fame=document.createElement('div');fame.className='pr-manager-ability-stats';const fameRow=document.createElement('div');const fameLabel=document.createElement('span');fameLabel.textContent='명성';const fameValue=document.createElement('strong');fameValue.textContent=String(setup.renown??setup.initialRenown??0)+'/100';fameRow.append(fameLabel,fameValue);fame.append(fameRow);
-  summary.append(title,list,fame);detail.append(summary);
+  const stats=[['tactics','전술 이해'],['communication','소통 능력'],['development','육성 능력'],['negotiation','협상 능력'],['organization','조직 관리']];
+  for(const [key,label] of stats){
+   const item=document.createElement('div');item.className='pr-manager-stat';
+   const labelEl=document.createElement('span');labelEl.textContent=label;
+   const value=document.createElement('strong');value.textContent=String(setup.attributes[key]??5)+'/20';
+   item.append(labelEl,value);list.append(item);
+  }
+  const fame=document.createElement('div');fame.className='pr-manager-stat pr-manager-renown-stat';
+  const fameLabel=document.createElement('span');fameLabel.textContent='명성';
+  const fameScore=document.createElement('strong');fameScore.textContent=String(setup.renown??setup.initialRenown??0)+'/100';
+  fame.append(fameLabel,fameScore);list.append(fame);
+  summary.append(list);
  }else{
-  const legacy=document.createElement('p');legacy.textContent='이전 저장의 감독 능력치는 아직 설정되지 않았습니다.';legacy.className='g-muted';detail.append(legacy);
+  const legacy=document.createElement('p');legacy.className='pr-manager-legacy-note';
+  legacy.textContent='기존 저장 파일에는 감독 능력치가 설정되지 않았습니다.';summary.append(legacy);
  }
- card.append(detail);page.append(heading,card);return page;
+ card.append(summary);page.append(heading,card);return page;
 }
 function patchTable(table,club){
  if(table.querySelector('th.pr-roster-heading'))return;
@@ -236,7 +247,7 @@ function apply(){
  if(selected==='team')patchTrainers(root,club);
  removeOldPreview();
 }
-const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=integrated-calendar-5';document.head.append(css);
+const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=wide-profile-6';document.head.append(css);
 const previous=window.renderOffice;
 if(typeof previous==='function')window.renderOffice=function(...args){
  const value=previous.apply(this,args);

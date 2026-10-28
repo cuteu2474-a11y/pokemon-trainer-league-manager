@@ -31,9 +31,9 @@ test('recommended progress settles each week once, stops at market deadline then
  await ctx.ManagementUI.important();assert.equal(g.weeklyPrograms.length,4);
  assert.equal(g.management.history.length,2,'준비 화면에 재진입해도 빈 기록이 쌓이지 않는다');
 });
-test('first-session guidance shows manual and fast paths; the last market week requires explicit confirmation',async()=>{
+test('first-season progress controls remain without introductory banner; market deadline requires confirmation',async()=>{
  const {g,ctx}=setup();
- assert.match(ctx.ManagementUI.policyHTML(),/첫 경기까지 빠르게 시작하기/);
+ assert.doesNotMatch(ctx.ManagementUI.policyHTML(),/첫 경기까지 빠르게 시작하기/);
  assert.match(ctx.ManagementUI.policyHTML(),/추천 계획으로 개막전 준비/);
  assert.match(ctx.ManagementUI.policyHTML(),/다음 주 · 직접 준비/);
  await ctx.ManagementUI.important();

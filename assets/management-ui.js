@@ -129,9 +129,8 @@
     if(reason?.match)window.MatchdayPreparation?.render();
   }
   function policyHTML(){
-    const s=state(),summary=s.summary,action=nextAction(),first=opening()&&game.week===1;
+    const s=state(),summary=s.summary,action=nextAction();
     return '<section class="management-policy">'+
-      (first?'<div class="management-onboarding"><strong>첫 경기까지 빠르게 시작하기</strong><p>원하는 방식으로 시작하세요. 자동 진행은 매주 훈련·급여·탐색을 처리하며, 마지막 이적시장 결정과 경기 준비에서는 멈춥니다.</p></div>':'')+
       (marketDeadline()?'<div class="management-deadline"><strong>'+game.week+'주차 · 이적시장 마지막 결정 기회</strong><p>영입과 계약을 마쳤다면 아래 버튼을 눌러 마감을 승인하세요. 개막전에서는 선수 5명의 출전 순서와 포켓몬 상태를 직접 확인한 뒤 경기를 시작합니다.</p><button class="g-btn alt" onclick="setTab(&quot;transfer&quot;)">이적시장 확인</button></div>':'')+
       '<h3>주간 운영 방침</h3><p>추천 계획은 전술 분석 회의이며, 구단 피로 45 이상이면 회복으로 전환합니다. 실행한 주간 활동은 다시 적용하지 않습니다.</p>'+
       '<div class="management-controls"><label>기본 활동 <select onchange="ManagementUI.program(this.value)">'+['tactics','power','scrimmage','recovery'].map(id=>{
@@ -193,7 +192,7 @@
     #dashboard .management-nav button{min-width:0!important;padding:10px 4px;font-size:14px}
     .management-subnav{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}.management-subnav button{background:#21384d;color:white;border:1px solid #587187;padding:7px 10px;border-radius:5px}.management-subnav .active{border-color:#7bd5b5}
     .management-policy{background:#183447;border:1px solid #43667a;border-radius:8px;padding:15px;margin-bottom:16px}.management-policy h3{margin:0}.management-policy p{font-size:12px;line-height:1.6}
-    .management-onboarding,.management-deadline{border:1px solid #477f74;background:#173d41;border-radius:8px;padding:12px;margin-bottom:14px}.management-onboarding strong,.management-deadline strong{font-size:17px;color:#d1fff0}.management-deadline{border-color:#a88142;background:#473a2c}.management-deadline strong{color:#ffe5ad}.management-progress-report{margin-top:12px}.management-progress-report summary{cursor:pointer}.management-progress-report ul{padding-left:19px;font-size:12px;line-height:1.7}
+    .management-deadline{border:1px solid #477f74;background:#173d41;border-radius:8px;padding:12px;margin-bottom:14px}.management-deadline strong{font-size:17px;color:#d1fff0}.management-deadline{border-color:#a88142;background:#473a2c}.management-deadline strong{color:#ffe5ad}.management-progress-report{margin-top:12px}.management-progress-report summary{cursor:pointer}.management-progress-report ul{padding-left:19px;font-size:12px;line-height:1.7}
     .management-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}.management-controls label{font-size:12px;display:grid;gap:5px}.management-controls select{padding:8px;max-width:100%;background:#203e52;color:white;border:1px solid #7394a6}.management-action{width:100%;margin-bottom:12px}
     @media(max-width:650px){#dashboard .dashpanel{padding:12px}.management-controls>*{max-width:100%}.management-controls select{min-width:0}.management-policy{padding:11px}}
   `;document.head.append(style);

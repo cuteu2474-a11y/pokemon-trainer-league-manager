@@ -161,3 +161,60 @@
  .pr-week-legend{gap:6px 12px;font-size:10px}
  .pr-week-key{height:10px;width:10px}
 }
+
+/* Full-width manager profile: bio left, all six abilities filling the right. */
+#dashboard.pr-office .pr-manager-profile{width:100%;min-width:0}
+#dashboard.pr-office>.dashpanel.pr-manager-profile-view{min-height:0}
+#dashboard.pr-office .pr-manager-profile h2{margin:0 0 18px}
+#dashboard.pr-office .pr-manager-profile-card{
+ display:grid;grid-template-columns:minmax(255px,.85fr) minmax(0,2.65fr);
+ width:100%;max-width:none;min-width:0;align-items:stretch;gap:18px;
+ margin:0;padding:18px;box-sizing:border-box;
+}
+#dashboard.pr-office .pr-manager-profile-identity{
+ display:flex;flex-direction:column;align-items:center;gap:12px;
+ min-width:0;padding:18px;background:#0f2d4c;border:1px solid #355d7f;border-radius:9px;
+}
+#dashboard.pr-office .pr-manager-profile-identity .face-portrait{--fpw:120px;--fph:135px;margin:0 auto}
+#dashboard.pr-office .pr-manager-profile-detail{width:100%;flex:none}
+#dashboard.pr-office .pr-manager-profile-detail>strong{display:block;text-align:center;font-size:23px;margin:0 0 20px;color:#fff}
+#dashboard.pr-office .pr-manager-profile-detail dl{
+ display:grid;grid-template-columns:minmax(82px,.85fr) minmax(0,1.15fr);
+ column-gap:10px;row-gap:13px;font-size:13px;margin:0
+}
+#dashboard.pr-office .pr-manager-profile-detail dd{overflow-wrap:anywhere}
+#dashboard.pr-office .pr-manager-ability-summary{
+ display:flex;flex-direction:column;min-width:0;width:100%;
+ margin:0;padding:18px;background:#0f2d4c;border:1px solid #355d7f;border-radius:9px;
+}
+#dashboard.pr-office .pr-manager-ability-summary h3{font-size:18px;margin:0 0 14px;color:#fff}
+#dashboard.pr-office .pr-manager-ability-stats{
+ display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+ gap:12px;width:100%;min-width:0;align-content:stretch;flex:1;
+}
+#dashboard.pr-office .pr-manager-ability-stats>.pr-manager-stat{
+ display:flex;flex-direction:column;align-items:flex-start;
+ justify-content:space-between;gap:16px;min-width:0;min-height:104px;
+ padding:16px;background:linear-gradient(140deg,#194568,#123654);
+ border:1px solid #467ba0;border-radius:9px;font-size:14px;font-weight:650;
+ box-sizing:border-box;
+}
+#dashboard.pr-office .pr-manager-ability-stats>.pr-manager-stat strong{font-size:25px;font-variant-numeric:tabular-nums;color:#a7e8ff}
+#dashboard.pr-office .pr-manager-ability-stats>.pr-manager-renown-stat{background:linear-gradient(140deg,#1b4c6a,#183e57);border-color:#6196ac}
+#dashboard.pr-office .pr-manager-legacy-note{font-size:14px;color:#bad9ed}
+@media(max-width:1020px){
+ #dashboard.pr-office .pr-manager-profile-card{grid-template-columns:minmax(210px,.9fr) minmax(0,2fr);gap:12px;padding:12px}
+ #dashboard.pr-office .pr-manager-profile-identity,#dashboard.pr-office .pr-manager-ability-summary{padding:13px}
+ #dashboard.pr-office .pr-manager-ability-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+ #dashboard.pr-office .pr-manager-ability-stats>.pr-manager-stat{min-height:88px;padding:12px}
+}
+@media(max-width:660px){
+ #dashboard.pr-office .pr-manager-profile-card{grid-template-columns:minmax(0,1fr);gap:11px;padding:10px}
+ #dashboard.pr-office .pr-manager-profile-identity{flex-direction:row;align-items:center;gap:12px}
+ #dashboard.pr-office .pr-manager-profile-identity .face-portrait{--fpw:84px;--fph:100px;flex:none}
+ #dashboard.pr-office .pr-manager-profile-detail>strong{text-align:left;margin:0 0 10px;font-size:20px}
+ #dashboard.pr-office .pr-manager-profile-detail dl{row-gap:5px;font-size:12px}
+ #dashboard.pr-office .pr-manager-ability-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #dashboard.pr-office .pr-manager-ability-stats>.pr-manager-stat{min-height:80px;padding:11px;font-size:12px}
+ #dashboard.pr-office .pr-manager-ability-stats>.pr-manager-stat strong{font-size:20px}
+}
