@@ -63,6 +63,17 @@ test('recommendation respects the 5x5 opponent comparison and suggests real vali
   assert.ok(Number.isFinite(e.score));
   assert.ok(Array.isArray(report.typeDistribution));
 });
+test('human scouting analyzes the chosen lineup without recommending or changing its order',()=>{
+  const {home,away}=fixture(),selectedOrder=[4,2,0,3,1];
+  const original=JSON.stringify([home,away]);
+  const report=analyzeOpponent({home,away,playerClubId:0,selectedOrder});
+  assert.equal(report.recommendedOrder,undefined);
+  assert.deepEqual(report.selectedOrder,selectedOrder);
+  assert.deepEqual(report.matches.map(m=>m.trainerIndex),selectedOrder);
+  assert.deepEqual(report.matches.map(m=>m.slot),[0,1,2,3,4]);
+  assert.equal(JSON.stringify([home,away]),original);
+  assert.throws(()=>analyzeOpponent({home,away,playerClubId:0,selectedOrder:[0,0,1,2,3]}),/출전 순서/);
+});
 test('maximum assignment is deterministic and improves over deliberately reversed ordering',()=>{
   const matrix=Array.from({length:5},(_,i)=>Array.from({length:5},(_,j)=>({score:i===j?60:-60})));
   assert.deepEqual(recommendOrder(matrix),[0,1,2,3,4]);

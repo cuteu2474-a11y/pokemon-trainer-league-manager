@@ -22,7 +22,8 @@
     return r?.engine==='showdown-scout'&&r.specialtySchema===1&&r.opponentId===opponent.id&&
       r.round===p.round&&r.season===p.season&&
       Array.isArray(r.matches)&&r.matches.length===5&&
-      Array.isArray(r.recommendedOrder)&&r.recommendedOrder.length===5;
+      Array.isArray(r.selectedOrder)&&r.selectedOrder.length===5&&
+      r.selectedOrder.every((trainer,i)=>trainer===p.order[i]);
   }
   function teamTable(report){
     const rows=report.matches.map((rec,i)=>{
@@ -39,7 +40,7 @@
         '<td><button type="button" data-scout-one="'+rec.trainerIndex+'">해당 지시 적용</button></td></tr>';
     }).join('');
     return '<div class="md-scout-table"><table><thead><tr>'+
-      '<th>상대 예상 순서</th><th>추천 트레이너</th><th>추천 행동</th><th>개별 적용</th>'+
+      '<th>상대 예상 순서</th><th>감독이 정한 출전 트레이너</th><th>전술 권고</th><th>개별 적용</th>'+
       '</tr></thead><tbody>'+rows+'</tbody></table></div>';
   }
   function specialtyText(value){return value?.active?'전문 편성 '+value.types.map(type=>typeNames[type]||type).join('/')+' · 공격·방어·특공·특방 +5% (1회)':'혼합 편성 · 전문 보너스 없음';}
@@ -59,7 +60,7 @@
     const disabled=busy||p.phase!=='prepare'?' disabled':'';
     if(!report){
       return '<div class="md-scout-top"><div><h2>상대 팀 스카우팅</h2>'+
-        '<p>상대의 선플·포켓몬·타입 상성을 조사하고, 120가지 출전 순서에서 맞춤 추천을 도출합니다.</p>'+
+        '<p>상대의 선플·포켓몬·타입 상성을 조사하고, 감독이 정한 출전 순서에 맞춰 전술을 분석합니다.</p>'+
         '</div><button type="button" id="md-scout-request"'+disabled+'>'+
         (busy?'상대 분석 중…':'상대 팀 분석하기')+'</button></div>'+
         '<p class="md-scout-notice" role="status">'+safe(p.scoutMessage||'실제 승률이 아닌 전술 비교 결과를 제공합니다.')+'</p>';
@@ -72,10 +73,9 @@
       '명 · 견제 성향 '+(t.status??0)+'명 · 교체 성향 '+(t.switch??0)+'명</p>'+
       '</div><button type="button" id="md-scout-request"'+disabled+'>다시 분석</button></div>'+
       '<details class="md-scout-info"><summary>우리 팀 전문 편성 확인</summary>'+report.ownTrainers.map(t=>'<p>'+safe(t.name)+' · '+safe(specialtyText(t.specialty))+'</p>').join('')+'<p>현재 분석 시점의 편성입니다. 선수단이 바뀌면 다시 분석해 주세요. 출전 확정 명단을 기준으로 실제 보너스를 계산합니다.</p></details>'+
-      '<details class="md-scout-info" open><summary>추천 출전 순서와 맞춤형 전술 지시</summary>'+
-      '<div class="md-scout-actions"><button type="button" id="md-scout-order"'+disabled+
-      '>추천 순서만 적용</button><button type="button" id="md-scout-all"'+disabled+
-      '>추천 순서 + 모든 지시 적용</button></div>'+
+      '<details class="md-scout-info" open><summary>현재 출전 순서별 전술 분석</summary>'+
+      '<div class="md-scout-actions"><button type="button" id="md-scout-all"'+disabled+
+      '>모든 전술 지시 적용</button></div>'+
       teamTable(report)+'<p class="md-scout-disclaimer">'+safe(report.note)+'</p></details>'+
       '<details class="md-scout-info"><summary>상대 트레이너 5명 자세히 보기</summary>'+
       detailHTML(report)+'</details>'+
@@ -84,25 +84,20 @@
   }
   function applyAdvice(mode,index=null){
     const p=state(),report=p?.scoutReport;
-    if(!p||p.phase!=='prepare'||!report||
-      !Array.isArray(report.recommendedOrder)||report.recommendedOrder.length!==5)return false;
-    const order=report.recommendedOrder;
-    if(new Set(order).size!==5||order.some(i=>!Number.isInteger(i)||i<0||i>4))return false;
-    if(mode==='order'||mode==='all')p.order=order.slice();
-    if(mode==='all'||mode==='one'){
-      p.plans ||= Array.from({length:5},()=>null);
-      p.behaviors ||= Array.from({length:5},()=>null);
-      for(const rec of report.matches){
-        if(mode==='one'&&rec.trainerIndex!==index)continue;
-        if(!Number.isInteger(rec.trainerIndex)||rec.trainerIndex<0||
-          rec.trainerIndex>4||!Object.hasOwn(planLabels,rec.plan)||
-          !Object.hasOwn(behaviorLabels,rec.behavior))continue;
-        p.plans[rec.trainerIndex]=rec.plan;
-        p.behaviors[rec.trainerIndex]=rec.behavior;
-      }
+    const rival=game?.clubs?.[p?.home===myClub()?.id?p?.away:p?.home];
+    if(!p||p.phase!=='prepare'||!rival||!valid(p,rival)||
+      !['all','one'].includes(mode))return false;
+    p.plans ||= Array.from({length:5},()=>null);
+    p.behaviors ||= Array.from({length:5},()=>null);
+    for(const rec of report.matches){
+      if(mode==='one'&&rec.trainerIndex!==index)continue;
+      if(!Number.isInteger(rec.trainerIndex)||rec.trainerIndex<0||
+        rec.trainerIndex>4||!Object.hasOwn(planLabels,rec.plan)||
+        !Object.hasOwn(behaviorLabels,rec.behavior))continue;
+      p.plans[rec.trainerIndex]=rec.plan;
+      p.behaviors[rec.trainerIndex]=rec.behavior;
     }
-    p.scoutMessage=mode==='all'?'추천 출전 순서와 전술을 적용했습니다. 각 트레이너의 권고는 수정할 수 있습니다.':
-      mode==='order'?'추천 출전 순서를 적용했습니다. 개별 지시 사항은 유지됩니다.':
+    p.scoutMessage=mode==='all'?'감독이 정한 출전 순서는 유지하고 모든 전술 지시를 적용했습니다. 각 트레이너의 권고는 수정할 수 있습니다.':
       '선택한 트레이너에게만 전술을 권고했습니다.';
     if(typeof persist==='function')persist();
     repaint();
@@ -116,7 +111,7 @@
       const response=await fetch('/api/opponent-scout',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({home:clone(game.clubs[p.home]),away:clone(game.clubs[p.away]),
-          playerClubId:me,season:p.season,round:p.round})
+          playerClubId:me,season:p.season,round:p.round,selectedOrder:p.order.slice()})
       });
       const report=await response.json();
       if(!response.ok)throw new Error(report.error||'스카우팅 서버 오류');
@@ -125,7 +120,7 @@
         !Array.isArray(report.matches)||report.matches.length!==5)throw new Error('상대 분석 형식 오류');
       if(state()!==p||p.phase!=='prepare')return false;
       p.scoutReport=report;
-      p.scoutMessage='상대 분석을 완료했습니다. 감독이 권고 적용 여부를 선택할 수 있습니다.';
+      p.scoutMessage='현재 출전 순서에 맞춰 상대 분석을 완료했습니다. 전술 권고 적용 여부는 감독이 선택합니다.';
       if(typeof persist==='function')persist();
       return true;
     }catch(error){
@@ -146,7 +141,6 @@
     if(!anchor)return;
     anchor.insertAdjacentElement('afterend',panel);
     panel.querySelector('#md-scout-request')?.addEventListener('click',request);
-    panel.querySelector('#md-scout-order')?.addEventListener('click',()=>applyAdvice('order'));
     panel.querySelector('#md-scout-all')?.addEventListener('click',()=>applyAdvice('all'));
     panel.querySelectorAll('[data-scout-one]').forEach(button=>{
       button.addEventListener('click',()=>applyAdvice('one',Number(button.dataset.scoutOne)));

@@ -5,6 +5,7 @@ import {runInNewContext} from 'node:vm';
 import {analyzeOpponent} from '../src/scouting/opponent-report.js';
 
 const script=readFileSync(new URL('../assets/opponent-scout-ui.js',import.meta.url),'utf8');
+const matchday=readFileSync(new URL('../assets/matchday.js',import.meta.url),'utf8');
 const member=(name,species)=>({
   name,tactics:12,switching:11,autonomyAI:{preferredPlay:'balanced',playTraits:[]},
   pokemon:Array.from({length:6},()=>({name:species,level:50,power:100}))
@@ -53,27 +54,35 @@ test('preparation includes scout CTA but never automatically selects manager adv
   assert.equal(JSON.stringify(p),before);
   assert.ok(t.api);
 });
+test('match preparation shows the scheduled home and away clubs, not always the player first',()=>{
+  assert.match(matchday,/fixtureHeading=esc\(game\.clubs\[p\.home\]\.name\)/);
+  assert.match(matchday,/<h1>\$\{fixtureHeading\}<\/h1>/);
+});
 test('scouting fetches real five-opponent report and keeps initial orders intact',async()=>{
   const t=setup(),p=t.g.pendingMatch,original=p.order.slice();
   assert.equal(await t.api.request(),true);
   assert.deepEqual(Array.from(p.order),original);
   assert.ok(p.scoutReport);
   assert.equal(p.scoutReport.opponents.length,5);
+  assert.deepEqual(Array.from(p.scoutReport.selectedOrder),original);
+  assert.equal(p.scoutReport.recommendedOrder,undefined);
   assert.equal(t.state().calls,1);
   const html=t.render();
   assert.match(html,/상대 팀 분석 완료/);
-  assert.match(html,/추천 출전 순서와 맞춤형 전술 지시/);
+  assert.match(html,/현재 출전 순서별 전술 분석/);
+  assert.match(html,/모든 전술 지시 적용/);
+  assert.doesNotMatch(html,/추천 순서|md-scout-order/);
   assert.match(html,/상대 트레이너 5명 자세히 보기/);
   assert.match(html,/원치 않는 문자열 없음|포켓몬/);
 });
-test('manager explicitly applies all matchday advice keyed to trainer ID, not display position',async()=>{
+test('manager can apply tactical advice without automatic lineup changes',async()=>{
   const t=setup(),p=t.g.pendingMatch;
   await t.api.request();
-  const order=p.scoutReport.recommendedOrder;
+  const order=p.order.slice();
   const recommendations=p.scoutReport.matches;
-  // First, make an intentional manual override. Applying order must keep it.
+  // An old programmatic attempt to apply recommended order must be ignored.
   p.plans[2]='tempo';p.behaviors[2]='pp';
-  assert.equal(t.api.applyAdvice('order'),true);
+  assert.equal(t.api.applyAdvice('order'),false);
   assert.deepEqual(Array.from(p.order),order);
   assert.equal(p.plans[2],'tempo');
   assert.equal(p.behaviors[2],'pp');
@@ -83,6 +92,17 @@ test('manager explicitly applies all matchday advice keyed to trainer ID, not di
     assert.equal(p.behaviors[rec.trainerIndex],rec.behavior);
   }
   assert.deepEqual(Array.from(p.order),order);
+});
+test('changing the manager lineup invalidates old advice until reanalysis',async()=>{
+  const t=setup(),p=t.g.pendingMatch;
+  await t.api.request();
+  p.order=[3,1,4,0,2];
+  assert.equal(t.api.valid(p,t.away),false);
+  assert.equal(t.api.applyAdvice('all'),false);
+  assert.match(t.render(),/상대 팀 분석하기/);
+  assert.equal(await t.api.request(),true);
+  assert.deepEqual(Array.from(p.scoutReport.matches.map(m=>m.trainerIndex)),p.order);
+  assert.equal(t.api.valid(p,t.away),true);
 });
 test('individual recommendation changes only one trainer and does not reshuffle squad',async()=>{
   const t=setup(),p=t.g.pendingMatch;

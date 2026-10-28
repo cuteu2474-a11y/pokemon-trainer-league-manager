@@ -179,7 +179,7 @@ function orderedPlans(home,away,matrix,order){
       behavior:instruction.behavior,reason:instruction.reason};
   });
 }
-export function analyzeOpponent({home,away,playerClubId,season=1,round=1}={}){
+export function analyzeOpponent({home,away,playerClubId,season=1,round=1,selectedOrder}={}){
   if(!home||!away||home.id===away.id||!Array.isArray(home.trainers)||
     !Array.isArray(away.trainers)||home.trainers.length!==5||away.trainers.length!==5)
     throw new RangeError('서로 다른 구단의 주전 트레이너 5명이 필요합니다.');
@@ -189,8 +189,13 @@ export function analyzeOpponent({home,away,playerClubId,season=1,round=1}={}){
   const rival=own===home?away:home;
   const ours=own.trainers.map(profile),theirs=rival.trainers.map(profile);
   const matrix=ours.map(o=>theirs.map(t=>pairingScore(o,t)));
-  const recommendedOrder=recommendOrder(matrix);
-  const matches=orderedPlans(ours,theirs,matrix,recommendedOrder);
+  // A human manager decides the lineup. Analyze that order without suggesting
+  // or overwriting it; AI coaches still use independent optimization below.
+  if(selectedOrder!==undefined&&(!Array.isArray(selectedOrder)||selectedOrder.length!==5||
+    new Set(selectedOrder).size!==5||selectedOrder.some(i=>!Number.isInteger(i)||i<0||i>4)))
+    throw new RangeError('감독이 선택한 출전 순서에는 트레이너 5명이 한 번씩 필요합니다.');
+  const recommendedOrder=selectedOrder===undefined?recommendOrder(matrix):undefined;
+  const matches=orderedPlans(ours,theirs,matrix,selectedOrder||recommendedOrder);
   const types=Object.entries(theirs.reduce((out,t)=>{
     for(const [type,count] of Object.entries(t.types))out[type]=(out[type]||0)+count;
     return out;
@@ -209,8 +214,9 @@ export function analyzeOpponent({home,away,playerClubId,season=1,round=1}={}){
       // Existing public rosters are visible, but exact unknown moves are not invented.
       pokemon:team.map(({name,types,movesKnown})=>({name,types,movesKnown}))})),
     ownTrainers:ours.map(t=>({index:t.index,name:t.name,traits:t.traits,play:t.play,specialty:t.specialty})),
-    typeDistribution:types,tendency,matrix,recommendedOrder,matches,
-    note:'실제 대전 결과나 확정 승률이 아니라 현재 공개된 포켓몬과 전술 성향에 따른 비교 분석입니다. KOF 연승전에서는 추천된 순서대로 1:1 대결이 일어나는 것은 아닙니다.'};
+    typeDistribution:types,tendency,matrix,
+    ...(selectedOrder===undefined?{recommendedOrder}:{selectedOrder:selectedOrder.slice()}),matches,
+    note:'실제 대전 결과나 확정 승률이 아니라 현재 공개된 포켓몬과 전술 성향에 따른 비교 분석입니다. KOF 연승전에서는 현재 출전 순서의 주자끼리 반드시 1:1 대결하는 것은 아닙니다.'};
 }
 
 /**
