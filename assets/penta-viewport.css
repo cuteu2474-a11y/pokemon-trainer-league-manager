@@ -1,0 +1,193 @@
+/* Fluid full-viewport layout for Penta Rivals.
+   Presentation-only: preserves approved branding, navigation and gameplay. */
+:root{
+  --pr-viewport-pad:clamp(9px,1.1vw,22px);
+  --pr-readable-gap:clamp(8px,1.15vw,16px);
+}
+html,body{width:100%;min-width:0;overflow-x:clip}
+#game{width:100%;min-height:100vh;min-height:100dvh;overflow-x:clip}
+#game:has(#clubselect:not([hidden])),
+#game:has(#clubtrainers:not([hidden])),
+#game:has(#dashboard:not([hidden])){min-height:100vh;min-height:100dvh}
+#game :is(.hero,.tiles,.dashboard,.cs-shell,.ct-shell,.cs-main,.ct-main,
+  .cs-browser,.cs-detail,.ct-list,.ct-detail,.dashpanel){min-width:0}
+[hidden]{display:none!important}
+
+/* Do not letterbox the title or impose a desktop-only width cap. */
+#game .hero{
+  width:100%;max-width:none;min-width:0;
+  margin-inline:auto;padding-inline:var(--pr-viewport-pad);
+  gap:var(--pr-readable-gap);
+}
+#game .tiles{
+  width:100%;max-width:none;min-width:0;
+  margin-inline:auto;padding-inline:var(--pr-viewport-pad);
+  gap:var(--pr-readable-gap);
+}
+#game .hero>*{min-width:0}
+#game .menu{min-width:0;max-width:100%}
+#game .footer{max-width:none;padding-inline:var(--pr-viewport-pad)}
+@media(min-width:1180px) and (min-height:700px){
+  #game .hero{min-height:45dvh;align-items:center}
+  #game .tiles{margin-top:clamp(14px,3dvh,38px)}
+}
+@media(max-width:800px){
+  #game .hero{grid-template-columns:minmax(0,1fr);margin-top:0}
+  #game .menu{width:min(100%,480px);padding-top:0}
+  #game .tiles{margin-top:clamp(12px,2.5dvh,25px)}
+}
+
+/* Full-screen club and manager creation screens; excess content stays reachable. */
+#clubselect,#clubtrainers{
+  width:100%;min-width:0;min-height:100vh;min-height:100dvh;
+  overflow-x:clip;
+}
+#clubselect .cs-shell,#clubtrainers .ct-shell{
+  width:100%;max-width:none;min-width:0;
+  min-height:100vh;min-height:100dvh;height:auto;
+  padding:var(--pr-viewport-pad);
+  padding-left:max(var(--pr-viewport-pad),env(safe-area-inset-left,0px));
+  padding-right:max(var(--pr-viewport-pad),env(safe-area-inset-right,0px));
+  overflow:visible;
+}
+#clubselect :is(.cs-main,.cs-browser,.cs-detail,.cs-grid,.cs-detail-scroll),
+#clubtrainers :is(.ct-main,.ct-list,.ct-detail,.ct-attributes,.ct-pokemon-grid){
+  min-width:0;max-width:100%;
+}
+#clubselect .cs-main,#clubtrainers .ct-main{flex:1 1 auto}
+#clubselect .cs-grid,#clubtrainers .ct-pokemon-grid{width:100%}
+#clubtrainers .ct-detail,#clubselect .cs-detail-scroll{overscroll-behavior-y:contain}
+
+#player-manager-setup{
+  inset:0;width:100%;min-width:0;
+  min-height:100vh;min-height:100dvh;height:100dvh;
+  overflow-x:clip;overflow-y:auto;
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+#player-manager-setup .pm-shell{
+  width:100%;max-width:none;min-width:0;min-height:100%;
+  padding:var(--pr-viewport-pad);
+  padding-left:max(var(--pr-viewport-pad),env(safe-area-inset-left,0px));
+  padding-right:max(var(--pr-viewport-pad),env(safe-area-inset-right,0px));
+}
+#player-manager-setup :is(.pm-grid,.pm-panel,.pm-score,.pm-top){min-width:0;max-width:100%}
+
+/* Main office: entire display width and at least the actual available height. */
+#dashboard.pr-office{
+  width:100%;max-width:none;min-width:0;
+  min-height:100vh;min-height:100dvh;
+  margin:0;padding:var(--pr-viewport-pad);
+  padding-left:max(var(--pr-viewport-pad),env(safe-area-inset-left,0px));
+  padding-right:max(var(--pr-viewport-pad),env(safe-area-inset-right,0px));
+  padding-bottom:max(var(--pr-viewport-pad),env(safe-area-inset-bottom,0px));
+  align-content:start;column-gap:var(--pr-readable-gap);row-gap:var(--pr-readable-gap);
+  grid-template-columns:minmax(0,1fr) clamp(270px,22vw,375px);
+  grid-template-rows:repeat(3,min-content) minmax(340px,1fr);
+}
+#dashboard.pr-office > :not(#dashpanel):not(.pr-secretary-rail){grid-column:1 / -1;min-width:0}
+#dashboard.pr-office > #dashpanel{
+  grid-column:1;min-width:0;width:100%;max-width:none;
+  min-height:max(340px,calc(100dvh - 375px));
+  overflow-x:auto;overflow-y:visible;
+  overscroll-behavior-x:contain;
+}
+#dashboard.pr-office > .pr-secretary-rail{
+  grid-column:2;width:100%;min-width:0;max-width:none;
+  max-height:min(900px,calc(100dvh - 2 * var(--pr-viewport-pad)));
+}
+#dashboard.pr-office .pr-navigation-stack,
+#dashboard.pr-office .pr-progress-bar,
+#dashboard.pr-office .pr-club-banner{width:100%;min-width:0;max-width:none}
+#dashboard.pr-office :is(.pr-manager-profile,.pr-news-workspace,.g-grid,
+  .pr-news-columns,.trainer-layout,.trainer-profile,.pr-secretary-items){
+  min-width:0;max-width:100%;
+}
+#dashboard.pr-office :is(.g-table-wrap,.g-scroll,.league-table-scroll){
+  max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;
+}
+
+/* Short iPad landscape screens: preserve content height, never crop controls. */
+@media(max-height:730px) and (min-width:981px){
+  #dashboard.pr-office{grid-template-rows:repeat(3,min-content) minmax(260px,1fr)}
+  #dashboard.pr-office>.dashpanel{min-height:300px}
+  #dashboard.pr-office .pr-club-banner{min-height:78px;padding-block:7px}
+  #dashboard.pr-office .pr-top-link{min-height:49px;padding-block:5px}
+  #dashboard.pr-office .pr-progress-bar{min-height:45px;padding-block:6px}
+}
+
+/* Portrait tablets / smaller laptops: avoid a squeezed content column. */
+@media(max-width:980px){
+  #dashboard.pr-office{
+    grid-template-columns:minmax(0,1fr);
+    grid-template-rows:auto;
+    grid-auto-rows:min-content;
+    row-gap:var(--pr-readable-gap);
+  }
+  #dashboard.pr-office > #dashpanel{grid-column:1;min-height:max(330px,38dvh)}
+  #dashboard.pr-office > .pr-secretary-rail{
+    grid-column:1;position:static;top:auto;max-height:none;
+  }
+  #dashboard.pr-office .pr-secretary-items{max-height:none}
+  #dashboard.pr-office .pr-top-navigation{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));
+    overflow:visible;gap:6px;
+  }
+  #dashboard.pr-office .pr-top-link,
+  #dashboard.pr-office .pr-top-link.pr-main-link{
+    width:100%;min-width:0;min-height:53px;white-space:normal;
+  }
+  #dashboard.pr-office .pr-progress-bar{flex-wrap:wrap}
+  #player-manager-setup .pm-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  #clubselect .cs-main{grid-template-columns:minmax(0,1fr)}
+  #clubselect .cs-browser,#clubselect .cs-detail{overflow:visible}
+  #clubselect .cs-detail-scroll{overflow:visible}
+  #clubtrainers .ct-main{grid-template-columns:minmax(0,1fr)}
+  #clubtrainers .ct-detail{overflow:visible}
+}
+
+/* Phones: controls remain visible and appropriately sized on any aspect ratio. */
+@media(max-width:620px){
+  #game .hero{padding-inline:var(--pr-viewport-pad)}
+  #game .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #dashboard.pr-office > #dashpanel{min-height:calc(100dvh - 370px);padding:12px 10px}
+  #dashboard.pr-office .pr-top-navigation{
+    grid-template-columns:repeat(auto-fit,minmax(75px,1fr));gap:5px;
+  }
+  #dashboard.pr-office .pr-top-link,
+  #dashboard.pr-office .pr-top-link.pr-main-link{
+    min-height:47px;font-size:11px;padding:5px 6px;
+  }
+  #dashboard.pr-office .pr-club-banner{flex-wrap:wrap;gap:8px}
+  #dashboard.pr-office .pr-club-identity{flex:1 1 185px;min-width:0}
+  #dashboard.pr-office .pr-director{
+    flex:0 1 auto;min-width:0;max-width:100%;padding-left:0;
+    border-left:0;
+  }
+  #dashboard.pr-office .pr-progress-actions{width:100%;justify-content:flex-start}
+  #dashboard.pr-office .pr-secondary-navigation{max-width:100%;overflow-x:auto}
+  #clubselect .cs-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #clubtrainers .ct-list{grid-template-columns:minmax(0,1fr)}
+  #player-manager-setup .pm-grid{grid-template-columns:minmax(0,1fr)}
+  #player-manager-setup .pm-top{flex-wrap:wrap}
+}
+/* Landscape phone + very narrow split-screen: reserve a usable reading width. */
+@media(max-width:380px){
+  #dashboard.pr-office .pr-top-navigation{grid-template-columns:repeat(3,minmax(0,1fr))}
+  #dashboard.pr-office .pr-team-title h1{font-size:clamp(17px,5.2vw,22px)}
+  #dashboard.pr-office .pr-progress-button{min-height:42px}
+  #clubselect .cs-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+/* Touch and keyboard usability while preserving explicit scrolling regions. */
+@media(pointer:coarse){
+  #dashboard.pr-office :is(.pr-top-link,.pr-sub-link,.pr-progress-button,
+    .pr-secretary-item,.pr-secretary-action),
+  #clubselect :is(.cs-card,.cs-choose,.cs-return),
+  #clubtrainers :is(.ct-trainer-card,.ct-return),
+  #player-manager-setup :is(button,select){
+    touch-action:manipulation;
+  }
+  #dashboard.pr-office :is(.pr-sub-link,.pr-progress-button,.pr-secretary-action),
+  #player-manager-setup :is(button,select){min-height:40px}
+}

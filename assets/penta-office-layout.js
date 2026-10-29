@@ -575,6 +575,8 @@ function apply(){
  removeOldPreview();
 }
 const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=secretary-briefing-14';document.head.append(css);
+// Loaded after the approved office stylesheet; adapts all views to each viewport.
+const responsiveCSS=document.createElement('link');responsiveCSS.rel='stylesheet';responsiveCSS.href='assets/penta-viewport.css?v=responsive-all-devices-1';document.head.append(responsiveCSS);
 const previous=window.renderOffice;
 if(typeof previous==='function')window.renderOffice=function(...args){
  const value=previous.apply(this,args);
