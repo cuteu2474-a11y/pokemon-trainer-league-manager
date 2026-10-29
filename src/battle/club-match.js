@@ -1,6 +1,7 @@
 import {LEAGUE_RULES} from '../core/league-rules.js';
 import {recoverRelay} from './relay-state.js';
 import {simulateSixVsSix} from './showdown.js';
+import {analyzeAceHandoffs} from './switch-outcome.js';
 
 /** Validate each carry before recording the next duel: no silent HP, PP,
  * status, item, form or Pokémon identity loss after reordering survivors. */
@@ -110,5 +111,7 @@ export async function simulateClubMatch(clubA, clubB, {seed, maxBattles = LEAGUE
     }
   }
   return {rulesVersion:LEAGUE_RULES.version,winner: a === 5 && b === 5 ? 'tie' : a === 5 ? 'B' : 'A',
-    trainersDefeated: {A:a, B:b}, rounds};
+    trainersDefeated: {A:a, B:b}, rounds,
+    aceHandoffs:{A:analyzeAceHandoffs(rounds,clubA,'A'),
+      B:analyzeAceHandoffs(rounds,clubB,'B')}};
 }

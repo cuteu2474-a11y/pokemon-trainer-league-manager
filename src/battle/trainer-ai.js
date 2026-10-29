@@ -79,7 +79,7 @@ export class TrainerAI extends RandomPlayerAI{
     this.remaining=trainer.relayOpponentsRemaining??1;
     this.decisions={remainingOpponentsAtStart:this.remaining,
       moves:0,switches:0,voluntarySwitches:0,rollouts:0,rolloutFallbacks:0,
-      ppConservations:0,
+      ppConservations:0,switchEvents:[],
       switchAnalysis:{evaluations:0,avoided:0,urgentSwitches:0,aceProtected:0,scenes:[]},
       plan:this.plan,response:this.profile.response||'자율',preferred:this.profile.preferred,
       traits:[...(this.profile.traits||[])],
@@ -603,6 +603,14 @@ export class TrainerAI extends RandomPlayerAI{
         preserve:validQuality&&this.remaining>1&&endangered,
         currentThreat,nextThreat}});
     
+    // Record the actual voluntary switch command for post-match evaluation.
+    // The battle analyzer will match this against a public |switch| log entry.
+    if(active!==undefined&&this.decisions.switchEvents.length<200){
+      const turn=this.battleProvider?.()?.turn;
+      const target=(best.pokemon.ident||'').split(': ').slice(1).join(': ');
+      if(Number.isInteger(turn)&&target)
+        this.decisions.switchEvents.push({turn,target,slot:best.slot});
+    }
     return best.slot;
   }
 }

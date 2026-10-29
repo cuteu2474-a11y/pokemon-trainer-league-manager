@@ -56,15 +56,36 @@ const fresh=()=>({games:0,expertWins:0,noviceWins:0,ties:0,duels:0,
  expertSwitches:0,expertMoves:0,expertPPSaves:0,expertRollouts:0,
  expertFallbacks:0,expertAliveOnLastDuel:0,
  expertAceEntrants:0,expertAceSurvivors:0,
+ expertSwitchWindows:0,expertUnmatchedSwitchWindows:0,
+ expertDamagedEntries:0,expertFaintedEntries:0,expertRiskyEntries:0,
+ expertEntryHpLossFraction:0,
+ aceHandoffs:0,aceAliveAtHandoff:0,aceReadyForNext:0,
+ aceLeadKnown:0,aceReadyVsLead:0,
+ aceStoodNextDuel:0,
  expertSwitchEvaluations:0,expertNeutralSwitchesAvoided:0,
  expertUrgentSwitches:0,expertAceReservesProtected:0,
  turns:0,durationMs:0});
 const total=fresh(),perMatchup={},games=[];
 const scenes={urgentSwitch:[],neutralSwitchAvoided:[],aceReserve:[]};
+const worstEntries=[],notReadyAces=[];
 function tally(bucket,r,expertSide,elapsed){
  bucket.games++;bucket.durationMs+=elapsed;bucket.duels+=r.rounds.length;
  bucket[r.winner==='tie'?'ties':r.winner===expertSide?'expertWins':'noviceWins']++;
  const key=expertSide==='A'?'p1':'p2';
+ const ace=r.aceHandoffs?.[expertSide];
+ if(ace){
+  bucket.aceHandoffs+=ace.handoffs;
+  bucket.aceAliveAtHandoff+=ace.alive;
+  bucket.aceReadyForNext+=ace.ready;
+  bucket.aceLeadKnown+=ace.leadKnown||0;
+  bucket.aceReadyVsLead+=ace.readyVsLead||0;
+  bucket.aceStoodNextDuel+=ace.stoodNextDuel;
+  if(bucket===total)for(const entry of ace.records.filter(x=>!x.ready)){
+   if(notReadyAces.length<10)notReadyAces.push({
+    matchup:r.matchup,expertSide,...entry
+   });
+  }
+ }
  const entryIndices=[...new Set(r.rounds.map(d=>
   expertSide==='A'?d.trainerA:d.trainerB))];
  const source=expertSide==='A'?r.teamA:r.teamB;
@@ -79,6 +100,24 @@ function tally(bucket,r,expertSide,elapsed){
  }
  for(const duel of r.rounds){
   const data=duel.result.aiDecisions[key];
+  const observed=duel.result.switchOutcomes?.bySide?.[key];
+  if(observed){
+   bucket.expertSwitchWindows+=observed.matched;
+   bucket.expertUnmatchedSwitchWindows+=observed.unmatched;
+   bucket.expertDamagedEntries+=observed.damaged;
+   bucket.expertFaintedEntries+=observed.windowDeaths;
+   bucket.expertEntryHpLossFraction+=observed.totalHpLossFraction;
+   const entries=duel.result.switchOutcomes.switches.filter(x=>x.side===key);
+   bucket.expertRiskyEntries+=entries.filter(x=>x.hpLostFraction>=.3).length;
+   if(bucket===total)for(const entry of entries){
+    if(entry.hpLostFraction>=.25||!entry.survivedWindow){
+     worstEntries.push({...entry,matchup:r.matchup,expertSide,
+       duel:duel.trainerA+'-'+duel.trainerB});
+     worstEntries.sort((a,b)=>b.hpLostFraction-a.hpLostFraction);
+     worstEntries.length=Math.min(12,worstEntries.length);
+    }
+   }
+  }
   bucket.expertSwitches+=data.voluntarySwitches||0;
   bucket.expertMoves+=data.moves||0;
   bucket.expertPPSaves+=data.ppConservations||0;
@@ -116,4 +155,15 @@ for(const [aName,bName] of matchups){
    duels:result.rounds.length,ms,defeated:result.trainersDefeated});
  }
 }
-console.log(JSON.stringify({pairs,total,perMatchup,games,scenes},null,2));
+const rounded=x=>Number(x.toFixed(3));
+for(const item of [total,...Object.values(perMatchup)]){
+ item.meanEntryHpLossFraction=item.expertSwitchWindows?
+  rounded(item.expertEntryHpLossFraction/item.expertSwitchWindows):0;
+ item.switchEventMatchRate=item.expertSwitches?
+  rounded(item.expertSwitchWindows/item.expertSwitches):null;
+ item.aceNextReadinessRate=item.aceHandoffs?
+  rounded(item.aceReadyForNext/item.aceHandoffs):null;
+ item.aceNextLeadReadinessRate=item.aceLeadKnown?
+  rounded(item.aceReadyVsLead/item.aceLeadKnown):null;
+}
+console.log(JSON.stringify({pairs,total,perMatchup,games,scenes,worstEntries,notReadyAces},null,2));
