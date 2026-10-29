@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Dex} from '@pkmn/sim';
-import {ppConservation,ownReserveStrength,aceSwitchAdjustment} from '../src/battle/relay-resource-policy.js';
+import {ppConservation,ownReserveStrength,aceSwitchAdjustment,switchOpportunityPenalty} from '../src/battle/relay-resource-policy.js';
 import {TrainerAI} from '../src/battle/trainer-ai.js';
 
 const thunder=Dex.moves.get('thunderbolt');
@@ -98,4 +98,62 @@ test('actual voluntary-switch comparison discounts exposing a healthy ace in rel
  assert.equal(relay.moveScore,now.moveScore,'same legal attack at the same battle state');
  assert.ok(relay.switchScore<now.switchScore-5,
    'keeping a healthy ace for later challengers changes the real decision score');
+});
+
+
+test('PP saving does not reward a completely different weak or overpowered attack',()=>{
+ const tackle=Dex.moves.get('tackle');
+ const weakScarce={moveSlots:[
+   {id:'thunderbolt',pp:12,maxpp:15},
+   {id:'tackle',pp:1,maxpp:35}]};
+ assert.equal(ppConservation(params(thunder,{
+   own:weakScarce,options:[thunder,tackle]})).bonus,0,
+   'a weak, scarce move is not a strategic reason to favor a huge attack');
+ const strongScarce={moveSlots:[
+   {id:'thunderbolt',pp:1,maxpp:15},
+   {id:'tackle',pp:20,maxpp:35}]};
+ assert.equal(ppConservation(params(tackle,{
+   own:strongScarce,options:[thunder,tackle]})).bonus,0,
+   'a weak substitute is not rewarded solely for conserving a huge attack');
+ assert.ok(ppConservation(params(discharge)).bonus>0,
+   'genuinely comparable substitute remains preferred');
+});
+
+test('neutral switch penalty counts the lost attack turn but never blocks urgent counters',()=>{
+ const base={currentHealth:.95,currentDanger:1.1,matchupGain:.1,
+   bestMoveScore:95,foeHpFraction:.22,remaining:4,preservation:20};
+ const penalty=switchOpportunityPenalty(base);
+ assert.ok(penalty>=18&&penalty<=23);
+ assert.equal(switchOpportunityPenalty({...base,currentDanger:3}),0);
+ assert.equal(switchOpportunityPenalty({...base,matchupGain:1.5}),0);
+ assert.equal(switchOpportunityPenalty({...base,currentHealth:.35}),0);
+ assert.equal(switchOpportunityPenalty({...base,bestMoveScore:10}),0);
+ assert.ok(switchOpportunityPenalty({...base,remaining:1})<penalty);
+});
+
+
+test('live expert stays for a safe attack instead of a marginal neutral switch',()=>{
+ const team=[
+   {species:'Gyarados',name:'active',moves:['waterfall']},
+   {species:'Blastoise',name:'reserve',moves:['surf']}
+ ];
+ const ai=new TrainerAI({},{
+   tactics:20,switching:20,resourceManagement:20,relayOpponentsRemaining:4,
+   aiProfile:{preservation:20,switchSkill:20}
+ },{seed:[1,2,3,4],team});
+ ai.ownActive=team[0];
+ ai.foeSpecies='Lapras';
+ const request={active:[{moves:[{move:'Waterfall',disabled:false}]}],
+   side:{pokemon:[
+     {active:true,ident:'p1: active',details:'Gyarados',condition:'75/100'},
+     {active:false,ident:'p1: reserve',details:'Blastoise',condition:'100/100'}
+   ]}};
+ assert.equal(ai.moveProbability(request),1);
+ const {moveScore,switchScore}=ai.lastActionComparison;
+ assert.ok(switchScore<moveScore);
+ // With no charged opportunity cost, the marginal bench upgrade would win.
+ const penalty=switchOpportunityPenalty({currentHealth:.75,currentDanger:1.1,
+   matchupGain:0,bestMoveScore:60,foeHpFraction:1,remaining:4,preservation:20});
+ assert.ok(penalty>0);
+ assert.ok(switchScore+penalty>moveScore);
 });

@@ -46,9 +46,11 @@ export function ppConservation({move,options=[],own,ownTypes=[],foeTypes=[],
   // consume its last valuable PP. No reward for unusable/immune alternatives.
   const otherScarce=available.some(other=>{
     const otherSlot=own.moveSlots.find(s=>s.id===other.id);
+    const otherStrength=stageValue(other,ownTypes,foeTypes);
     return otherSlot&&otherSlot.maxpp>=5&&
       otherSlot.pp<=Math.max(2,Math.floor(otherSlot.maxpp*.20))&&
-      stageValue(other,ownTypes,foeTypes)<=strength/0.82;
+      otherStrength>0&&
+      strength>=otherStrength*.82&&otherStrength>=strength*.82;
   });
   if(!scarce&&otherScarce){
     return {bonus:Math.min(15,11*futureWeight*motivation),saved:true};
@@ -91,4 +93,20 @@ export function aceSwitchAdjustment({active,candidate,team=[],remaining=1,
      candidateHealthAfterEntry>=.35)
     return Math.min(12,4+(current-strength)*.10)*weight;
   return 0;
+}
+
+/** Switching spends a full turn: prefer a good legal attack when staying is
+ * safe, rather than repeatedly exposing reserves for a minor score advantage.
+ * The penalty disappears for dangerous positions or meaningful counters.
+ * All inputs are own legal attacks and visible foe HP/type data only. */
+export function switchOpportunityPenalty({currentHealth=1,currentDanger=1,
+  matchupGain=0,bestMoveScore=0,foeHpFraction=1,remaining=1,
+  preservation=10}={}){
+  if(currentHealth<=.60||currentDanger>=1.6||matchupGain>=.75||
+     bestMoveScore<45)return 0;
+  const attackValue=clamp((bestMoveScore-45)*.15,0,12);
+  const likelyFinish=foeHpFraction<=.30?7:0;
+  const relayWeight=remaining>1&&preservation>=14?4:0;
+  return Math.min(23,(6+attackValue+likelyFinish+relayWeight)*
+    (currentHealth>=.80?1:.75));
 }

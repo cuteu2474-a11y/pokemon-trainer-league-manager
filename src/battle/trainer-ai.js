@@ -5,7 +5,7 @@ import {RandomPlayerAI,Dex} from '@pkmn/sim';
 import {selectTacticalMove,searchBudget,evaluateMove,wastedStatusMove,wastedSelfMove} from './tactical-search.js';
 import {rolloutActions,robustResponseScore} from './showdown-rollout.js';
 import {traitValue,assessMoveTraits,switchTraitBonus} from './trait-decision.js';
-import {aceSwitchAdjustment} from './relay-resource-policy.js';
+import {aceSwitchAdjustment,switchOpportunityPenalty} from './relay-resource-policy.js';
 
 const clamp=x=>Math.max(1,Math.min(20,Number.isFinite(x)?x:10));
 const limit=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -259,6 +259,10 @@ export class TrainerAI extends RandomPlayerAI{
     };
     const currentDanger=danger(ownTypes);
     const ownBattle=battle?.[this.side]?.active?.[0];
+    // The opponent's current HP is publicly visible; other set details aren't.
+    const foeBattle=battle?.[this.side==='p1'?'p2':'p1']?.active?.[0];
+    const foeHpFraction=foeBattle?.maxhp>0?
+      limit(foeBattle.hp/foeBattle.maxhp,0,1):1;
     const ownSideConditions=battle?.[this.side]?.sideConditions||{};
     const foeAbility=this.publicOpponentKnowledge.get(this.foeIdentity)?.ability||'';
     const context={foeTypes,ownTypes,ownAbility:own?.ability,ownItem:own?.item,
@@ -300,8 +304,12 @@ export class TrainerAI extends RandomPlayerAI{
         remaining:this.remaining,preservation:this.profile.preservation,
         currentHealth:health,currentDanger,matchupGain:betterMatchup,
         candidateHealthAfterEntry:fraction-hazard});
+      const opportunity=switchOpportunityPenalty({
+        currentHealth:health,currentDanger,matchupGain:betterMatchup,
+        bestMoveScore:bestMove,foeHpFraction,remaining:this.remaining,
+        preservation:this.profile.preservation});
       const score=this.candidateScore(mon,i+1,foeTypes,hazard)+betterMatchup*9+
-        traits+preservation+aceAdjustment-28-nextDanger*8-hazard*28;
+        traits+preservation+aceAdjustment-opportunity-28-nextDanger*8-hazard*28;
       return [{slot:i+1,score}];
     }).sort((a,b)=>b.score-a.score||a.slot-b.slot);
     const best=candidates[0];
