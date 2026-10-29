@@ -110,3 +110,50 @@ export function switchOpportunityPenalty({currentHealth=1,currentDanger=1,
   return Math.min(23,(6+attackValue+likelyFinish+relayWeight)*
     (currentHealth>=.80?1:.75));
 }
+
+
+/** Public, conservative opportunity to finish a visibly weakened opponent.
+ * This is an action-selection nudge, not a promised KO: enemy EVs, abilities,
+ * hidden moves or private stats are never read. Disabled own moves excluded.
+ */
+export function publicFinishOpportunity({moves=[],ownTypes=[],foeTypes=[],
+  foeHpFraction=1,ownHealth=1,currentDanger=1}={}){
+  if(!(foeHpFraction>0)||foeHpFraction>.18||ownHealth<=.08)return 0;
+  let best=0;
+  for(const entry of moves){
+    if(entry?.disabled||entry?.pp===0)continue;
+    const move=Dex.moves.get(entry?.id||entry?.move||'');
+    if(!move.exists||move.category==='Status'||!(move.basePower>0))continue;
+    const accuracy=typeof move.accuracy==='number'?move.accuracy/100:1;
+    if(accuracy<.9)continue;
+    const impact=stageValue(move,ownTypes,foeTypes);
+    if(!(impact>=65))continue;
+    if(move.priority>=1&&foeHpFraction<=.18)best=Math.max(best,34);
+    else if(foeHpFraction<=.10&&ownHealth>=.7&&currentDanger<=1.3&&impact>=90&&accuracy>=.95)
+      best=Math.max(best,20);
+  }
+  return best;
+}
+
+/** Penalize risky entries against PUBLICLY revealed attacks (not unseen sets).
+ * Even without a revealed move, preserve a fragile reserve when its HP after
+ * entry hazards is very low. Showdown damage remains authoritative.
+ */
+export function switchExposurePenalty({currentHealth=1,currentDanger=1,
+  nextDanger=1,observedCurrent=0,observedNext=0,
+  candidateHealthAfterEntry=1,matchupGain=0}={}){
+  if(currentHealth<.50||candidateHealthAfterEntry<=0)return 0;
+  let penalty=0;
+  const riskGap=observedNext-Math.max(observedCurrent,.75);
+  if(observedNext>=1.7&&riskGap>=.65&&matchupGain<.75){
+    penalty=Math.max(penalty,
+      Math.min(32,8+(observedNext-1.7)*8+(riskGap-.65)*6+
+        (candidateHealthAfterEntry<.6?7:0)));
+  }
+  if(candidateHealthAfterEntry<=.28&&nextDanger>=1.3&&
+     currentHealth>=.6&&matchupGain<1)
+    penalty=Math.max(penalty,22);
+  if(candidateHealthAfterEntry<=.5&&observedNext>=1.7&&currentHealth>=.7)
+    penalty=Math.max(penalty,18);
+  return Math.max(0,Math.min(34,penalty));
+}

@@ -62,6 +62,8 @@ const fresh=()=>({games:0,expertWins:0,noviceWins:0,ties:0,duels:0,
  aceHandoffs:0,aceAliveAtHandoff:0,aceReadyForNext:0,
  aceLeadKnown:0,aceReadyVsLead:0,
  aceStoodNextDuel:0,
+ expertFinishWindows:0,expertExposedCandidates:0,
+ expertFinishKept:0,expertExposureAvoided:0,
  expertSwitchEvaluations:0,expertNeutralSwitchesAvoided:0,
  expertUrgentSwitches:0,expertAceReservesProtected:0,
  turns:0,durationMs:0});
@@ -123,6 +125,10 @@ function tally(bucket,r,expertSide,elapsed){
   bucket.expertPPSaves+=data.ppConservations||0;
   bucket.expertRollouts+=data.rollouts||0;
   bucket.expertFallbacks+=data.rolloutFallbacks||0;
+  bucket.expertFinishWindows+=data.switchAnalysis?.finishWindows||0;
+  bucket.expertExposedCandidates+=data.switchAnalysis?.exposedCandidates||0;
+  bucket.expertFinishKept+=data.switchAnalysis?.finishKept||0;
+  bucket.expertExposureAvoided+=data.switchAnalysis?.exposureAvoided||0;
   bucket.expertSwitchEvaluations+=data.switchAnalysis?.evaluations||0;
   bucket.expertNeutralSwitchesAvoided+=data.switchAnalysis?.avoided||0;
   bucket.expertUrgentSwitches+=data.switchAnalysis?.urgentSwitches||0;

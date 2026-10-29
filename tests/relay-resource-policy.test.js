@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Dex} from '@pkmn/sim';
-import {ppConservation,ownReserveStrength,aceSwitchAdjustment,switchOpportunityPenalty} from '../src/battle/relay-resource-policy.js';
+import {ppConservation,ownReserveStrength,aceSwitchAdjustment,switchOpportunityPenalty,
+  publicFinishOpportunity,switchExposurePenalty} from '../src/battle/relay-resource-policy.js';
 import {TrainerAI} from '../src/battle/trainer-ai.js';
 
 const thunder=Dex.moves.get('thunderbolt');
@@ -156,4 +157,90 @@ test('live expert stays for a safe attack instead of a marginal neutral switch',
    matchupGain:0,bestMoveScore:60,foeHpFraction:1,remaining:4,preservation:20});
  assert.ok(penalty>0);
  assert.ok(switchScore+penalty>moveScore);
+});
+
+test('priority attacks are valued when a visible foe is almost knocked out',()=>{
+ const args={moves:[{id:'extremespeed',pp:5}],ownTypes:['Normal'],foeTypes:['Dragon','Ground'],
+   foeHpFraction:.08,ownHealth:.9,currentDanger:2};
+ assert.equal(publicFinishOpportunity(args),34);
+ assert.equal(publicFinishOpportunity({...args,foeHpFraction:.5}),0);
+ assert.equal(publicFinishOpportunity({...args,moves:[{id:'extremespeed',disabled:true}]}),0);
+ assert.equal(publicFinishOpportunity({...args,moves:[{id:'extremespeed',pp:0}]}),0);
+ assert.equal(publicFinishOpportunity({...args,foeTypes:['Ghost']}),0);
+ assert.equal(publicFinishOpportunity({...args,moves:[{id:'toxic'}]}),0);
+ assert.equal(publicFinishOpportunity({...args,ownHealth:.05}),0);
+});
+test('nonpriority finish is rewarded only when safe and opponent HP is very low',()=>{
+ const args={moves:[{id:'thunderbolt'}],ownTypes:['Electric'],foeTypes:['Water'],
+   foeHpFraction:.09,ownHealth:.9,currentDanger:1.1};
+ assert.equal(publicFinishOpportunity(args),20);
+ assert.equal(publicFinishOpportunity({...args,currentDanger:2}),0);
+ assert.equal(publicFinishOpportunity({...args,foeHpFraction:.15}),0);
+ assert.equal(publicFinishOpportunity({...args,ownHealth:.3}),0);
+});
+test('publicly revealed dangerous attacks and low reserve HP incur a bounded exposure cost',()=>{
+ const args={currentHealth:.9,currentDanger:1.1,nextDanger:4,
+   observedCurrent:1,observedNext:4,candidateHealthAfterEntry:.56,matchupGain:-2};
+ assert.ok(switchExposurePenalty(args)>=20&&switchExposurePenalty(args)<=34);
+ assert.equal(switchExposurePenalty({...args,observedNext:0,candidateHealthAfterEntry:.85}),0);
+ assert.equal(switchExposurePenalty({...args,currentHealth:.2}),0);
+ assert.equal(switchExposurePenalty({...args,observedNext:1,candidateHealthAfterEntry:.23,nextDanger:2}),22);
+ assert.equal(switchExposurePenalty({...args,matchupGain:2,observedNext:2,candidateHealthAfterEntry:.9}),0);
+});
+test('expert keeps a legal priority attack rather than giving up a public finishing chance',()=>{
+ const team=[{species:'Arcanine',name:'active',moves:['extremespeed']},
+   {species:'Togekiss',name:'bench',moves:['airslash']}];
+ const battle={turn:4,p1:{active:[{hp:90,maxhp:100}],pokemon:[],sideConditions:{}},
+   p2:{active:[{hp:8,maxhp:100}],sideConditions:{}}};
+ const ai=new TrainerAI({}, {tactics:20,switching:20,resourceManagement:20,
+   relayOpponentsRemaining:4,aiProfile:{preservation:20,switchSkill:20}},
+   {seed:[1,2,3,4],team,battleProvider:()=>battle});
+ ai.ownActive=team[0];ai.foeSpecies='Garchomp';ai.foeIdentity='p2a: enemy';
+ ai.publicMoveHistory.set('p2a: enemy',new Set(['earthquake']));
+ const request={active:[{moves:[{move:'Extreme Speed',disabled:false,pp:5}]}],
+   side:{pokemon:[
+     {active:true,ident:'p1: active',details:'Arcanine',condition:'90/100'},
+     {active:false,ident:'p1: bench',details:'Togekiss',condition:'100/100'}]}};
+ assert.equal(ai.moveProbability(request),1);
+ assert.equal(ai.lastActionComparison.finishOpportunity,34);
+ assert.ok(ai.lastActionComparison.switchScore>
+   ai.lastActionComparison.moveScore-ai.lastActionComparison.finishOpportunity);
+ assert.equal(ai.decisions.switchAnalysis.finishKept,1);
+});
+test('expert recognizes a public Water attack threatens a Water-weak reserve',()=>{
+ const team=[{species:'Greninja',name:'active',moves:['surf']},
+   {species:'Tyranitar',name:'bench',moves:['stoneedge']}];
+ const battle={turn:4,p1:{active:[{hp:90,maxhp:100}],pokemon:[],sideConditions:{}},
+   p2:{active:[{hp:100,maxhp:100}],sideConditions:{}}};
+ const trainer={tactics:20,switching:20,relayOpponentsRemaining:4,
+   aiProfile:{preservation:20,switchSkill:20}};
+ const opts={seed:[1,2,3,4],team,battleProvider:()=>battle};
+ const req={active:[{moves:[{move:'Surf',disabled:false}]}],
+   side:{pokemon:[
+     {active:true,ident:'p1: active',details:'Greninja',condition:'90/100'},
+     {active:false,ident:'p1: bench',details:'Tyranitar',condition:'100/100'}]}};
+ const observed=new TrainerAI({},trainer,opts);
+ observed.ownActive=team[0];observed.foeSpecies='Gyarados';observed.foeIdentity='p2a: foe';
+ observed.publicMoveHistory.set(observed.foeIdentity,new Set(['waterfall']));
+ observed.moveProbability(req);
+ assert.ok(observed.lastActionComparison.exposurePenalty>10);
+ assert.equal(observed.decisions.switchAnalysis.exposedCandidates,1);
+ const unseen=new TrainerAI({},trainer,opts);
+ unseen.ownActive=team[0];unseen.foeSpecies='Gyarados';unseen.foeIdentity='p2a: foe';
+ unseen.moveProbability(req);
+ assert.equal(unseen.lastActionComparison.exposurePenalty,0);
+});
+test('fixed-damage attacks are not falsely classified as a type-based bench weakness',()=>{
+ const team=[{species:'Greninja',name:'active',moves:['surf']},
+   {species:'Tyranitar',name:'bench',moves:['stoneedge']}];
+ const battle={turn:4,p1:{active:[{hp:90,maxhp:100}],pokemon:[],sideConditions:{}},
+   p2:{active:[{hp:100,maxhp:100}],sideConditions:{}}};
+ const ai=new TrainerAI({}, {tactics:20,switching:20},{
+   seed:[1,2,3,4],team,battleProvider:()=>battle});
+ ai.ownActive=team[0];ai.foeSpecies='Blissey';ai.foeIdentity='p2a: foe';
+ ai.publicMoveHistory.set(ai.foeIdentity,new Set(['seismictoss']));
+ ai.moveProbability({active:[{moves:[{move:'Surf'}]}],side:{pokemon:[
+   {active:true,ident:'p1: active',details:'Greninja',condition:'90/100'},
+   {active:false,ident:'p1: bench',details:'Tyranitar',condition:'100/100'}]}});
+ assert.equal(ai.lastActionComparison.exposurePenalty,0);
 });
