@@ -246,3 +246,159 @@ html:has(#game),body:has(#game){width:100%;height:100%;overflow:hidden!important
 @media(pointer:coarse){
  .pr-screen-pager button,.pr-screen-switch button,.pr-setup-switch button{touch-action:manipulation}
 }
+
+
+/* Inner drag scrolling, NOT scrolling the whole game viewport.
+ * Slight iPad/phone height differences must not obscure the last actions. */
+#dashboard.pr-office.pr-one-screen > #dashpanel{
+  overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+  touch-action:pan-y;
+}
+#dashboard.pr-office.pr-one-screen > .pr-secretary-rail{
+  overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+  touch-action:pan-y;
+}
+#clubselect.pr-one-screen-select .cs-detail-scroll,
+#clubtrainers.pr-one-screen-select .ct-detail{
+  overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+  touch-action:pan-y;
+  scrollbar-width:thin;
+  scrollbar-color:#4d87ac transparent;
+}
+#player-manager-setup.pr-one-screen-select .pm-panel{
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+  overscroll-behavior-y:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+  scrollbar-width:thin;
+  scrollbar-color:#4d87ac transparent;
+  /* Bottom controls can scroll fully into view, above the iPad home indicator. */
+  padding-bottom:max(16px,env(safe-area-inset-bottom,0px))!important;
+}
+#player-manager-setup.pr-one-screen-select .pr-manager-pager,
+#clubselect.pr-one-screen-select .pr-club-detail-pager,
+#clubtrainers.pr-one-screen-select .pr-trainer-detail-pager{display:none!important}
+/* On portrait iPads, select one fully usable setup panel per viewport.
+ * Prior 681–900px breakpoint stacked both panels, pushing actions off-screen. */
+@media(max-width:900px){
+  #player-manager-setup.pr-one-screen-select .pm-panel{
+    grid-column:1;grid-row:1;min-width:0;
+  }
+  #player-manager-setup.pr-one-screen-select[data-pr-view="list"] .pm-panel:nth-child(2),
+  #player-manager-setup.pr-one-screen-select[data-pr-view="detail"] .pm-panel:nth-child(1){
+    display:none!important;
+  }
+}
+/* A small overflow should not incur a floating pager that covers buttons. */
+@media(pointer:coarse){
+  #player-manager-setup.pr-one-screen-select .pm-panel{
+    scroll-behavior:auto;
+  }
+}
+
+
+/* One screen stays fixed; everything that overflows it moves by native
+ * touch-drag / trackpad scroll INSIDE its own panel. No pagination bar. */
+#dashboard.pr-office.pr-one-screen{
+ grid-template-rows:min-content min-content min-content minmax(0,1fr)!important;
+}
+#dashboard.pr-office.pr-one-screen > .pr-main-pager,
+#dashboard.pr-office.pr-one-screen > .pr-aside-pager,
+#clubselect.pr-one-screen-select .pr-club-pager,
+#clubselect.pr-one-screen-select .pr-club-detail-pager,
+#clubtrainers.pr-one-screen-select .pr-roster-pager,
+#clubtrainers.pr-one-screen-select .pr-trainer-detail-pager,
+#player-manager-setup.pr-one-screen-select .pr-manager-pager{
+ display:none!important;
+}
+#dashboard.pr-office.pr-one-screen > #dashpanel,
+#dashboard.pr-office.pr-one-screen > .pr-secretary-rail,
+#clubselect.pr-one-screen-select .cs-detail-scroll,
+#clubtrainers.pr-one-screen-select .ct-detail,
+#player-manager-setup.pr-one-screen-select .pm-panel{
+ overflow-y:auto!important;
+ overflow-x:hidden;
+ overscroll-behavior-y:contain;
+ -webkit-overflow-scrolling:touch;
+ touch-action:pan-y;
+ scrollbar-width:thin;
+ scrollbar-color:#5287a9 transparent;
+}
+#dashboard.pr-office.pr-one-screen > #dashpanel{
+ overflow-x:auto!important;
+ touch-action:pan-x pan-y;
+}
+#clubselect.pr-one-screen-select .cs-grid{
+ display:grid;
+ grid-template-rows:none!important;
+ grid-auto-rows:minmax(120px,max-content)!important;
+ overflow-y:auto!important;
+ overflow-x:hidden!important;
+ align-content:start!important;
+ min-height:0;
+ overscroll-behavior-y:contain;
+ -webkit-overflow-scrolling:touch;
+ touch-action:pan-y;
+ padding-bottom:8px;
+ scrollbar-width:thin;
+ scrollbar-color:#5287a9 transparent;
+}
+#clubselect.pr-one-screen-select .cs-grid .cs-card{
+ height:auto!important;
+ min-height:120px!important;
+ max-height:none!important;
+}
+#clubtrainers.pr-one-screen-select .ct-list{
+ overflow-y:auto!important;
+ overflow-x:hidden!important;
+ min-height:0;
+ overscroll-behavior-y:contain;
+ -webkit-overflow-scrolling:touch;
+ touch-action:pan-y;
+}
+#clubtrainers.pr-one-screen-select .ct-list .ct-trainer-card{
+ flex:0 0 auto!important;
+ min-height:100px!important;
+ height:auto!important;
+ max-height:none!important;
+}
+#player-manager-setup.pr-one-screen-select .pm-panel{
+ padding-bottom:max(20px,env(safe-area-inset-bottom,0px))!important;
+}
+#player-manager-setup.pr-one-screen-select .pm-actions{
+ position:static!important;
+ bottom:auto!important;
+ margin-bottom:4px;
+}
+@media(max-width:980px){
+ #dashboard.pr-office.pr-one-screen{
+  grid-template-rows:min-content min-content min-content 34px minmax(0,1fr)!important;
+ }
+}
+/* A very short landscape screen uses the same drag areas with side navigation. */
+@media(min-width:640px) and (max-height:510px){
+ #dashboard.pr-office.pr-one-screen{
+  grid-template-rows:40px 35px minmax(0,1fr)!important;
+ }
+ #dashboard.pr-office.pr-one-screen > .pr-navigation-stack{
+  grid-row:1 / 4!important;
+ }
+}
+@media(max-width:900px){
+ /* On narrow portrait screens, each panel fills the same fixed content slot. */
+ #player-manager-setup.pr-one-screen-select .pm-panel{
+  grid-column:1!important;
+  grid-row:1!important;
+ }
+ #player-manager-setup.pr-one-screen-select[data-pr-view="list"] .pm-panel:nth-child(2),
+ #player-manager-setup.pr-one-screen-select[data-pr-view="detail"] .pm-panel:nth-child(1){
+  display:none!important;
+ }
+}

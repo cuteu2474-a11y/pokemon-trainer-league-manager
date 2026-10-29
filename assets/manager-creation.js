@@ -26,6 +26,9 @@ screen.setAttribute('aria-label','감독 경력과 능력치 설정');
 document.body.appendChild(screen);
 const remaining=()=>CAREERS[career].points-STATS.reduce((sum,[id])=>sum+(points[id]-BASE),0);
 function draw(){
+ // +/- and career changes re-render the panel. Keep the user's scroll
+ // position so the bottom buttons don't jump away after each tap.
+ const previousScroll=Array.from(screen.querySelectorAll('.pm-panel')).map(el=>el.scrollTop);
  const tier=CAREERS[career];
  const club=typeof clubSelectDraft!=='undefined'?clubSelectDraft?.clubs?.[clubSelectId]:null;
  const manager=String($('csManager')?.value|| (typeof clubSelectManager!=='undefined'?clubSelectManager:'') || '').trim();
@@ -38,6 +41,9 @@ function draw(){
  '<div class="pm-stat"><div class="pm-stat-meta"><div><strong>'+label+'</strong><span class="pm-stat-effect" data-keep-copy>'+desc+'</span></div><div class="pm-stepper"><button type="button" data-stat="'+id+'" data-delta="-1" aria-label="'+label+' 감소" '+(points[id]<=BASE?'disabled':'')+'>−</button><b>'+points[id]+'</b><button type="button" data-stat="'+id+'" data-delta="1" aria-label="'+label+' 증가" '+(remaining()<=0||points[id]>=tier.max?'disabled':'')+'>+</button></div></div><div class="pm-bar"><span style="width:'+(points[id]/20*100)+'%"></span></div></div>').join('')+'</div>'+
  '<div class="pm-renown"><span><strong>명성 '+tier.renown+'/100</strong><span class="pm-renown-effect" data-keep-copy>감독 평판 · 유명 트레이너 영입</span></span><span class="pm-renown-badge">'+tier.name+'</span></div>'+
  '<div class="pm-actions"><button type="button" data-action="reset" class="pm-reset">배분 초기화</button><button type="button" data-action="submit" class="pm-submit" '+(remaining()!==0?'disabled':'')+'>설정 완료 · 감독 취임</button></div></section></div></div>';
+ screen.querySelectorAll('.pm-panel').forEach((panel,i)=>{
+  panel.scrollTop=previousScroll[i]||0;
+ });
 }
 function back(){
  screen.hidden=true;
