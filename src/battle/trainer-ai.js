@@ -80,6 +80,7 @@ export class TrainerAI extends RandomPlayerAI{
     this.decisions={remainingOpponentsAtStart:this.remaining,
       moves:0,switches:0,voluntarySwitches:0,rollouts:0,rolloutFallbacks:0,
       ppConservations:0,
+      switchAnalysis:{evaluations:0,avoided:0,urgentSwitches:0,aceProtected:0,scenes:[]},
       plan:this.plan,response:this.profile.response||'자율',preferred:this.profile.preferred,
       traits:[...(this.profile.traits||[])],
       behaviorAdvice:this.profile.behaviorAdvice||null,
@@ -182,6 +183,19 @@ export class TrainerAI extends RandomPlayerAI{
     return this.team.find(mon=>mon.name===label)||
       this.team[Number(slot)-1]||null;
   }
+  /** Own side PP is visible. Match bench identity by its stable ID or unique
+   * name, not by battle slot order (which changes when a Pokémon switches). */
+  ownedAttackSlots(pokemon,slot){
+    const owned=this.findOwned(pokemon,slot);
+    const roster=this.battleProvider?.()?.[this.side]?.pokemon;
+    if(!Array.isArray(roster)||!owned)return null;
+    const id=owned.pokemonId??owned.uid??owned.id;
+    const name=owned.name||(pokemon?.ident||'').split(': ').slice(1).join(': ');
+    const live=roster.find(mon=>
+      (id!=null&&String(mon.leagueMeta?.pokemonId??'')===String(id))||
+      (name&&mon.name===name));
+    return live?.baseMoveSlots||live?.moveSlots||null;
+  }
   /* Evaluate one owned Pokémon using known types, current HP and real own moves.
      This never examines the opponent's hidden moves, items or battle set. */
   candidateScore(pokemon,slot,foeTypes=[],hazards=0){
@@ -192,10 +206,13 @@ export class TrainerAI extends RandomPlayerAI{
     if(condition.endsWith(' fnt')||Number.parseInt(condition,10)===0)return -1e6;
     const hp=Number.parseInt(condition,10),max=Number.parseInt(condition.split('/')[1]||'',10);
     const health=Number.isFinite(max)&&max>0?limit(hp/max,0,1):1;
+    const liveSlots=this.ownedAttackSlots(pokemon,slot);
+    const usable=id=>!liveSlots||liveSlots.some(m=>m.id===id&&m.pp>0&&!m.disabled);
     const bestAgainst=types=>{
       let best=0;
       const ownMoves=own?.moves||[];
       for(const id of ownMoves){
+        if(!usable(id))continue;
         const move=Dex.moves.get(id);
         if(!move.exists||move.category==='Status'||move.basePower<=0)continue;
         const effectiveness=types.length?typeMultiplier(move.type,types):1;
@@ -208,7 +225,7 @@ export class TrainerAI extends RandomPlayerAI{
     // Do not inflate the lead evaluation with imagined opposing moves.
     const defense=foeTypes.length?Math.max(...foeTypes.map(t=>typeMultiplier(t,species.types))):1;
     const offense=bestAgainst(foeTypes);
-    const versatility=own?.moves?.filter(id=>Dex.moves.get(id).category!=='Status').length||0;
+    const versatility=own?.moves?.filter(id=>Dex.moves.get(id).category!=='Status'&&usable(id)).length||0;
     const conditionPenalty=String(pokemon?.condition||'').match(/\b(par|brn|slp|frz)\b/)?.[1] ? 15:0;
     return 45*health+Math.min(90,offense)*.50+Math.min(versatility,4)*3+
       (defense===0?42:29/Math.max(.5,defense))-hazards*120-conditionPenalty;
@@ -310,13 +327,46 @@ export class TrainerAI extends RandomPlayerAI{
         preservation:this.profile.preservation});
       const score=this.candidateScore(mon,i+1,foeTypes,hazard)+betterMatchup*9+
         traits+preservation+aceAdjustment-opportunity-28-nextDanger*8-hazard*28;
-      return [{slot:i+1,score}];
+      return [{slot:i+1,score,rawScore:score+opportunity,opportunity,aceAdjustment}];
     }).sort((a,b)=>b.score-a.score||a.slot-b.slot);
     const best=candidates[0];
     this.lastActionComparison={moveScore,switchScore:best?.score??-Infinity,
       switchSlot:best?.slot??null};
     const precisionMargin=(20-this.profile.switchSkill)*.6;
-    if(best&&best.score>moveScore+precisionMargin){
+    const shouldSwitch=Boolean(best&&best.score>moveScore+precisionMargin);
+    const analysis=this.decisions.switchAnalysis;
+    if(best){
+      analysis.evaluations++;
+      const highestRaw=Math.max(...candidates.map(x=>x.rawScore));
+      const avoided=!shouldSwitch&&highestRaw>moveScore+precisionMargin;
+      if(avoided)analysis.avoided++;
+      const aceProtected=!shouldSwitch&&candidates.some(x=>x.aceAdjustment<0&&
+        x.score-x.aceAdjustment>moveScore+precisionMargin);
+      if(aceProtected)analysis.aceProtected++;
+      const urgent=shouldSwitch&&(health<.55||currentDanger>=1.6);
+      if(urgent)analysis.urgentSwitches++;
+      if(avoided||aceProtected||urgent){
+        const scene={
+          turn:Number.isInteger(battle?.turn)?battle.turn:null,
+          ownSpecies:this.ownActive?.species||'',foeSpecies:this.foeSpecies||'',
+          ownHpFraction:Number(health.toFixed(3)),danger:Number(currentDanger.toFixed(2)),
+          benchSlot:best.slot,
+          attackScore:Number(moveScore.toFixed(2)),
+          switchScore:Number(best.score.toFixed(2)),
+          opportunity:Number((best.opportunity||0).toFixed(2)),
+          aceAdjustment:Number((best.aceAdjustment||0).toFixed(2)),
+          decision:urgent?'urgent-switch':aceProtected?'ace-reserve':'neutral-switch-avoided'
+        };
+        if(analysis.scenes.length<8)analysis.scenes.push(scene);
+        else if(avoided||aceProtected){
+          // Do not let the first eight routine danger switches hide rare,
+          // diagnostically valuable opportunities to keep an ace or stay in.
+          const index=analysis.scenes.findIndex(x=>x.decision==='urgent-switch');
+          if(index>=0)analysis.scenes[index]=scene;
+        }
+      }
+    }
+    if(shouldSwitch){
       this.preferredSwitchSlot=best.slot;
       return -1;
     }
