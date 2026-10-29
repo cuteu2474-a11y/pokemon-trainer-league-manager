@@ -174,3 +174,41 @@ test('feedback never changes match replay results or Pokémon stats',()=>{
   assert.equal(JSON.stringify(p.result),before);
   assert.deepEqual(mons,[{ca:40,pa:80,hp:90,moves:['thunderbolt']}]);
 });
+
+test('actual KO experience produces an autonomous finishing trait that changes the next match',()=>{
+ const api=careerApi(),save=game();
+ for(let round=1;round<=12;round++){
+   const frame=fixture(round);save.round=round;
+   for(const duel of frame.result.rounds){
+     duel.aiDecisions.p1.trace=[];
+     duel.log='|move|p1a: Azumarill|Aqua Jet|p2a: Arcanine\n'+
+       '|-damage|p2a: Arcanine|0 fnt\n|faint|p2a: Arcanine\n|turn|3';
+   }
+   assert.ok(api.applyMatch(save,frame,0));
+ }
+ const experienced=save.clubs[0].trainers[2];
+ assert.ok(experienced.autonomyAI.playTraits.includes('킬각 포착'));
+ assert.ok(experienced.autonomyAI.habitScores.kill>=55);
+ const trainedProfile=resolveBattleAutonomy(experienced,50);
+ assert.equal(trainedProfile.behaviorAdvice,null,'no manager instruction is supplied');
+ const untrained=coach('fresh'),untrainedProfile=resolveBattleAutonomy(untrained,50);
+ function choose(trainer,profile){
+   const own={hp:180,maxhp:200,types:['Water','Fairy'],getTypes:()=>['Water','Fairy'],
+     moveSlots:[{id:'aquajet',pp:10,maxpp:20},{id:'waterpulse',pp:10,maxpp:20}]};
+   const foe={hp:8,maxhp:100,types:['Fire'],getTypes:()=>['Fire'],status:''};
+   const battle={requestState:'idle',turn:8,p1:{active:[own],sideConditions:{}},
+     p2:{active:[foe],sideConditions:{}}};
+   const ai=new TrainerAI({}, {...trainer,relayOpponentsRemaining:3,aiProfile:profile},
+     {seed:[2,3,4,5],team:[{species:'Azumarill'}],battleProvider:()=>battle});
+   ai.ownActive={species:'Azumarill'};ai.foeSpecies='Arcanine';
+   return {choice:ai.chooseMove({},[
+    {choice:'move 1',move:{id:'aquajet'}},
+    {choice:'move 2',move:{id:'waterpulse'}}]),
+    uses:ai.decisions.traitUses.kill||0};
+ }
+ assert.equal(choose(untrained,untrainedProfile).choice,'move 2');
+ const action=choose(experienced,trainedProfile);
+ assert.equal(action.choice,'move 1');
+ assert.equal(action.uses,1);
+ assert.equal(api.applyMatch(save,fixture(12),0),null,'same confirmed round cannot duplicate experience');
+});

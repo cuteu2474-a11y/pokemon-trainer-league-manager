@@ -1,5 +1,5 @@
 import {Dex} from '@pkmn/sim';
-import {ppConservation} from './relay-resource-policy.js';
+import {ppConservation,publicFinishOpportunity} from './relay-resource-policy.js';
 
 /** The seven league traits affect AI selection only. They never modify Showdown rules. */
 export const TRAITS=Object.freeze({
@@ -40,9 +40,13 @@ export function statusIsUseful(move,foe) {
 export function assessMoveTraits({move,battle,side='p1',profile={},remaining=1,options=[],forecast=null}={}) {
   if(!move?.exists)return {bonus:0,quality:{}};
   const own=battle?.[side]?.active?.[0],foe=battle?.[side==='p1'?'p2':'p1']?.active?.[0];
-  const quality={kill:false,pp:false,status:false};
+  const quality={kill:false,pp:false,status:false,preserve:false,killOpportunity:false};
   if(!own||!foe||!own.hp||!foe.hp)return {bonus:0,quality};
   const attacking=move.category!=='Status';
+  const ownTypes=own.getTypes?.()||own.types||[];
+  const foeTypes=foe.getTypes?.()||foe.types||[];
+  const ownFraction=own.maxhp>0?own.hp/own.maxhp:1;
+  const foeFraction=foe.maxhp>0?foe.hp/foe.maxhp:1;
   let bonus=0;
   const kill=traitValue(profile,'kill');
   const chance=Number(forecast?.koRate)||0;
@@ -50,6 +54,28 @@ export function assessMoveTraits({move,battle,side='p1',profile={},remaining=1,o
     const confidence=typeof move.accuracy==='number'?move.accuracy/100:1;
     bonus+=kill*35*chance*confidence;
     quality.kill=chance>=.50&&confidence>=.60;
+  }else if(attacking&&forecast==null){
+    // A plausible finishing window is public information, not a guaranteed KO.
+    const opportunity=publicFinishOpportunity({
+      moves:[{id:move.id,pp:own.moveSlots?.find(x=>x.id===move.id)?.pp}],
+      ownTypes,foeTypes,foeHpFraction:foeFraction,
+      ownHealth:ownFraction,currentDanger:1.4});
+    if(opportunity>0){
+      quality.killOpportunity=true;
+      bonus+=kill*opportunity*.75;
+    }
+  }
+  // A healing choice can teach conservation even before the trait is learned.
+  // Only score genuinely useful self-healing while another relay opponent remains.
+  const selfHeal=Boolean(move.heal)&&['self','allySide','allyTeam'].includes(move.target);
+  const draining=attacking&&Boolean(move.drain)&&move.basePower>0&&
+    Dex.getImmunity(move.type,foeTypes);
+  if(remaining>1&&ownFraction>=.23&&ownFraction<.49&&foeFraction>.42&&
+      (selfHeal||draining)){
+    quality.preserve=true;
+    const accuracy=typeof move.accuracy==='number'?move.accuracy/100:1;
+    const need=Math.min(1,(1-ownFraction)/.55);
+    bonus+=traitValue(profile,'preserve')*need*(selfHeal?9:4)*accuracy;
   }
   const status=traitValue(profile,'status');
   if(status>0&&statusIsUseful(move,foe)){

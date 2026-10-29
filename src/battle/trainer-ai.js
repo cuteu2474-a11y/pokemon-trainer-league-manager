@@ -4,7 +4,7 @@ import {trainerPersonality} from './battle-autonomy.js';
 import {RandomPlayerAI,Dex} from '@pkmn/sim';
 import {selectTacticalMove,searchBudget,evaluateMove,wastedStatusMove,wastedSelfMove} from './tactical-search.js';
 import {rolloutActions,robustResponseScore} from './showdown-rollout.js';
-import {traitValue,assessMoveTraits,switchTraitBonus} from './trait-decision.js';
+import {TRAITS,traitValue,assessMoveTraits,switchTraitBonus} from './trait-decision.js';
 import {aceSwitchAdjustment,switchOpportunityPenalty,publicFinishOpportunity,switchExposurePenalty,relativeReserveExposure} from './relay-resource-policy.js';
 
 const clamp=x=>Math.max(1,Math.min(20,Number.isFinite(x)?x:10));
@@ -79,7 +79,7 @@ export class TrainerAI extends RandomPlayerAI{
     this.remaining=trainer.relayOpponentsRemaining??1;
     this.decisions={remainingOpponentsAtStart:this.remaining,
       moves:0,switches:0,voluntarySwitches:0,rollouts:0,rolloutFallbacks:0,
-      ppConservations:0,switchEvents:[],
+      ppConservations:0,switchEvents:[],traitUses:{},
       switchAnalysis:{evaluations:0,avoided:0,urgentSwitches:0,aceProtected:0,
         finishWindows:0,exposedCandidates:0,finishKept:0,exposureAvoided:0,
         saferReserveChosen:0,scenes:[]},
@@ -91,6 +91,14 @@ export class TrainerAI extends RandomPlayerAI{
   }
   record(kind,choice,reason,details={}){
     if(kind==='move'&&details.quality?.pp)this.decisions.ppConservations++;
+    // Report only an actually selected action, never every considered option.
+    // A matching trait does not prove it caused the result of the turn.
+    for(const [key,trait] of Object.entries(TRAITS)){
+      if(!this.profile.traits?.includes(trait.name))continue;
+      if(details.quality?.[key]===true||
+        (key==='kill'&&details.quality?.killOpportunity===true))
+        this.decisions.traitUses[key]=(this.decisions.traitUses[key]||0)+1;
+    }
     this.decisions.reasons[reason]=(this.decisions.reasons[reason]||0)+1;
     if(this.decisions.trace.length<60){
       this.decisions.trace.push({kind,choice,reason,...details});
@@ -543,8 +551,7 @@ export class TrainerAI extends RandomPlayerAI{
           const gap=ranked[1]?.runs>0?ranked[0].score-ranked[1].score:0;
           const own=battle[this.side].active[0],slot=Number(ranked[0].choice.split(' ')[1])-1;
           const chosen=Dex.moves.get(own.moveSlots?.[slot]?.id);
-          const restore=(chosen.heal||chosen.drain)&&own.maxhp>0&&own.hp/own.maxhp<.66;
-          const preserveCandidate=this.remaining>1&&Boolean(restore);
+          const preserveCandidate=ranked[0].traitEvidence?.preserve===true;
           this.record('move',ranked[0].choice,
             this.profile.preservation>=14&&this.remaining>1?'전황 분석·연승 전력 관리':'전황 분석·실전 시뮬레이션',
             {plan:this.plan,advantage:Number(ranked[0].score.toFixed(1)),
@@ -577,10 +584,9 @@ export class TrainerAI extends RandomPlayerAI{
       const choice=rankings[0].entry.choice;
       const chosen=rankings[0].entry.move;
       const move=Dex.moves.get(chosen?.id||chosen?.move||chosen||'');
-      const own=battle?.[this.side]?.active?.[0];
-      const preserve=this.remaining>1&&own?.maxhp>0&&own.hp/own.maxhp<.66&&Boolean(move.heal||move.drain);
+      const preserve=rankings[0].quality?.preserve===true;
       this.record('move',choice,'선플·상성·전술 우선순위',
-        {plan:this.plan,quality:{...rankings[0].quality,analysis:false,preserve,
+        {plan:this.plan,quality:{...rankings[0].quality,analysis:false,
           preserveMove:preserve?move.id:null}});
       return choice;
     }

@@ -34,12 +34,12 @@ function mock(){
     behaviorResponse:'수용'}]},
   rounds:[
    {trainerA:0,trainerB:0,winner:'A',log:'|turn|2',aiDecisions:{
-     p1:{ppConservations:2,switchAnalysis:{avoided:3,urgentSwitches:1,aceProtected:0,saferReserveChosen:1}},
+     p1:{ppConservations:2,traitUses:{kill:1,pp:2},switchAnalysis:{avoided:3,urgentSwitches:1,aceProtected:0,saferReserveChosen:1}},
      p2:{}},
      switchOutcomes:{bySide:{p1:metric(2,2,.6,0),p2:metric(0,0,0)},
        switches:events('p1',[2,.2,false],[4,.4,false])}},
    {trainerA:0,trainerB:0,winner:'B',log:'|turn|8',aiDecisions:{
-     p1:{ppConservations:1,switchAnalysis:{avoided:0,urgentSwitches:1,aceProtected:1}},
+     p1:{ppConservations:1,traitUses:{kill:2},switchAnalysis:{avoided:0,urgentSwitches:1,aceProtected:1}},
      p2:{}},
      switchOutcomes:{bySide:{p1:metric(1,1,.6,1),p2:metric(0,0,0)},
        switches:events('p1',[8,.6,true])}},
@@ -63,6 +63,8 @@ test('per-trainer records aggregate two duels without mixing another trainer',()
  assert.equal(rows[0].fainted,1);
  assert.ok(Math.abs(rows[0].meanEntryLoss-.4)<1e-10);
  assert.equal(rows[0].ppSaves,3);
+ assert.equal(rows[0].traitUses.find(x=>x.kind==='kill').count,3);
+ assert.equal(rows[0].traitUses.find(x=>x.kind==='pp').count,2);
  assert.equal(rows[0].observations.avoided,3);
  assert.equal(rows[0].observations.urgent,2);
  assert.equal(rows[0].observations.aceProtected,1);
@@ -108,6 +110,8 @@ test('evidence is described as observation, not ranked or causally scored',()=>{
  assert.match(html,/안전한 예비 포켓몬 선택 1회/);
  assert.match(html,/체력·상성 위험에서 교체 2회/);
  assert.match(html,/PP 보존 선택 3회/);
+ assert.match(html,/습득 선플 관련 실제 선택/);
+ assert.match(html,/킬각 포착 3회/);
  assert.match(html,/HP 30% 이상 손실 2회/);
  assert.match(html,/교체한 턴 기절 1회/);
  assert.match(html,/인과관계는 확인할 수 없습니다/);

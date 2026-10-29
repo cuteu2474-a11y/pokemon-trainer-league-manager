@@ -24,6 +24,14 @@
        .filter(x=>x&&typeof x==='object');
      const quantified=decisions.filter(x=>x.switchAnalysis&&typeof x.switchAnalysis==='object');
      const ppEntries=decisions.filter(x=>Number.isFinite(x.ppConservations));
+     const traitLabels={kill:'킬각 포착',switch:'적극적인 교체',
+       matchup:'상성 교체 전문가',preserve:'에이스 보존',pp:'PP 관리자',
+       status:'상태이상 전문가',analysis:'전황 분석가'};
+     const traitUses=Object.entries(traitLabels).flatMap(([kind,name])=>{
+       const count=decisions.reduce((sum,entry)=>
+         sum+Math.max(0,Number(entry.traitUses?.[kind])||0),0);
+       return count>0?[{kind,name,count}]:[];
+     });
      const acc=(list,get)=>list.reduce((sum,x)=>sum+count(get(x)),0);
      const matched=acc(recorded,({round})=>round.switchOutcomes.bySide[sideId].matched);
      const choices=acc(recorded,({round})=>round.switchOutcomes.bySide[sideId].choices);
@@ -65,6 +73,7 @@
            aceProtected:acc(quantified,x=>x.switchAnalysis.aceProtected),
            saferReserve:acc(quantified,x=>x.switchAnalysis.saferReserveChosen)}:null,
        ppSaves:ppEntries.length?acc(ppEntries,x=>x.ppConservations):null,
+       traitUses,
        aceHandoffs:aceRecords?.length??null,aceReady,
        aceNotReady,
        aceLeadKnown:aceRecords?aceRecords.filter(x=>x.readyVsLead!=null).length:null,
@@ -110,6 +119,9 @@
    const points=(label,list,empty,klass)=>
      '<div class="'+klass+'"><b>'+esc(label)+'</b><p>'+
      (list.length?list.map(esc).join(' · '):esc(empty))+'</p></div>';
+   const uses=record.traitUses?.length?
+     '<p class="mte-note">습득 선플 관련 실제 선택: '+
+       record.traitUses.map(x=>esc(x.name)+' '+esc(x.count)+'회').join(' · ')+'</p>':'';
    const positives=points('관찰된 전술 행동',record.strengths,
      (record.observations||record.ppSaves!==null?'관련 특성 행동이 관찰되지 않았습니다.':'관련 세부 기록이 없습니다.'),'mte-observed');
    const cautions=points('추가로 살펴볼 장면',record.reviews,
@@ -126,7 +138,7 @@
      '<summary>'+esc(summary)+'</summary>'+
      '<p class="mte-note">실제 출전 '+record.duels+'대결 · 승리 '+record.wins+
      '대결 · 선택과 승패 사이의 인과관계는 확인할 수 없습니다.</p>'+
-     metricsHTML+positives+cautions+(scenes?'<div class="mte-actions">'+scenes+'</div>':'')+
+     metricsHTML+uses+positives+cautions+(scenes?'<div class="mte-actions">'+scenes+'</div>':'')+
      '<p class="mte-note">행동을 기록한 것이며 AI의 절대 등급 또는 최선의 선택 판정은 아닙니다.</p>'+
      '</details>';
  }

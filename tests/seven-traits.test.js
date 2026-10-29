@@ -145,3 +145,75 @@ test('battle simulation still uses legal Showdown damage and reports real decisi
     assert.ok(result.aiDecisions.p1.trace.some(x=>x.quality?.koRate>0));
     assert.ok(result.log.includes('|faint|p2'));
   });
+
+test('learned kill habit favors legal priority finisher and records use without manager advice',()=>{
+ const own={hp:180,maxhp:200,types:['Water','Fairy'],getTypes:()=>['Water','Fairy'],
+  moveSlots:[{id:'aquajet',pp:10,maxpp:20},{id:'waterpulse',pp:12,maxpp:20}]};
+ const foe={hp:8,maxhp:100,types:['Fire'],getTypes:()=>['Fire'],status:''};
+ const battle={requestState:'idle',turn:4,p1:{active:[own],sideConditions:{}},
+   p2:{active:[foe],sideConditions:{}}};
+ function choose(experienced){
+   const trainer={tactics:20,switching:16,relayOpponentsRemaining:3,
+     autonomyAI:{preferredPlay:'balanced',habitScores:{kill:experienced?100:0},
+       playTraits:experienced?['킬각 포착']:[]}};
+   const ai=new TrainerAI({}, {...trainer,aiProfile:resolveBattleAutonomy(trainer,50)},
+     {seed:[1,2,3,4],team:[{species:'Azumarill'}],battleProvider:()=>battle});
+   ai.ownActive={species:'Azumarill'};ai.foeSpecies='Arcanine';
+   const choice=ai.chooseMove({},[
+     {choice:'move 1',move:{id:'aquajet'}},{choice:'move 2',move:{id:'waterpulse'}}]);
+   return {choice,ai};
+ }
+ const newTrainer=choose(false),veteran=choose(true);
+ assert.equal(newTrainer.choice,'move 2');
+ assert.equal(veteran.choice,'move 1');
+ assert.equal(veteran.ai.profile.behaviorAdvice,null);
+ assert.equal(veteran.ai.decisions.traitUses.kill,1);
+ assert.equal(newTrainer.ai.decisions.traitUses.kill,undefined);
+});
+
+test('learned ace preservation favors measured recovery only at meaningful relay HP',()=>{
+ const own={hp:90,maxhp:200,types:['Psychic'],getTypes:()=>['Psychic'],
+   moveSlots:[{id:'recover',pp:5,maxpp:10},{id:'waterfall',pp:25,maxpp:35}]};
+ const foe={hp:95,maxhp:100,types:['Normal'],getTypes:()=>['Normal'],status:''};
+ const battle={requestState:'idle',turn:6,p1:{active:[own],sideConditions:{}},
+   p2:{active:[foe],sideConditions:{}}};
+ function choose(trained){
+   const trainer={tactics:20,switching:16,relayOpponentsRemaining:3,
+     autonomyAI:{preferredPlay:'balanced',habitScores:{preserve:trained?100:0},
+       playTraits:trained?['에이스 보존']:[]}};
+   const ai=new TrainerAI({}, {...trainer,aiProfile:resolveBattleAutonomy(trainer,50)},
+     {seed:[1,2,3,4],team:[{species:'Mew'}],battleProvider:()=>battle});
+   ai.ownActive={species:'Mew'};ai.foeSpecies='Eevee';
+   return {choice:ai.chooseMove({},[
+    {choice:'move 1',move:{id:'recover'}},{choice:'move 2',move:{id:'waterfall'}}]),ai};
+ }
+ assert.equal(choose(false).choice,'move 2');
+ const experienced=choose(true);
+ assert.equal(experienced.choice,'move 1');
+ assert.equal(experienced.ai.decisions.traitUses.preserve,1);
+ const final=assessMoveTraits({move:Dex.moves.get('recover'),
+   battle,profile:makeProfile('preserve'),remaining:1});
+ const full={p1:{active:[{...own,hp:200}]},p2:{active:[foe]}};
+ assert.equal(final.quality.preserve,false);
+ assert.equal(final.bonus,0);
+ assert.equal(assessMoveTraits({move:Dex.moves.get('recover'),
+   battle:full,profile:makeProfile('preserve'),remaining:4}).bonus,0);
+});
+
+test('actual selected trait actions are tracked across all seven kinds without double counting candidates',()=>{
+ const trainer={tactics:20,autonomyAI:{
+   playTraits:Object.values(TRAITS).map(x=>x.name),
+   habitScores:Object.fromEntries(Object.keys(TRAITS).map(k=>[k,100]))}};
+ const ai=new TrainerAI({}, {...trainer,aiProfile:resolveBattleAutonomy(trainer,50)},
+  {seed:[3,4,5,6]});
+ ai.record('move','move 1','ordinary',{quality:{kill:false}});
+ assert.deepEqual(ai.decisions.traitUses,{});
+ ai.record('move','move 1','chosen finisher',{quality:{killOpportunity:true,pp:true}});
+ ai.record('move','move 2','recovery',{quality:{preserve:true,status:true}});
+ ai.record('switch','2','favorable counter',{quality:{switch:true,matchup:true}});
+ ai.record('move','move 3','tactical forecast',{quality:{analysis:true}});
+ assert.deepEqual(ai.decisions.traitUses,{
+   kill:1,pp:1,preserve:1,status:1,switch:1,matchup:1,analysis:1
+ });
+ assert.equal(ai.decisions.trace.length,5);
+});
