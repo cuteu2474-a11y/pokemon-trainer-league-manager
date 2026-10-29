@@ -21,6 +21,16 @@ test('real generated club relay completes and updates league standings', {timeou
   assert.equal(league.current.round,1);
   const actual=results.find(r=>r.home===fixture.home&&r.away===fixture.away);
   assert.ok(actual.details?.rounds.length>=1);
+  // Generated rosters often have no explicit names/IDs. All six must still
+  // retain unique identities across the relay without modifying the roster.
+  for(const duel of actual.details.rounds){
+    for(const side of ['p1','p2']){
+      const ids=duel.result.initialStats[side].map(mon=>mon.pokemonId);
+      assert.equal(new Set(ids).size,6);
+      assert.ok(ids.every(id=>id&&id!=='undefined'));
+      assert.ok(duel.pokemonOrder[side].every(Boolean));
+    }
+  }
   assert.equal(actual.homeScore+actual.awayScore>=5,true);
   const table=standings(league.current,1);
   assert.equal(table.reduce((sum,row)=>sum+row.played,0),10);

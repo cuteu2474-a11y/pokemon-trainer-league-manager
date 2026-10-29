@@ -77,7 +77,8 @@ export class TrainerAI extends RandomPlayerAI{
     this.battleProvider=options.battleProvider;
     this.side='p1';
     this.remaining=trainer.relayOpponentsRemaining??1;
-    this.decisions={moves:0,switches:0,voluntarySwitches:0,rollouts:0,rolloutFallbacks:0,
+    this.decisions={remainingOpponentsAtStart:this.remaining,
+      moves:0,switches:0,voluntarySwitches:0,rollouts:0,rolloutFallbacks:0,
       ppConservations:0,
       plan:this.plan,response:this.profile.response||'자율',preferred:this.profile.preferred,
       traits:[...(this.profile.traits||[])],
