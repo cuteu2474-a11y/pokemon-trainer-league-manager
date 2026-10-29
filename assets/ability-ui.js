@@ -191,4 +191,4 @@ styles.textContent=[
 document.head.append(styles);
 
 // Install calendar and navigation after the ability migration wrapper.
-import('./match-feedback-insights.js').then(()=>import('./match-feedback.js')).then(()=>import('./management-ui.js')).then(()=>import('./match-registration-ui.js')).then(()=>import('./league-ui.js')).then(()=>import('./condition-ui.js')).then(()=>import('./finance-ui.js'));
+import('./match-feedback-insights.js').then(()=>import('./trainer-match-evaluation.js')).then(()=>import('./match-feedback.js')).then(()=>import('./management-ui.js')).then(()=>import('./match-registration-ui.js')).then(()=>import('./league-ui.js')).then(()=>import('./condition-ui.js')).then(()=>import('./finance-ui.js'));

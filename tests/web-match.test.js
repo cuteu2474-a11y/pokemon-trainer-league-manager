@@ -1,4 +1,6 @@
 import {matchLoad} from '../src/core/squad-condition.js';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {battlePokemon, prepareClub, runMatch} from '../src/web/match-service.js';
@@ -52,6 +54,19 @@ test('web service returns actual relay battle logs and score', {timeout:120000},
  assert.equal(result.moveVisuals.Psychic.type,'Psychic');assert.equal(result.moveVisuals.Psychic.label,'사이코키네시스');
  assert.equal(result.typeChart.Electric.Ground,0);assert.equal(result.typeChart.Electric.Water,2);
  assert.ok(result.rounds[0].initial.p1[0].pp.length>0);assert.match(result.rounds[0].log,/\|league-state\|/);
+ // The real web API output is consumed directly by the trainer evaluation UI.
+ const browser={};browser.globalThis=browser;
+ runInNewContext(readFileSync(new URL('../assets/trainer-match-evaluation.js',import.meta.url),'utf8'),browser);
+ const reviews=browser.TrainerMatchEvaluation.summarize(result,'home');
+ assert.equal(reviews.length,5);
+ assert.equal(reviews[0].name,'트레이너 4');
+ assert.equal(reviews[0].duels,5);
+ assert.ok(reviews.slice(1).every(x=>x.duels===0));
+ assert.equal(reviews[0].matched,result.rounds.reduce((n,r)=>
+   n+(r.switchOutcomes?.bySide?.p1?.matched||0),0));
+ assert.equal(reviews[0].aceHandoffs,
+   result.aceHandoffs.A.records.filter(x=>x.trainerIndex===0).length);
+ assert.ok(browser.TrainerMatchEvaluation.renderOne(reviews[0],true).includes('이번 경기 전술 관찰'));
  matchLoad({season:1,week:5,clubs:[a,b]},{home:0,away:1},{id:'1:1:0:1',result});
  assert.equal(a.trainers[4].fatigue,16);assert.equal(a.trainers[0].fatigue,0);assert.ok(a.trainers[4].pokemon.some(p=>p.fatigue>0));
 });

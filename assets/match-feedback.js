@@ -25,6 +25,7 @@
     const trust=confirmed?(game.trainerAI?.coachMatchReports||[]).find(x=>x.season===p.season&&x.round===p.round):null;
     const scene=moments(p);
     const insights=window.MatchFeedbackInsights?.render(p.result,side,confirmed)||'';
+    const trainerReviews=window.TrainerMatchEvaluation?.summarize(p.result,side)||[];
     return '<section class="match-feedback"><h2>'+(confirmed?'경기 결과·성장 반영 완료':'경기 종료 · 결과 확인 전 임시 요약')+'</h2><p>'+esc(p.result.aScore)+' : '+esc(p.result.bScore)+' · 출전 순서 '+p.result.teams[side].map(t=>esc(t.name)).join(' → ')+'</p>'+insights+
       p.result.teams[side].map((t,slot)=>{
         const rounds=p.result.rounds.filter(r=>(home?r.trainerA:r.trainerB)===slot);
@@ -43,6 +44,7 @@
           (relation?'<p>감독 신뢰 '+relation.before+'→'+relation.after+'</p>':'')+
           (e?.experience?'<p>'+e.experience.map(x=>esc(x.label)+' '+x.from+'→'+x.to+' · 경험 '+x.beforeXP+'→'+x.afterXP+' (획득 +'+x.earned+')').join('<br>')+'</p>':'')+
           (e?.learned?.length?'<p>새 선플: '+e.learned.map(esc).join(', ')+'</p>':'')+
+          (window.TrainerMatchEvaluation?.renderOne(trainerReviews[slot],confirmed)||'')+
           scene.map((x,i)=>x.slot===slot?'<button class="g-btn alt" data-feedback-scene="'+i+'">'+esc(x.text)+' 보기</button>':'').filter(Boolean).slice(0,2).join('')+'</article>';
       }).join('')+'<p>수용 여부, 실제 행동, 경기 결과를 구분합니다. 이 보고서는 권고가 승리의 원인이었다고 판정하지 않습니다.</p></section>';
   }
@@ -50,6 +52,17 @@
     const scene=moments(p);
     const side=myClub().id===p.home?'home':'away';
     const featured=window.MatchFeedbackInsights?.summarize(p.result,side).worst||[];
+    const evaluation=window.TrainerMatchEvaluation?.summarize(p.result,side)||[];
+    root.querySelectorAll('[data-feedback-trainer-scene]').forEach(button=>button.onclick=()=>{
+      if(game.pendingMatch){alert('경기 결과를 먼저 확인해 주세요.');return;}
+      if(!window.MatchdayPreparation?.review)return;
+      const parts=String(button.dataset.feedbackTrainerScene||'').split(':').map(Number);
+      if(parts.length!==2||!parts.every(Number.isInteger))return;
+      const x=evaluation[parts[0]]?.dangerous?.[parts[1]];
+      if(!x)return;
+      document.getElementById('match-feedback-overlay')?.remove();
+      window.MatchdayPreparation.review(p,x.duel,x.turn);
+    });
     root.querySelectorAll('[data-feedback-insight-scene]').forEach(button=>button.onclick=()=>{
       if(game.pendingMatch){alert('경기 결과를 먼저 확인해 주세요.');return;}
       const selected=featured[Number(button.dataset.feedbackInsightScene)];
@@ -109,5 +122,25 @@
       .mfi-scene>div{flex-basis:100%}.mfi-scene button{width:100%}
       #match-feedback-overlay .g-btn{min-height:44px}}
   `;
+  style.textContent+=`
+.mte-panel{margin:12px 0 10px;padding:13px;border:1px solid #537084;border-radius:9px;background:linear-gradient(145deg,#163c4e,#10283a)}
+.mte-panel>summary{min-height:44px;display:list-item;cursor:pointer;font-size:14px;
+      font-weight:750;color:#f1f8fd;padding:12px 3px;touch-action:manipulation}
+    .mte-panel[open]>summary{margin-bottom:6px;border-bottom:1px solid #395d71}
+    .mte-panel h4{font-size:14px;margin:0 0 7px;color:#f1f8fd}
+.mte-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:10px 0}
+.mte-stat{min-width:0;padding:9px;background:#0d2638;border:1px solid #3b6075;border-radius:6px;display:flex;flex-direction:column;gap:3px}
+.mte-stat span{font-size:12px;color:#b2ccd9}
+.mte-stat strong{font-size:16px;color:#f6faff}
+.mte-panel .mte-observed,.mte-panel .mte-review{margin-top:8px;line-height:1.7}
+.mte-observed b,.mte-review b{font-size:12px;color:#d6e9f4}
+.mte-panel .mte-observed p,.mte-panel .mte-review p{font-size:12px;margin:3px 0 0;color:#e1ebf0}
+.mte-panel .mte-note{color:#b5c7d3;font-size:12px;margin:4px 0}
+.mte-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.mte-actions .mte-replay{min-height:44px;padding:8px 11px;white-space:normal;text-align:left;line-height:1.35;margin:0}
+.mte-actions .mte-replay:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:740px){.mte-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.mte-panel{padding:10px}.mte-actions .mte-replay{width:100%}}
+`;
   document.head.append(style);
 })();
