@@ -33,6 +33,17 @@ test('web service returns actual relay battle logs and score', {timeout:120000},
  const result=await runMatch({...frozen.request,registration:frozen.registration});await validateResult(frozen,result);
  assert.equal(result.engine,'showdown');assert.equal(result.aScore,5);assert.equal(result.bScore,0);assert.equal(result.rounds.length,5);
  assert.equal(result.rounds[0].initial.p1.length,6);
+ // The web match API must preserve the engine's switch and ace evidence
+ // so the post-match report can use real observations, not inferred events.
+ assert.ok(result.rounds.every(round=>round.switchOutcomes?.bySide?.p1&&
+   round.switchOutcomes?.bySide?.p2));
+ assert.equal(result.rounds.reduce((sum,round)=>
+   sum+round.switchOutcomes.bySide.p1.choices,0),
+   result.rounds.reduce((sum,round)=>
+   sum+(round.aiDecisions.p1.voluntarySwitches||0),0));
+ assert.equal(result.aceHandoffs.A.handoffs,result.rounds.length-1);
+ assert.ok(result.aceHandoffs.A.records.every(record=>
+   typeof record.ready==='boolean'&&typeof record.species==='string'));
  assert.equal(new Set(result.rounds[0].initial.p1.map(m=>m.name)).size,6);
  assert.ok(result.rounds[0].initial.p1.every(m=>m.hp>0&&m.hp<=m.maxhp));
  assert.equal(result.report.home.reduce((n,m)=>n+m.knockouts,0),30);
