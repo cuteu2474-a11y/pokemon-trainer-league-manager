@@ -1305,6 +1305,8 @@
     return a;
   }
   function tech(t){
+    const careerSkill=window.TrainerCareer?.skill?.(t,'moveTraining');
+    if(Number.isFinite(careerSkill))return careerSkill;
     for(const k of ['moveTraining','technical','techniqueTeaching','trainingSkill','tactics','coaching','training']){
       const value=Number(t?.[k]??t?.skills?.[k]);
       if(Number.isFinite(value)&&value>0)return clamp(Math.round(value>20?value/5:value),1,20);
@@ -1362,7 +1364,9 @@
   }
   function integrate(payload,rows,current){
     if(payload.period!==current||week()!==current||game.pendingMatch?.frozen)return false;
-    const s=state(),contexts=new Map(rows.map(x=>[x.input.key,x.context]));
+    const s=state();
+    if(s.movesProcessedWeek===current)return false;
+    const contexts=new Map(rows.map(x=>[x.input.key,x.context]));
     const report={week:current,initialised:0,learned:0,accepted:0,compromised:0,refused:0,trainers:[]};
     for(const entry of payload.results||[]){
       const ctx=contexts.get(entry.key);if(!ctx||window.SquadCondition?.away(ctx.trainer))continue;
@@ -1376,12 +1380,19 @@
         mon.moves=[...item.moves];validSlots.add(slot);
         if(item.kind==='initial')report.initialised++;
       }
-      const changes=(entry.changes||[]).filter(c=>validSlots.has(c.slot));
+      const changes=(entry.changes||[]).filter(c=>validSlots.has(Number(c.slot))&&
+        typeof c.learned==='string'&&c.learned.length>0);
       report.learned+=changes.length;
+      // Experience only for verified, actually installed research results.
+      // A first-time default move-set assignment is not a learned technique.
+      const learned=changes.filter(c=>(entry.updates||[]).some(update=>
+        Number(update.slot)===Number(c.slot)&&update.kind!=='initial'));
+      const development=window.TrainerCareer?.applyResearch?.(
+        ctx.trainer,current,learned);
       if(!ctx.mine)continue;
       report.trainers.push({id:ctx.id,name:ctx.trainer.name,decision:ctx.choice.result,
         focus:ctx.choice.focus,reason:ctx.choice.reason,offer:ctx.offer?.focus||null,
-        preferred:play(ctx.trainer,ctx.club,ctx.index),changes});
+        preferred:play(ctx.trainer,ctx.club,ctx.index),changes,development});
       if(ctx.offer){
         const delta=ctx.choice.result==='수용'?3:ctx.choice.result==='절충'?1:-2;
         s.trust[ctx.id]=clamp(ctx.trust+delta,15,85);
@@ -1429,6 +1440,9 @@
       '마리 · 새 기술 '+r.learned+'건 · 권고 수용 '+r.accepted+' / 절충 '+r.compromised+' / 거부 '+r.refused+'</p>'+
       '<div class="am-results">'+r.trainers.map(t=>'<div class="am-result"><b>'+safe(t.name)+'</b> · '+safe(t.decision)+
       ' · '+safe(plays[t.focus]||t.focus)+'<p class="am-small">'+safe(t.reason)+'</p>'+
+      (t.development?'<p class="am-small">기술 지도 성장 경험 +'+
+        safe(t.development.earned)+' · 기술 지도 '+safe(t.development.to)+'/20'+
+        (t.development.levelUp?' (능력 상승)':'')+'</p>':'')+
       (t.changes.length?t.changes.map(x=>'<p class="am-changed">'+safe(x.name)+' : '+
          safe(x.forgotten||'새 슬롯')+' → '+safe(x.learned)+' <small>('+safe(x.reason)+')</small></p>').join(''):
          '<p class="am-small">이번 주 기술 변경 없음</p>')+'</div>').join('')+'</div>';
@@ -1519,7 +1533,8 @@
     moveJudgment:{label:'기술 판단',fallback:'tactics'},
     switchJudgment:{label:'교체 판단',fallback:'switching'},
     battleAnalysis:{label:'전황 분석',fallback:'tactics'},
-    resourceManagement:{label:'전력 관리',fallback:'switching'}
+    resourceManagement:{label:'전력 관리',fallback:'switching'},
+    moveTraining:{label:'기술 지도',fallback:'tactics'}
   };
   const FEEDBACK={
     praise:'경기 내용 칭찬',analysis:'전술 분석 제안',
@@ -1545,7 +1560,27 @@
     analysis:{label:'전황 분석가',description:'후보 기술을 분석해 승리한 경험',threshold:60,matches:4}
   });
   function skill(trainer,field){
+    if(field==='moveTraining'&&trainer?.moveTraining==null){
+      for(const key of ['technical','techniqueTeaching','trainingSkill','tactics','coaching','training']){
+        const n=trainer?.[key]??trainer?.skills?.[key];
+        if(n!==null&&n!==undefined&&n!==''&&Number.isFinite(Number(n)))
+          return val(Number(n)>20?Number(n)/5:Number(n));
+      }
+    }
     return val(trainer?.[field],val(trainer?.[FIELDS[field]?.fallback]));
+  }
+  /** Unified XP arithmetic for real-match abilities and weekly technical research. */
+  function advanceSkill(trainer,career,field,earned){
+    if(!Object.hasOwn(FIELDS,field))return null;
+    const before=skill(trainer,field);
+    const previous=Math.max(0,Number(career.experience?.[field])||0);
+    let score=before,xp=previous+Math.max(0,Math.min(30,Number(earned)||0));
+    while(score<20&&xp>=threshold(score)){xp-=threshold(score);score++;}
+    trainer[field]=score;
+    career.experience[field]=score===20?Math.min(xp,threshold(20)):xp;
+    return {field,label:FIELDS[field].label,from:before,to:score,beforeXP:previous,
+      afterXP:career.experience[field],earned:Math.max(0,Math.min(30,Number(earned)||0)),
+      levelUp:score>before};
   }
   function state(game){
     const existing=game.trainerAI||(game.trainerAI={
@@ -1559,14 +1594,49 @@
     return existing;
   }
   function getCareer(trainer){
-    if(trainer.aiCareer?.version===1)return trainer.aiCareer;
+    if(trainer.aiCareer?.version===1){
+      const career=trainer.aiCareer;
+      career.experience ||= {};
+      for(const key of Object.keys(FIELDS))career.experience[key] ??= 0;
+      career.research ||= {weeks:0,learned:0,history:[]};
+      career.research.weeks ??= 0;
+      career.research.learned ??= 0;
+      if(!Array.isArray(career.research.history))career.research.history=[];
+      if(!Array.isArray(career.researchApplied))career.researchApplied=[];
+      return career;
+    }
     const career={version:1,matches:0,duels:0,wins:0,losses:0,
       experience:Object.fromEntries(Object.keys(FIELDS).map(field=>[field,0])),
       observed:{switches:0,voluntary:0,analyses:0,preservation:0},
       quality:Object.fromEntries(Object.keys(HABITS).map(k=>[k,{points:0,matches:0}])),
-      events:[]};
+      research:{weeks:0,learned:0,history:[]},researchApplied:[],events:[]};
     trainer.aiCareer=career;
     return career;
+  }
+  /** The already accepted weekly move edits are the sole source of research XP.
+   * No new move, no reward. Initial/default slots and duplicate weeks award zero.
+   * Only technical teaching grows here; a move change never grants a battle trait.
+   */
+  function applyResearch(trainer,period,changes=[]){
+    if(!trainer||!Array.isArray(changes)||!changes.length)return null;
+    const key=String(period||'');
+    if(!/^[0-9]+:[0-9]+$/.test(key))return null;
+    const distinct=new Set(changes.filter(item=>item&&Number.isInteger(Number(item.slot))&&
+      item.slot!==''&&typeof item.learned==='string'&&item.learned.length>0)
+      .map(item=>Number(item.slot)));
+    if(!distinct.size)return null;
+    const career=getCareer(trainer);
+    if(career.researchApplied.includes(key))return null;
+    const progress=advanceSkill(trainer,career,'moveTraining',Math.min(3,distinct.size)*7);
+    if(!progress)return null;
+    career.research.weeks++;
+    career.research.learned+=distinct.size;
+    career.research.history.unshift({week:key,moves:distinct.size,
+      earned:progress.earned,from:progress.from,to:progress.to});
+    career.research.history.length=Math.min(12,career.research.history.length);
+    career.researchApplied.push(key);
+    career.researchApplied.length=Math.min(32,career.researchApplied.length);
+    return {...progress,moves:distinct.size,week:key};
   }
   /** Check real Showdown logs, not a move's intended outcome or a name tag. */
   function actualBattleEvents(log,sideId){
@@ -1655,18 +1725,9 @@
     career.observed.preservation+=evidence.preservation;
     const levels=[],experience=[];
     for(const field of Object.keys(FIELDS)){
-      // Initialise previously missing specialist attributes from existing overall ability.
-      if(!Number.isFinite(Number(trainer[field])))trainer[field]=skill(trainer,field);
-      const beforeXP=Number(career.experience[field])||0,beforeSkill=skill(trainer,field);
-      let score=skill(trainer,field),xp=Math.max(0,Number(career.experience[field])||0)+earned[field];
-      while(score<20&&xp>=threshold(score)){
-        xp-=threshold(score);
-        levels.push({field,label:FIELDS[field].label,from:score,to:score+1});
-        score++;
-      }
-      trainer[field]=score;
-      career.experience[field]=score===20?Math.min(xp,threshold(20)):xp;
-      experience.push({field,label:FIELDS[field].label,from:beforeSkill,to:score,beforeXP,afterXP:career.experience[field],earned:earned[field]});
+      const point=advanceSkill(trainer,career,field,earned[field]||0);
+      if(point.levelUp)levels.push({field,label:point.label,from:point.from,to:point.to});
+      experience.push(point);
     }
     const ai=trainer.autonomyAI ||= {};
     const traits=ai.playTraits ||= [];
@@ -1818,7 +1879,7 @@
   }
 
   window.TrainerCareer={FIELDS,FEEDBACK,HABITS,skill,threshold,state,getCareer,applyMatch,
-    offerFeedback,roundEvidence,actualBattleEvents,trainerId};
+    applyResearch,advanceSkill,offerFeedback,roundEvidence,actualBattleEvents,trainerId};
   if(typeof document==='undefined')return;
   let visible=false,notice='';
   const getClub=()=>{try{return typeof myClub==='function'?myClub():null;}catch{return null;}};
@@ -1843,19 +1904,26 @@
           '<div class="tc-meter"><i style="width:'+Math.min(100,Math.round(progress/threshold(current)*100))+'%"></i></div></div>';
       }).join('');
       const feedback=last?.feedback;
+      const research=career?.research;
+      const recentResearch=research?.history?.[0]||null;
       const habits=trainer.autonomyAI?.habitScores||{};
       const victories=trainer.autonomyAI?.habitSuccessfulMatches||{};
       const latestBehavior=last?.advice,learning=last?.progress;
-      const habitCards='<div class="tc-development"><strong>경기 결과로 형성되는 플레이 성향</strong>'+
+      const habitCards='<div class="tc-development"><strong>경기 결과로 형성되는 플레이 성향 · 습득 '+traits.length+'/3</strong>'+
         '<p class="tc-muted">경기 전 감독 권고는 행동 시도에 영향을 주지만, 실제 성공한 플레이만 누적 학습됩니다.</p>'+
         Object.entries(HABITS).map(([kind,config])=>{
           const score=Math.min(100,Math.max(0,Number(habits[kind])||0));
           const acquired=traits.includes(config.label),recent=learning?.[kind];
           const highlight=latestBehavior?.target===kind;
+          const capped=!acquired&&traits.length>=3;
+          const scoreProgress=Math.min(100,Math.round(score/config.threshold*100));
           return '<div class="tc-habit-row"><div><b>'+esc(config.label)+'</b>'+
-            '<small>'+(acquired?'선플 습득 완료': '성향 '+score+'/100 · 성공한 경기 '+(victories[kind]||0)+'회')+
+            '<small>'+(acquired?'선플 습득 완료':
+              '성향 '+score+'/'+config.threshold+' · 성공한 경기 '+
+              (victories[kind]||0)+'/'+config.matches+'회'+
+              (capped?' · 선플 보유 한도 3개':'') )+
             (highlight?' · 직전 미팅 '+esc(latestBehavior.response):'')+'</small></div>'+
-            '<div class="tc-meter"><i style="width:'+score+'%"></i></div>'+
+            '<div class="tc-meter"><i style="width:'+scoreProgress+'%"></i></div>'+
             (recent?.gained?'<small class="tc-gain">직전 경기 성공 경험 +'+recent.gained+'</small>':'')+
             '</div>';
         }).join('')+'</div>';
@@ -1869,6 +1937,10 @@
         '<p class="tc-muted">커리어 '+(career?.matches||0)+'경기 · '+(career?.duels||0)+'대결 · '+
           (career?.wins||0)+'승 / '+(career?.losses||0)+'패'+
           (traits.length?' · 습득 선플: '+traits.map(esc).join(', '):'')+'</p>'+
+        '<p class="tc-muted">주간 기술 연구 '+(research?.weeks||0)+'주 · 실제 기술 교체 '+
+          (research?.learned||0)+'건'+
+          (recentResearch?' · 최근 '+esc(recentResearch.week)+' 경험 +'+
+            esc(recentResearch.earned):'')+'</p>'+
         '<div class="tc-stats">'+numbers+'</div>'+
         (last?'<p class="tc-muted">이번 경기 '+last.duels+'대결 · '+last.wins+'승 · 전황 분석 '+last.analyses+
           '회 · 자율 교체 '+last.voluntary+'회</p>'+
@@ -1879,7 +1951,7 @@
     overlay.innerHTML='<section class="tc-dialog" role="dialog" aria-modal="true" aria-labelledby="tc-title">'+
       '<button type="button" class="tc-close">닫기</button>'+
       '<h2 id="tc-title">트레이너 플레이 성향 · 감독 면담</h2>'+
-      '<p class="tc-muted">경기에 실제로 출전한 트레이너만 경험을 얻습니다. 기술·교체·전황 분석·연승 전력 관리 경험이 다음 경기의 실력에 반영됩니다.</p>'+
+      '<p class="tc-muted">실전 경험은 출전한 트레이너에게만, 기술 지도 경험은 실제 기술 연구가 성공한 트레이너에게만 쌓입니다. 선플은 전투에서 성공한 행동으로만 습득합니다.</p>'+
       (notice?'<p class="tc-gain" role="status">'+esc(notice)+'</p>':'')+
       '<div class="tc-summary">'+(latest?('최근 '+esc(latest.season)+'시즌 '+esc(latest.round)+
         '라운드 · 능력 상승 '+latest.levelUps+'건 · 선플 습득 '+latest.traits+'건'):'경기 후 커리어 보고서가 생성됩니다.')+'</div>'+
