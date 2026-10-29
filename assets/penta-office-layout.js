@@ -562,7 +562,7 @@ function apply(){
  const club=typeof myClub==='function'?myClub():null;if(!club)return;
  const panel=root.querySelector(':scope > #dashpanel');if(!panel)return;
  root.classList.add('pr-office');
- root.querySelectorAll(':scope > .pr-navigation-stack,:scope > .pr-top-navigation,:scope > .pr-secondary-navigation,:scope > .pr-club-banner,:scope > .pr-progress-bar,:scope > .pr-season-timeline,:scope > .pr-secretary-rail').forEach(x=>x.remove());
+ root.querySelectorAll(':scope > .pr-navigation-stack,:scope > .pr-top-navigation,:scope > .pr-secondary-navigation,:scope > .pr-club-banner,:scope > .pr-progress-bar,:scope > .pr-season-timeline,:scope > .pr-secretary-rail,:scope > .pr-screen-switch,:scope > .pr-main-pager,:scope > .pr-aside-pager').forEach(x=>x.remove());
  const selected=newsActive?'news':typeof tab==='string'?tab:'home';
  root.insertBefore(bannerView(root,club),panel);root.insertBefore(progressView(),panel);root.insertBefore(navView(selected),panel);
  const isProfile=selected==='home';
@@ -573,10 +573,12 @@ function apply(){
  if(selected==='team')patchTrainers(root,club);
  panel.after(secretaryView());
  removeOldPreview();
+ window.PentaOneScreen?.enhanceOffice?.(root,panel);
 }
 const css=document.createElement('link');css.rel='stylesheet';css.href='assets/penta-office-layout.css?v=secretary-briefing-14';document.head.append(css);
 // Loaded after the approved office stylesheet; adapts all views to each viewport.
 const responsiveCSS=document.createElement('link');responsiveCSS.rel='stylesheet';responsiveCSS.href='assets/penta-viewport.css?v=responsive-all-devices-1';document.head.append(responsiveCSS);
+const oneScreenStyle=document.createElement('link');oneScreenStyle.rel='stylesheet';oneScreenStyle.href='assets/penta-one-screen.css?v=single-screen-2';document.head.append(oneScreenStyle);
 const previous=window.renderOffice;
 if(typeof previous==='function')window.renderOffice=function(...args){
  const value=previous.apply(this,args);
@@ -594,6 +596,7 @@ window.PentaOfficeLayout={apply,removeOldPreview,openNews:()=>{
  newsActive=true;newsFilter='all';newsMode='all';
  apply();
 }};
+const fitScript=document.createElement('script');fitScript.src='assets/penta-one-screen.js?v=single-screen-2';fitScript.async=false;document.body.append(fitScript);
 removeOldPreview();apply();
 /* Saved secretary inbox, advice reminders and read-state helpers. */
 const inboxScript=document.createElement('script');inboxScript.async=false;

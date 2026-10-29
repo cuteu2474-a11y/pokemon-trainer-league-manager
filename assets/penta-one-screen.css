@@ -1,0 +1,248 @@
+/* One-screen workspace: fixed height; excess content uses previous/next pages.
+ * The approved title, crests and FM game logic are not replaced. */
+:root{--pr-fit-pad:clamp(5px,.9vw,12px);--pr-fit-gap:clamp(4px,.7vw,9px)}
+html:has(#game),body:has(#game){width:100%;height:100%;overflow:hidden!important}
+#game{width:100%;height:100dvh!important;min-height:0!important;max-height:100dvh!important;overflow:hidden!important}
+#game:has(#clubselect:not([hidden])),
+#game:has(#clubtrainers:not([hidden])),
+#game:has(#dashboard:not([hidden])){height:100dvh!important;min-height:0!important;overflow:hidden!important}
+[hidden]{display:none!important}
+#mainmenu:not([hidden]){height:100dvh!important;min-height:0!important;max-height:100dvh!important;overflow:hidden!important}
+#game .title-art-stage{height:100dvh!important;max-height:100dvh!important}
+#game .title-mobile-menu{height:100dvh!important;min-height:0!important;max-height:100dvh!important;overflow:hidden!important;padding:clamp(8px,2dvh,15px) 12px;gap:clamp(4px,1.4dvh,12px)}
+#game .title-mobile-brand{height:clamp(110px,29dvh,260px);min-height:0;flex:0 1 auto}
+#game .title-mobile-buttons{gap:clamp(4px,1.2dvh,10px)}
+#game .title-mobile-buttons button{min-height:clamp(36px,7dvh,59px)}
+.pr-screen-pager{display:flex;align-items:center;justify-content:center;gap:10px;min-width:0;min-height:32px;padding:2px 6px;border:1px solid #4b7899;border-radius:7px;background:#132f4b;color:#e3f5ff;font:700 12px 'Malgun Gothic',system-ui,sans-serif}
+.pr-screen-pager[hidden]{display:none!important}
+.pr-screen-pager button{min-height:28px;min-width:68px;padding:3px 8px;border:1px solid #628fab;border-radius:5px;background:#215775;color:#fff;font:700 12px 'Malgun Gothic',system-ui,sans-serif;cursor:pointer}
+.pr-screen-pager button:disabled{opacity:.38;cursor:default}
+.pr-screen-pager span{font-variant-numeric:tabular-nums;white-space:nowrap}
+.pr-screen-switch,.pr-setup-switch{display:flex;min-width:0;min-height:34px;gap:5px}
+.pr-screen-switch button,.pr-setup-switch button{flex:1;min-width:0;min-height:34px;padding:4px;border:1px solid #5c87a6;border-radius:6px;background:#153955;color:#deeffb;font:750 12px 'Malgun Gothic',system-ui,sans-serif;cursor:pointer}
+.pr-screen-switch button.active,.pr-setup-switch button.active{background:#24618d;border-color:#86d8ff;color:white}
+.pr-screen-switch button:focus-visible,.pr-setup-switch button:focus-visible,.pr-screen-pager button:focus-visible{outline:2px solid #8bdcff;outline-offset:1px}
+.pr-subpage-select,.pr-setup-switch{display:none}
+
+/* Office: compact fixed status area, workspace takes ALL remaining height. */
+#dashboard.pr-office.pr-one-screen{
+ display:grid!important;width:100%!important;height:100dvh!important;min-height:0!important;max-height:100dvh!important;
+ margin:0!important;padding:var(--pr-fit-pad)!important;overflow:hidden!important;
+ grid-template-columns:minmax(0,1fr) clamp(235px,22vw,330px)!important;
+ grid-template-rows:min-content min-content min-content minmax(0,1fr) auto!important;
+ gap:var(--pr-fit-gap)!important;align-content:stretch!important;align-items:stretch!important;
+}
+#dashboard.pr-office.pr-one-screen > .pr-club-banner{
+ grid-column:1 / -1;grid-row:1;min-height:52px!important;
+ padding:5px 10px!important;margin:0!important;gap:8px;
+}
+#dashboard.pr-office.pr-one-screen .pr-club-logo{width:42px;height:42px}
+#dashboard.pr-office.pr-one-screen .pr-club-identity{gap:8px}
+#dashboard.pr-office.pr-one-screen .pr-team-title h1{font-size:clamp(16px,2vw,23px);margin-bottom:2px}
+#dashboard.pr-office.pr-one-screen .pr-director{min-width:0;gap:7px}
+#dashboard.pr-office.pr-one-screen .pr-director .face-portrait{--fpw:38px;--fph:42px}
+#dashboard.pr-office.pr-one-screen .pr-director-name{font-size:11px}
+#dashboard.pr-office.pr-one-screen .pr-director-name strong{font-size:12px}
+#dashboard.pr-office.pr-one-screen > .pr-progress-bar{
+ grid-column:1 / -1;grid-row:2;min-height:0!important;margin:0!important;
+ padding:5px 10px!important;gap:3px!important;
+}
+#dashboard.pr-office.pr-one-screen .pr-progress-button{min-height:30px;padding:5px 8px;font-size:11px}
+#dashboard.pr-office.pr-one-screen .pr-progress-actions{gap:5px}
+#dashboard.pr-office.pr-one-screen .pr-save-tools>summary{min-height:30px;padding:5px 8px;font-size:11px}
+#dashboard.pr-office.pr-one-screen .pr-week-calendar{padding-top:0!important}
+#dashboard.pr-office.pr-one-screen .pr-week-legend{display:none!important}
+#dashboard.pr-office.pr-one-screen .pr-week-block{height:9px}
+#dashboard.pr-office.pr-one-screen > .pr-navigation-stack{
+ grid-column:1 / -1;grid-row:3;min-height:0;margin:0!important;gap:3px!important;
+}
+#dashboard.pr-office.pr-one-screen .pr-top-navigation{min-height:0;max-height:46px;gap:5px;padding:0;overflow:hidden}
+#dashboard.pr-office.pr-one-screen .pr-top-link.pr-main-link{
+ min-width:0;min-height:43px!important;padding:4px 6px;font-size:11px;gap:2px;white-space:nowrap;
+}
+#dashboard.pr-office.pr-one-screen .pr-nav-icon{width:18px;height:18px;font-size:18px}
+#dashboard.pr-office.pr-one-screen .pr-secondary-navigation{height:32px;min-height:32px;max-height:32px;padding:1px 6px;overflow:hidden}
+#dashboard.pr-office.pr-one-screen .pr-secondary-navigation.is-empty{height:0;min-height:0;max-height:0;padding:0;border:0}
+#dashboard.pr-office.pr-one-screen .pr-sub-link{min-height:27px;padding:3px 10px;font-size:11px}
+#dashboard.pr-office.pr-one-screen > .pr-screen-switch{display:none}
+#dashboard.pr-office.pr-one-screen > #dashpanel{
+ grid-column:1!important;grid-row:4;display:block;
+ width:100%;height:100%;min-height:0!important;max-height:100%!important;
+ overflow-x:auto!important;overflow-y:hidden!important;overscroll-behavior:contain;
+ scrollbar-width:none;padding:12px!important;
+}
+#dashboard.pr-office.pr-one-screen > .pr-secretary-rail{
+ grid-column:2!important;grid-row:4;display:block;
+ width:100%;height:100%;min-height:0!important;max-height:100%!important;
+ position:relative;top:auto;overflow:hidden!important;overscroll-behavior:contain;align-self:stretch;
+}
+#dashboard.pr-office.pr-one-screen .pr-secretary-items{max-height:none!important;overflow:visible!important}
+#dashboard.pr-office.pr-one-screen > .pr-main-pager{grid-column:1!important;grid-row:5}
+#dashboard.pr-office.pr-one-screen > .pr-aside-pager{grid-column:2!important;grid-row:5}
+/* Narrow display: main and secretary take turns in the SAME workspace row. */
+@media(max-width:980px){
+ #dashboard.pr-office.pr-one-screen{
+  grid-template-columns:minmax(0,1fr)!important;
+  grid-template-rows:min-content min-content min-content 34px minmax(0,1fr) auto!important;
+ }
+ #dashboard.pr-office.pr-one-screen > .pr-screen-switch{display:flex;grid-column:1!important;grid-row:4}
+ #dashboard.pr-office.pr-one-screen > #dashpanel,
+ #dashboard.pr-office.pr-one-screen > .pr-secretary-rail{
+  grid-column:1!important;grid-row:5;height:100%;max-height:100%;
+ }
+ #dashboard.pr-office.pr-one-screen[data-pr-pane="main"] > .pr-secretary-rail,
+ #dashboard.pr-office.pr-one-screen[data-pr-pane="main"] > .pr-aside-pager,
+ #dashboard.pr-office.pr-one-screen[data-pr-pane="secretary"] > #dashpanel,
+ #dashboard.pr-office.pr-one-screen[data-pr-pane="secretary"] > .pr-main-pager{display:none!important}
+ #dashboard.pr-office.pr-one-screen > .pr-main-pager,
+ #dashboard.pr-office.pr-one-screen > .pr-aside-pager{grid-column:1!important;grid-row:6}
+ #dashboard.pr-office.pr-one-screen .pr-secondary-navigation:not(.is-empty) .pr-sub-link{display:none!important}
+ #dashboard.pr-office.pr-one-screen .pr-secondary-navigation{height:34px;min-height:34px;max-height:34px;padding:1px 4px}
+ #dashboard.pr-office.pr-one-screen .pr-subpage-select{
+  display:block;min-width:0;width:100%;height:30px;padding:2px 9px;
+  border:1px solid #6289a7;border-radius:6px;background:#173d5b;color:white;font-size:12px;
+ }
+}
+@media(max-width:620px){
+ #dashboard.pr-office.pr-one-screen > .pr-club-banner{min-height:43px!important;padding:4px 6px!important;flex-wrap:nowrap}
+ #dashboard.pr-office.pr-one-screen .pr-club-logo{width:34px;height:34px}
+ #dashboard.pr-office.pr-one-screen .pr-team-title h1{font-size:16px}
+ #dashboard.pr-office.pr-one-screen .pr-director-name{display:none}
+ #dashboard.pr-office.pr-one-screen .pr-director .face-portrait{--fpw:32px;--fph:35px}
+ #dashboard.pr-office.pr-one-screen > .pr-progress-bar{padding:4px 6px!important}
+ #dashboard.pr-office.pr-one-screen .pr-progress-status{gap:4px}
+ #dashboard.pr-office.pr-one-screen .pr-progress-status span{font-size:10px}
+ #dashboard.pr-office.pr-one-screen .pr-progress-actions{flex-wrap:nowrap;width:100%}
+ #dashboard.pr-office.pr-one-screen .pr-progress-button{min-width:0;min-height:28px;padding:4px;font-size:10px;flex:1}
+ #dashboard.pr-office.pr-one-screen .pr-save-tools{width:auto}
+ #dashboard.pr-office.pr-one-screen .pr-save-tools>summary{width:auto;min-height:28px;padding:4px;font-size:10px}
+ #dashboard.pr-office.pr-one-screen .pr-top-navigation{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));max-height:46px}
+ #dashboard.pr-office.pr-one-screen .pr-top-link.pr-main-link{min-width:0;min-height:43px!important;padding:4px 2px;font-size:10px;white-space:normal}
+ #dashboard.pr-office.pr-one-screen .pr-nav-icon{width:16px;height:16px}
+ #dashboard.pr-office.pr-one-screen > #dashpanel{padding:8px!important}
+}
+@media(max-height:650px){
+ #dashboard.pr-office.pr-one-screen .pr-week-calendar{display:none!important}
+ #dashboard.pr-office.pr-one-screen > .pr-club-banner{min-height:41px!important}
+ #dashboard.pr-office.pr-one-screen .pr-progress-button{min-height:28px}
+}
+/* Short landscape devices use vertical navigation to preserve workspace height. */
+@media(min-width:640px) and (max-height:510px){
+ #dashboard.pr-office.pr-one-screen{
+  grid-template-columns:clamp(114px,17vw,142px) minmax(0,1fr)!important;
+  grid-template-rows:40px 35px minmax(0,1fr) auto!important;
+  gap:4px!important;padding:5px!important;
+ }
+ #dashboard.pr-office.pr-one-screen > .pr-club-banner{display:none!important}
+ #dashboard.pr-office.pr-one-screen > .pr-progress-bar{
+  grid-column:2!important;grid-row:1;max-height:40px;min-height:0!important;
+  overflow:hidden;flex-direction:row!important;align-items:center;padding:3px 6px!important;
+ }
+ #dashboard.pr-office.pr-one-screen .pr-progress-head{flex-direction:row!important;align-items:center;flex-wrap:nowrap;gap:6px}
+ #dashboard.pr-office.pr-one-screen .pr-progress-status{font-size:11px;gap:5px}
+ #dashboard.pr-office.pr-one-screen .pr-progress-status strong{display:none}
+ #dashboard.pr-office.pr-one-screen .pr-progress-actions{flex-wrap:nowrap;width:auto}
+ #dashboard.pr-office.pr-one-screen > .pr-navigation-stack{
+  grid-column:1!important;grid-row:1 / 5;height:100%;min-height:0;
+  display:flex;flex-direction:column;
+ }
+ #dashboard.pr-office.pr-one-screen .pr-top-navigation{
+  flex:1 1 auto;min-height:0;max-height:none;height:100%;
+  display:flex!important;flex-direction:column;gap:3px;
+ }
+ #dashboard.pr-office.pr-one-screen .pr-top-link.pr-main-link{
+  flex:1 1 0;display:flex;flex-direction:row;gap:5px;align-items:center;
+  justify-content:flex-start;width:100%;min-height:0!important;padding:3px 5px;font-size:11px;
+ }
+ #dashboard.pr-office.pr-one-screen .pr-nav-icon{width:17px;height:17px}
+ #dashboard.pr-office.pr-one-screen .pr-secondary-navigation{flex:none;width:100%;max-height:30px;min-height:30px;height:30px}
+ #dashboard.pr-office.pr-one-screen > .pr-screen-switch{grid-column:2!important;grid-row:2}
+ #dashboard.pr-office.pr-one-screen > #dashpanel,
+ #dashboard.pr-office.pr-one-screen > .pr-secretary-rail{grid-column:2!important;grid-row:3;min-height:0!important}
+ #dashboard.pr-office.pr-one-screen > .pr-main-pager,
+ #dashboard.pr-office.pr-one-screen > .pr-aside-pager{grid-column:2!important;grid-row:4}
+}
+
+/* Club and trainer selection: list or detail fills one screen, not two stacked ones. */
+#clubselect.pr-one-screen-select,#clubtrainers.pr-one-screen-select{
+ width:100%;height:100dvh!important;min-height:0!important;max-height:100dvh!important;overflow:hidden!important;
+}
+#clubselect.pr-one-screen-select .cs-shell,#clubtrainers.pr-one-screen-select .ct-shell{
+ height:100%!important;min-height:0!important;max-height:100%!important;
+ padding:var(--pr-fit-pad)!important;gap:var(--pr-fit-gap)!important;
+ display:flex;flex-direction:column;overflow:hidden!important;
+}
+#clubselect.pr-one-screen-select .cs-topbar,#clubtrainers.pr-one-screen-select .ct-topbar{
+ flex:none;min-height:48px!important;padding:3px 6px!important;
+}
+#clubselect.pr-one-screen-select .cs-topbar h1,#clubtrainers.pr-one-screen-select .ct-topbar h1{font-size:clamp(21px,3vw,31px)}
+#clubselect.pr-one-screen-select .cs-main,#clubtrainers.pr-one-screen-select .ct-main{
+ min-height:0!important;height:100%;max-height:100%;flex:1 1 0;overflow:hidden!important;align-items:stretch;
+}
+#clubselect.pr-one-screen-select :is(.cs-browser,.cs-detail),#clubtrainers.pr-one-screen-select :is(.ct-list,.ct-detail){
+ height:100%;min-height:0!important;max-height:100%;overflow:hidden!important;
+}
+#clubselect.pr-one-screen-select .cs-browser{display:flex;flex-direction:column;gap:6px!important}
+#clubselect.pr-one-screen-select .cs-selector-tools{flex:none;gap:5px}
+#clubselect.pr-one-screen-select .cs-grid{
+ flex:1 1 0;height:100%;min-height:0!important;max-height:none!important;
+ display:grid;grid-template-columns:repeat(var(--pr-grid-cols,5),minmax(0,1fr))!important;
+ grid-template-rows:repeat(var(--pr-grid-rows,2),minmax(0,1fr))!important;
+ grid-auto-rows:0!important;gap:var(--pr-fit-gap)!important;align-content:stretch;overflow:hidden!important;
+}
+#clubselect.pr-one-screen-select .cs-card{min-height:0!important;max-height:100%;height:100%;overflow:hidden;padding:5px 4px;gap:4px}
+#clubselect.pr-one-screen-select .cs-crest.small{width:clamp(35px,6dvh,63px);height:clamp(41px,7dvh,72px)}
+#clubselect.pr-one-screen-select .cs-detail{display:flex;flex-direction:column;min-width:0}
+#clubselect.pr-one-screen-select .cs-detail-scroll{min-height:0!important;flex:1 1 0;overflow-y:hidden!important}
+#clubselect.pr-one-screen-select .cs-commit{flex:none;padding:8px!important}
+#clubselect.pr-one-screen-select .pr-club-detail-pager{order:2;margin:4px 9px}
+#clubselect.pr-one-screen-select .cs-club-head{min-height:0!important;padding-bottom:8px!important}
+#clubselect.pr-one-screen-select .cs-crest.large{width:clamp(68px,9dvh,106px);height:clamp(77px,10dvh,120px)}
+#clubselect.pr-one-screen-select .cs-report{gap:5px;margin-top:7px}
+#clubselect.pr-one-screen-select .cs-report-row{min-height:34px;padding:5px 8px}
+#clubtrainers.pr-one-screen-select .ct-list{display:flex!important;flex-direction:column!important;gap:6px!important;padding:9px!important}
+#clubtrainers.pr-one-screen-select .ct-list-title{flex:none}
+#clubtrainers.pr-one-screen-select .ct-trainer-card{min-height:0!important;max-height:none;flex:1 1 0;padding:7px;gap:8px}
+#clubtrainers.pr-one-screen-select .ct-detail{position:relative;overflow-y:hidden!important}
+#clubtrainers.pr-one-screen-select .pr-trainer-detail-pager{position:sticky;bottom:0;z-index:5;margin-top:5px}
+
+/* Manager ability setup: both stages stay in one viewport. */
+#player-manager-setup.pr-one-screen-select{height:100dvh!important;max-height:100dvh!important;overflow:hidden!important}
+#player-manager-setup.pr-one-screen-select .pm-shell{
+ height:100%;min-height:0;max-height:100%;display:flex;flex-direction:column;
+ overflow:hidden;padding:var(--pr-fit-pad)!important;gap:var(--pr-fit-gap)!important;
+}
+#player-manager-setup.pr-one-screen-select .pm-top{flex:none;min-height:45px;margin:0!important;padding:4px 8px!important}
+#player-manager-setup.pr-one-screen-select .pm-top h1{font-size:clamp(18px,2.7vw,26px);margin:0}
+#player-manager-setup.pr-one-screen-select .pm-grid{
+ display:grid!important;flex:1 1 0;min-height:0;height:100%;
+ grid-template-columns:minmax(0,.8fr) minmax(0,1.5fr);gap:var(--pr-fit-gap);
+}
+#player-manager-setup.pr-one-screen-select .pm-panel{
+ height:100%;min-height:0;max-height:100%;overflow-y:hidden!important;overscroll-behavior:contain;
+ padding:clamp(9px,1.3vw,16px)!important;
+}
+#player-manager-setup.pr-one-screen-select .pm-tier{padding:clamp(9px,1.5dvh,14px)}
+#player-manager-setup.pr-one-screen-select .pm-tier-list{gap:6px}
+#player-manager-setup.pr-one-screen-select .pr-manager-pager{position:sticky;bottom:0;z-index:4;margin-top:6px}
+@media(max-width:900px){
+ #clubselect.pr-one-screen-select .cs-main,#clubtrainers.pr-one-screen-select .ct-main,
+ #player-manager-setup.pr-one-screen-select .pm-grid{grid-template-columns:minmax(0,1fr)!important;flex:1 1 0}
+ #clubselect.pr-one-screen-select :is(.cs-browser,.cs-detail),
+ #clubtrainers.pr-one-screen-select :is(.ct-list,.ct-detail){grid-row:1;grid-column:1}
+ .pr-one-screen-select .pr-setup-switch{display:flex;flex:none}
+ #clubselect.pr-one-screen-select[data-pr-view="list"] .cs-detail,
+ #clubselect.pr-one-screen-select[data-pr-view="detail"] .cs-browser,
+ #clubtrainers.pr-one-screen-select[data-pr-view="list"] .ct-detail,
+ #clubtrainers.pr-one-screen-select[data-pr-view="detail"] .ct-list{display:none!important}
+}
+@media(max-width:680px){
+ #player-manager-setup.pr-one-screen-select .pm-grid{grid-template-columns:minmax(0,1fr)!important}
+ #player-manager-setup.pr-one-screen-select .pm-panel{grid-column:1;grid-row:1}
+ #player-manager-setup.pr-one-screen-select[data-pr-view="list"] .pm-panel:nth-child(2),
+ #player-manager-setup.pr-one-screen-select[data-pr-view="detail"] .pm-panel:nth-child(1){display:none!important}
+ #clubselect.pr-one-screen-select .cs-grid{gap:5px!important}
+}
+@media(pointer:coarse){
+ .pr-screen-pager button,.pr-screen-switch button,.pr-setup-switch button{touch-action:manipulation}
+}
