@@ -157,3 +157,20 @@ export function switchExposurePenalty({currentHealth=1,currentDanger=1,
     penalty=Math.max(penalty,18);
   return Math.max(0,Math.min(34,penalty));
 }
+
+
+/** Compare risk between our actual legal reserves, using observed enemy moves.
+ * Relative tie-breaker only; does not prevent the only legal switch.
+ * Type danger is a heuristic, never an estimated win probability.
+ */
+export function relativeReserveExposure({
+  candidateThreat=0,safestEntryRisk=0,candidateHealthAfterEntry=1,
+  alternativeCount=0}={}){
+  if(alternativeCount<2||candidateThreat<=0)return 0;
+  if(!(candidateHealthAfterEntry>0))return 0;
+  const health=Math.max(.15,candidateHealthAfterEntry);
+  const ownRisk=candidateThreat/health;
+  const saferRisk=Math.max(0,safestEntryRisk);
+  const gap=Math.max(0,ownRisk-saferRisk-1);
+  return Math.min(32,gap*8);
+}

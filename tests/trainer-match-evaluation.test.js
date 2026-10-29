@@ -34,7 +34,7 @@ function mock(){
     behaviorResponse:'수용'}]},
   rounds:[
    {trainerA:0,trainerB:0,winner:'A',log:'|turn|2',aiDecisions:{
-     p1:{ppConservations:2,switchAnalysis:{avoided:3,urgentSwitches:1,aceProtected:0}},
+     p1:{ppConservations:2,switchAnalysis:{avoided:3,urgentSwitches:1,aceProtected:0,saferReserveChosen:1}},
      p2:{}},
      switchOutcomes:{bySide:{p1:metric(2,2,.6,0),p2:metric(0,0,0)},
        switches:events('p1',[2,.2,false],[4,.4,false])}},
@@ -66,6 +66,7 @@ test('per-trainer records aggregate two duels without mixing another trainer',()
  assert.equal(rows[0].observations.avoided,3);
  assert.equal(rows[0].observations.urgent,2);
  assert.equal(rows[0].observations.aceProtected,1);
+ assert.equal(rows[0].observations.saferReserve,1);
  assert.equal(rows[0].aceReady,1);
  assert.equal(rows[0].dangerous[0].duel,1);
  assert.equal(rows[0].dangerous[0].turn,8);
@@ -104,6 +105,7 @@ test('evidence is described as observation, not ranked or causally scored',()=>{
  const summary=e.summarize(p.result,'home')[0];
  const html=e.renderOne(summary,true);
  assert.match(html,/중립 교체 유보 판단 3회/);
+ assert.match(html,/안전한 예비 포켓몬 선택 1회/);
  assert.match(html,/체력·상성 위험에서 교체 2회/);
  assert.match(html,/PP 보존 선택 3회/);
  assert.match(html,/HP 30% 이상 손실 2회/);

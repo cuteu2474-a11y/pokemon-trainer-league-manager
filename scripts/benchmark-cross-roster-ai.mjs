@@ -34,9 +34,18 @@ const sets={
   ['Clodsire',['earthquake','recover','toxicspikes','stealthrock']],
   ['Skeledirge',['torch song','shadowball','willowisp','slackoff']],
   ['Garganacl',['saltcure','recover','protect','earthquake']]
+ ],
+ tempo:[
+  ['Azumarill',['aquajet','playrough','liquidation','bellydrum']],
+  ['Breloom',['machpunch','bulletseed','spore','rocktomb']],
+  ['Mamoswine',['iceshard','earthquake','iciclecrash','stealthrock']],
+  ['Scizor',['bulletpunch','uturn','swordsdance','roost']],
+  ['Talonflame',['bravebird','flareblitz','roost','uturn']],
+  ['Ferrothorn',['powerwhip','gyroball','leechseed','protect']]
  ]
 };
-const matchups=[['balanced','offense'],['offense','endurance'],['endurance','balanced']];
+const matchups=[['balanced','offense'],['offense','endurance'],
+  ['endurance','balanced'],['tempo','endurance'],['balanced','tempo']];
 const keys=['hp','atk','def','spa','spd','spe'];
 const statCA=Object.fromEntries(keys.map(s=>[s,130]));
 const statPA=Object.fromEntries(keys.map(s=>[s,170]));
@@ -62,7 +71,7 @@ const fresh=()=>({games:0,expertWins:0,noviceWins:0,ties:0,duels:0,
  aceHandoffs:0,aceAliveAtHandoff:0,aceReadyForNext:0,
  aceLeadKnown:0,aceReadyVsLead:0,
  aceStoodNextDuel:0,
- expertFinishWindows:0,expertExposedCandidates:0,
+ expertFinishWindows:0,expertExposedCandidates:0,expertSaferReserveChoices:0,
  expertFinishKept:0,expertExposureAvoided:0,
  expertSwitchEvaluations:0,expertNeutralSwitchesAvoided:0,
  expertUrgentSwitches:0,expertAceReservesProtected:0,
@@ -125,6 +134,7 @@ function tally(bucket,r,expertSide,elapsed){
   bucket.expertPPSaves+=data.ppConservations||0;
   bucket.expertRollouts+=data.rollouts||0;
   bucket.expertFallbacks+=data.rolloutFallbacks||0;
+  bucket.expertSaferReserveChoices+=data.switchAnalysis?.saferReserveChosen||0;
   bucket.expertFinishWindows+=data.switchAnalysis?.finishWindows||0;
   bucket.expertExposedCandidates+=data.switchAnalysis?.exposedCandidates||0;
   bucket.expertFinishKept+=data.switchAnalysis?.finishKept||0;

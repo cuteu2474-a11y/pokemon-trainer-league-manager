@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Dex} from '@pkmn/sim';
 import {ppConservation,ownReserveStrength,aceSwitchAdjustment,switchOpportunityPenalty,
-  publicFinishOpportunity,switchExposurePenalty} from '../src/battle/relay-resource-policy.js';
+  publicFinishOpportunity,switchExposurePenalty,relativeReserveExposure} from '../src/battle/relay-resource-policy.js';
 import {TrainerAI} from '../src/battle/trainer-ai.js';
 
 const thunder=Dex.moves.get('thunderbolt');
@@ -243,4 +243,43 @@ test('fixed-damage attacks are not falsely classified as a type-based bench weak
    {active:true,ident:'p1: active',details:'Greninja',condition:'90/100'},
    {active:false,ident:'p1: bench',details:'Tyranitar',condition:'100/100'}]}});
  assert.equal(ai.lastActionComparison.exposurePenalty,0);
+});
+
+
+test('relative bench entry risk requires at least two legal reserves and revealed danger',()=>{
+ const risky={candidateThreat:3,safestEntryRisk:0,candidateHealthAfterEntry:.55,
+   alternativeCount:2};
+ assert.ok(relativeReserveExposure(risky)>=25);
+ assert.equal(relativeReserveExposure({...risky,alternativeCount:1}),0);
+ assert.equal(relativeReserveExposure({...risky,candidateThreat:0}),0);
+ assert.equal(relativeReserveExposure({...risky,candidateHealthAfterEntry:0}),0);
+ assert.equal(relativeReserveExposure({...risky,candidateThreat:.4,
+   candidateHealthAfterEntry:1,safestEntryRisk:.4}),0);
+ assert.ok(relativeReserveExposure({...risky,candidateHealthAfterEntry:.95})<
+   relativeReserveExposure(risky));
+});
+
+test('injured active switches to safer reserve using revealed Ground coverage',()=>{
+ const team=[
+   {species:'Pikachu',name:'active',moves:['thunderbolt']},
+   {species:'Excadrill',name:'first',moves:['ironhead']},
+   {species:'Dragonite',name:'second',moves:['dragonclaw']}
+ ];
+ const battle={turn:5,p1:{active:[{hp:32,maxhp:100}],sideConditions:{}},
+   p2:{active:[{hp:85,maxhp:100}],sideConditions:{}}};
+ const ai=new TrainerAI({},{
+   tactics:20,switching:20,relayOpponentsRemaining:4,
+   aiProfile:{preservation:20,switchSkill:20}},{
+     seed:[1,2,3,4],team,battleProvider:()=>battle});
+ ai.ownActive=team[0];ai.foeSpecies='Garchomp';ai.foeIdentity='p2a: foe';
+ ai.publicMoveHistory.set(ai.foeIdentity,new Set(['earthquake']));
+ const request={active:[{moves:[{move:'Thunderbolt',disabled:false}]}],
+   side:{pokemon:[
+     {active:true,ident:'p1: active',details:'Pikachu',condition:'32/100'},
+     {active:false,ident:'p1: first',details:'Excadrill',condition:'100/100'},
+     {active:false,ident:'p1: second',details:'Dragonite',condition:'70/100'}]}};
+ assert.equal(ai.moveProbability(request),-1);
+ assert.equal(ai.lastActionComparison.switchSlot,3);
+ assert.equal(ai.decisions.switchAnalysis.saferReserveChosen,1);
+ assert.equal(ai.decisions.switchAnalysis.urgentSwitches,1);
 });

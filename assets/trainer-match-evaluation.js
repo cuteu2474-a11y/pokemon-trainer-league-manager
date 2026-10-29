@@ -62,7 +62,8 @@
        observations:quantified.length?
          {avoided:acc(quantified,x=>x.switchAnalysis.avoided),
            urgent:acc(quantified,x=>x.switchAnalysis.urgentSwitches),
-           aceProtected:acc(quantified,x=>x.switchAnalysis.aceProtected)}:null,
+           aceProtected:acc(quantified,x=>x.switchAnalysis.aceProtected),
+           saferReserve:acc(quantified,x=>x.switchAnalysis.saferReserveChosen)}:null,
        ppSaves:ppEntries.length?acc(ppEntries,x=>x.ppConservations):null,
        aceHandoffs:aceRecords?.length??null,aceReady,
        aceNotReady,
@@ -74,6 +75,7 @@
      if(observed.observations?.avoided>0)strengths.push('중립 교체 유보 판단 '+observed.observations.avoided+'회');
      if(observed.observations?.urgent>0)strengths.push('체력·상성 위험에서 교체 '+observed.observations.urgent+'회');
      if(observed.observations?.aceProtected>0)strengths.push( '에이스 투입 유보 신호 '+observed.observations.aceProtected+'회');
+     if(observed.observations?.saferReserve>0)strengths.push('공개 기술에 안전한 예비 포켓몬 선택 '+observed.observations.saferReserve+'회');
      if(observed.ppSaves>0)strengths.push('PP 보존 선택 '+observed.ppSaves+'회');
      if(observed.aceReady>0)
        strengths.push('다음 주자에 공격 가능한 에이스 인계 '+observed.aceReady+'/'+observed.aceHandoffs+'회');

@@ -5,7 +5,7 @@ import {RandomPlayerAI,Dex} from '@pkmn/sim';
 import {selectTacticalMove,searchBudget,evaluateMove,wastedStatusMove,wastedSelfMove} from './tactical-search.js';
 import {rolloutActions,robustResponseScore} from './showdown-rollout.js';
 import {traitValue,assessMoveTraits,switchTraitBonus} from './trait-decision.js';
-import {aceSwitchAdjustment,switchOpportunityPenalty,publicFinishOpportunity,switchExposurePenalty} from './relay-resource-policy.js';
+import {aceSwitchAdjustment,switchOpportunityPenalty,publicFinishOpportunity,switchExposurePenalty,relativeReserveExposure} from './relay-resource-policy.js';
 
 const clamp=x=>Math.max(1,Math.min(20,Number.isFinite(x)?x:10));
 const limit=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -81,7 +81,8 @@ export class TrainerAI extends RandomPlayerAI{
       moves:0,switches:0,voluntarySwitches:0,rollouts:0,rolloutFallbacks:0,
       ppConservations:0,switchEvents:[],
       switchAnalysis:{evaluations:0,avoided:0,urgentSwitches:0,aceProtected:0,
-        finishWindows:0,exposedCandidates:0,finishKept:0,exposureAvoided:0,scenes:[]},
+        finishWindows:0,exposedCandidates:0,finishKept:0,exposureAvoided:0,
+        saferReserveChosen:0,scenes:[]},
       plan:this.plan,response:this.profile.response||'자율',preferred:this.profile.preferred,
       traits:[...(this.profile.traits||[])],
       behaviorAdvice:this.profile.behaviorAdvice||null,
@@ -311,6 +312,22 @@ export class TrainerAI extends RandomPlayerAI{
     const hazards=battle?.[this.side]?.sideConditions||{};
     const livingTeam=pokemon.flatMap((mon,i)=>Number.parseInt(mon.condition||'',10)>0?
       [this.findOwned(mon,i+1)].filter(Boolean):[]);
+    // Compare actual reserves' public danger instead of a fictitious safe pivot.
+    const entryProfiles=pokemon.flatMap((mon,i)=>{
+      if(mon.active||Number.parseInt(mon.condition||'',10)<=0)return [];
+      const owned=this.findOwned(mon,i+1);
+      const species=Dex.species.get(mon.details?.split(',')[0]||owned?.species||'');
+      if(!species.exists)return [];
+      const n=Number.parseInt(mon.condition||'',10);
+      const d=Number.parseInt((mon.condition||'').split('/')[1]||'',10);
+      const fraction=d>0?n/d:1;
+      const hazard=entryHazardFraction(hazards,species.types,owned?.item,owned?.ability);
+      if(fraction-hazard<=.02)return [];
+      const threat=observedDanger(species.types);
+      return [{slot:i+1,threat,afterEntry:fraction-hazard,
+        risk:threat/Math.max(.15,fraction-hazard)}];
+    });
+    const safestEntryRisk=Math.min(Infinity,...entryProfiles.map(x=>x.risk));
     const candidates=pokemon.flatMap((mon,i)=>{
       if(mon.active||Number.parseInt(mon.condition||'',10)<=0)return [];
       const owned=this.findOwned(mon,i+1);
@@ -338,15 +355,21 @@ export class TrainerAI extends RandomPlayerAI{
         currentHealth:health,currentDanger,nextDanger,
         observedCurrent:currentObserved,observedNext:observedDanger(species.types),
         candidateHealthAfterEntry:fraction-hazard,matchupGain:betterMatchup});
+      const relativeRisk=relativeReserveExposure({
+        candidateThreat:observedDanger(species.types),
+        safestEntryRisk,
+        candidateHealthAfterEntry:fraction-hazard,
+        alternativeCount:entryProfiles.length});
       const score=this.candidateScore(mon,i+1,foeTypes,hazard)+betterMatchup*9+
-        traits+preservation+aceAdjustment-opportunity-exposure-28-nextDanger*8-hazard*28;
-      return [{slot:i+1,score,rawScore:score+opportunity+exposure,
-        opportunity,exposure,aceAdjustment}];
+        traits+preservation+aceAdjustment-opportunity-exposure-relativeRisk-
+        28-nextDanger*8-hazard*28;
+      return [{slot:i+1,score,rawScore:score+opportunity+exposure+relativeRisk,
+        opportunity,exposure,relativeRisk,aceAdjustment}];
     }).sort((a,b)=>b.score-a.score||a.slot-b.slot);
     const best=candidates[0];
     this.lastActionComparison={moveScore,switchScore:best?.score??-Infinity,
       switchSlot:best?.slot??null,finishOpportunity,
-      exposurePenalty:best?.exposure??0};
+      exposurePenalty:best?.exposure??0,relativeRisk:best?.relativeRisk??0};
     const precisionMargin=(20-this.profile.switchSkill)*.6;
     const shouldSwitch=Boolean(best&&best.score>moveScore+precisionMargin);
     const analysis=this.decisions.switchAnalysis;
@@ -354,6 +377,11 @@ export class TrainerAI extends RandomPlayerAI{
       analysis.evaluations++;
       if(finishOpportunity>0)analysis.finishWindows++;
       analysis.exposedCandidates+=candidates.filter(x=>x.exposure>0).length;
+      const highestWithoutRelative=[...candidates].sort((x,y)=>
+        (y.score+y.relativeRisk)-(x.score+x.relativeRisk)||x.slot-y.slot)[0];
+      if(shouldSwitch&&highestWithoutRelative?.slot!==best.slot&&
+        highestWithoutRelative?.relativeRisk>best.relativeRisk)
+        analysis.saferReserveChosen++;
       const highestRaw=Math.max(...candidates.map(x=>x.rawScore));
       const avoided=!shouldSwitch&&highestRaw>moveScore+precisionMargin;
       if(avoided)analysis.avoided++;
@@ -376,6 +404,7 @@ export class TrainerAI extends RandomPlayerAI{
           switchScore:Number(best.score.toFixed(2)),
           opportunity:Number((best.opportunity||0).toFixed(2)),
           exposure:Number((best.exposure||0).toFixed(2)),
+          relativeRisk:Number((best.relativeRisk||0).toFixed(2)),
           finishOpportunity:Number(finishOpportunity.toFixed(2)),
           aceAdjustment:Number((best.aceAdjustment||0).toFixed(2)),
           decision:urgent?'urgent-switch':aceProtected?'ace-reserve':'neutral-switch-avoided'
